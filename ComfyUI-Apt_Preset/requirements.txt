@@ -1,7 +1,0 @@
-numpy
-torch
-toml
-aiohttp
-Pillow
-spandrel
-tqdm
