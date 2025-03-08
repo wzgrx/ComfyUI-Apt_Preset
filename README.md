@@ -1,9 +1,11 @@
 
 **ComfyUI-Apt_Preset** is a node package designed to simplify workflows by merging commonly used basic nodes into new nodes, reducing connections between basic nodes, and simplifying the overall workflow.
+**ComfyUI-Apt_Preset**是一个节点包，旨在通过将常用的基本节点合并到新节点中来简化工作流程，减少基本节点之间的连接，并简化整体工作流程。
 
-## 👨🏻‍🎨 Usage Guide
+## 👨🏻‍🎨 Usage Guide使用指南
 
 1. The main loader sum_load integrates 4 loading modes: basic, clip, flux, and sd 3.5
+   主加载器sum_load集成了4种加载模式：基本、剪辑、通量和sd 3.5
 
 | Basic  | Load checkpoint  + clip set last layer |
 | ------ | -------------------------------------- |
@@ -20,6 +22,7 @@ Flux Mode (Arbitrary Transfer)
 
 2. Preset can save sum_load presets (requires restart to take effect),
 Save path: ComfyUI-Apt_Preset\presets
+Preset可以保存sum_load预设（需要重启才能生效），保存路径：ComfyUI-Apt_Preset\presets
 ![image](https://github.com/user-attachments/assets/01d5793f-5703-420b-b57a-6e120527bc19)
 
 
@@ -35,7 +38,7 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 ```
 
 
-## Reference Node Packages
+## Reference Node Packages参考节点包
 
 Declaration: I highly respect the efforts of the original authors. Open source is not easy. I just did some integration.
 
@@ -52,7 +55,7 @@ Declaration: I highly respect the efforts of the original authors. Open source i
 [ComfyUI_VisualStylePrompting](https://github.com/ExponentialML/ComfyUI_VisualStylePrompting) -Visual Style Prompting with Swapping Self-Attention
 
 
-## Disclaimer
+## Disclaimer免责声明
 
 This open-source project and its contents are provided "AS IS" without any express or implied warranties, including but not limited to warranties of merchantability, fitness for a particular purpose, and non-infringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.
 
