@@ -11,27 +11,13 @@
 | Flux   | Load diffusion model +DualCLIPLoader   |
 | SD 3.5 | Load diffusion model +TripleCLIPLoader |
 
-![[Pasted image 20250308002725.png]]
+![image](https://github.com/user-attachments/assets/73d64eb6-fc41-44e7-9766-dce8f9ab74e6)
 
-Clip Mode (LTX Image to Video)
-![[Pasted image 20250308012503.png]]
-
-Flux Mode (Basic Setup)
-![[Pasted image 20250308014542.png]]
-
-Flux Mode (Hybrid Text to Video)
-![[Pasted image 20250308012620.png]]
-
-Flux Mode (Arbitrary Transfer)
-![[Pasted image 20250308013625.png]]
-
-SD 3.5 Mode
-![[Pasted image 20250308015018.png]]
 
 2. Preset can save sum_load presets (requires restart to take effect),
 Save path: ComfyUI-Apt_Preset\presets
+![image](https://github.com/user-attachments/assets/01d5793f-5703-420b-b57a-6e120527bc19)
 
-![Uploading Pasted image 20250308015401.png…]()
 
 
 ## 👨🏻‍🔧 Installation
