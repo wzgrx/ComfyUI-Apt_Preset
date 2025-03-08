@@ -31,7 +31,8 @@ SD 3.5 Mode
 2. Preset can save sum_load presets (requires restart to take effect),
 Save path: ComfyUI-Apt_Preset\presets
 
-![[Pasted image 20250308015401.png]]
+![Uploading Pasted image 20250308015401.png…]()
+
 
 ## 👨🏻‍🔧 Installation
 
