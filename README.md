@@ -53,6 +53,8 @@ Declaration: I highly respect the efforts of the original authors. Open source i
 
 [ComfyUI_VisualStylePrompting](https://github.com/ExponentialML/ComfyUI_VisualStylePrompting) -Visual Style Prompting with Swapping Self-Attention
 
+[rgthree-comfy](https://github.com/rgthree/rgthree-comfy) - _Making ComfyUI more comfortable!_
+
 
 ## Disclaimer免责声明
 
