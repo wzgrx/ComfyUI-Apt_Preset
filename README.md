@@ -5,7 +5,7 @@
 ## 👨🏻‍🎨 Usage Guide使用指南
 
 1. The main loader sum_load integrates 4 loading modes: basic, clip, flux, and sd 3.5
-   主加载器sum_load集成了4种加载模式：基本、剪辑、通量和sd 3.5
+   主加载器sum_load集成了4种加载模式：basic, clip, flux, and sd 3.5
 
 | Basic  | Load checkpoint  + clip set last layer |
 | ------ | -------------------------------------- |
