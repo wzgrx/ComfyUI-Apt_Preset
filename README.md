@@ -1,5 +1,5 @@
 
-**Make the workflow easier**
+## **Make the workflow easier**
 ## 👨🏻‍🎨 Usage Guide使用指南
 
 1.The main loader sum\_load integrates 4 loading modes: basic, clip, flux, and sd 3.5 主加载器sum\_load集成了4种加载模式：basic, clip, flux, and sd 3.5
