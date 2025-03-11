@@ -15,13 +15,15 @@
 ![image](https://github.com/user-attachments/assets/73d64eb6-fc41-44e7-9766-dce8f9ab74e6)
 
 
-examlpe: Flux Mode (Arbitrary Transfer)
-![image](https://github.com/user-attachments/assets/e6ebec1f-b000-42f5-8c0e-cadc3a6d437c)
+
+Examlpe: Flux Mode (Arbitrary Transfer)
+![image](https://github.com/user-attachments/assets/15099be1-25d7-42d7-876d-948ef54f99cc)
+
 
 
 2. Preset can save sum_load presets (requires restart to take effect),Save path: ComfyUI-Apt_Preset\presets
    Preset可以保存sum_load预设（需要重启才能生效），保存路径：ComfyUI-Apt_Preset\presets
-![image](https://github.com/user-attachments/assets/01d5793f-5703-420b-b57a-6e120527bc19)
+![image](https://github.com/user-attachments/assets/9c68e1d5-a5ee-454b-b343-f94f9e6d47eb)
 
 
 
