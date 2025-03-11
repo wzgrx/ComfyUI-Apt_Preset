@@ -1,6 +1,6 @@
 
-**ComfyUI-Apt_Preset** is a node package designed to simplify workflows by merging commonly used basic nodes into new nodes, reducing connections between basic nodes, and simplifying the overall workflow.
-**ComfyUI-Apt_Preset**是一个简化工作流的节点包，将常用的节点按在内在逻辑，合并成新的节点，减少连线。
+**ComfyUI-Apt_Preset**  is a node package that simplifies the workflow. It combines frequently used nodes into a composite node, making the logic simpler.
+**ComfyUI-Apt_Preset**是一个简化工作流的节点包，将常用的节点做成一个组合节点，让逻辑变的简单。
 
 ## 👨🏻‍🎨 Usage Guide使用指南
 
