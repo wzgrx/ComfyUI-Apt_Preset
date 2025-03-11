@@ -15,7 +15,7 @@
 ![image](https://github.com/user-attachments/assets/73d64eb6-fc41-44e7-9766-dce8f9ab74e6)
 
 
-Flux Mode (Arbitrary Transfer)
+examlpe: Flux Mode (Arbitrary Transfer)
 ![image](https://github.com/user-attachments/assets/e6ebec1f-b000-42f5-8c0e-cadc3a6d437c)
 
 
