@@ -4,14 +4,14 @@
 
 ## 👨🏻‍🎨 Usage Guide使用指南
 
-1. The main loader sum_load integrates 4 loading modes: basic, clip, flux, and sd 3.5
-   主加载器sum_load集成了4种加载模式：basic, clip, flux, and sd 3.5
+1.The main loader sum\_load integrates 4 loading modes: basic, clip, flux, and sd 3.5 主加载器sum\_load集成了4种加载模式：basic, clip, flux, and sd 3.5
 
-| Basic  | Load checkpoint  + clip set last layer |
+| **Basic**  | **Load checkpoint + clip set last layer**  |
 | ------ | -------------------------------------- |
-| Clip   | Load checkpoint   + load clip          |
-| Flux   | Load diffusion model +DualCLIPLoader   |
-| SD 3.5 | Load diffusion model +TripleCLIPLoader |
+| **Clip**   | **Load checkpoint + load clip**            |
+| **Flux**   | **Load diffusion model +DualCLIPLoader**   |
+| **SD 3.5** | **Load diffusion model +TripleCLIPLoader** |
+****
 
 ![image](https://github.com/user-attachments/assets/73d64eb6-fc41-44e7-9766-dce8f9ab74e6)
 
@@ -37,23 +37,12 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 ```
 
 
-## Reference Node Packages参考节点包
+The code of this open-source project has referred to the following code during the development process. We express our sincere gratitude for their contributions in the relevant fields.
 
-Declaration: I highly respect the efforts of the original authors. Open source is not easy. I just did some integration.
-
-[ComfyUI](https://github.com/comfyanonymous/ComfyUI) -The most powerful and modular diffusion model GUI
-
-[ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) - helps to conveniently enhance images through Detector, Detailer
-
-[ComfyUI-Inspire-Pack](https://github.com/ltdrdata/ComfyUI-Inspire-Pack) - This repository offers various extension nodes for ComfyUI
-
-**[ComfyUI_mittimiLoadPreset2](https://github.com/mittimi/ComfyUI_mittimiLoadPreset2)**-easily switch between models and prompts by saving presets
-
-**[ComfyUI-EasyDeforum](https://github.com/Chan-0312/ComfyUI-EasyDeforum)**- easy deforum
-
-[ComfyUI_VisualStylePrompting](https://github.com/ExponentialML/ComfyUI_VisualStylePrompting) -Visual Style Prompting with Swapping Self-Attention
-
-[rgthree-comfy](https://github.com/rgthree/rgthree-comfy) - _Making ComfyUI more comfortable!_
+| [ComfyUI](https://github.com/comfyanonymous/ComfyUI)                                           | [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)                   | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| **[ComfyUI-EasyDeforum](https://github.com/Chan-0312/ComfyUI-EasyDeforum)**\-                  | [ComfyUI-Inspire-Pack](https://github.com/ltdrdata/ComfyUI-Inspire-Pack)                 |                                                           |
+| [ComfyUI\_VisualStylePrompting](https://github.com/ExponentialML/ComfyUI_VisualStylePrompting) | **[ComfyUI\_mittimiLoadPreset2](https://github.com/mittimi/ComfyUI_mittimiLoadPreset2)** |                                                           |
 
 
 ## Disclaimer免责声明
