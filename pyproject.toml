@@ -1,0 +1,15 @@
+[project]
+name = "apt_preset"
+description = "ComfyUI-Apt_Preset is a node package designed to simplify workflows"
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = ["numpy", "torch", "toml", "aiohttp", "Pillow", "spandrel", "tqdm"]
+
+[project.urls]
+Repository = "https://github.com/cardenluo/ComfyUI-Apt_Preset"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI-Apt_Preset"
+Icon = ""
