@@ -27,6 +27,7 @@ Examlpe: Flux Mode (Arbitrary Transfer)
 
 
 
+
 ## 👨🏻‍🔧 Installation
 
 Clone the repository to the **custom_nodes** directory and install dependencies
