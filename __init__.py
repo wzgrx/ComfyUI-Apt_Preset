@@ -136,15 +136,13 @@ NODE_CLASS_MAPPINGS = {
 "Apply_condiStack": Apply_condiStack,
 "Apply_textStack": Apply_textStack,
 "Apply_Redux": Apply_Redux,
-
 "Apply_latent": Apply_latent,
-"Stack_latent": Stack_latent,
-
-"Stack_IPA_SD3":Stack_IPA_SD3,
 "Apply_IPA_SD3":Apply_IPA_SD3,
 
-"Stack_Redux":Stack_Redux,
 
+"Stack_latent": Stack_latent,
+"Stack_Redux":Stack_Redux,
+"Stack_IPA_SD3":Stack_IPA_SD3,
 "stack_AD_diff": stack_AD_diff,
 "Stack_adv_CN_easy": Stack_adv_CN_easy,
 "Stack_adv_CN": Stack_adv_CN,
