@@ -1,15 +1,21 @@
 [project]
-name = "apt_preset"
-description = "ComfyUI-Apt_Preset is a node package designed to simplify workflows"
+name = "ComfyUI-Apt_Preset"
+description = "ComfyUI Preset Manager, supporting various preset templates and workflow management"
 version = "1.0.0"
-license = {file = "LICENSE"}
-dependencies = ["numpy", "torch", "toml", "aiohttp", "Pillow", "spandrel", "tqdm"]
+license = { file = "LICENSE.txt" }
 
 [project.urls]
-Repository = "https://github.com/cardenluo/ComfyUI-Apt_Preset"
-#  Used by Comfy Registry https://comfyregistry.org
+Repository = "https://github.com/cardenluo/ComfyUI-Apt_Preset.git"
 
 [tool.comfy]
-PublisherId = ""
+PublisherId = "cardenluo"
 DisplayName = "ComfyUI-Apt_Preset"
 Icon = ""
+
+Tags = ["preset", "workflow", "ComfyUI", "management"]
+Nodes = [
+    "nodes.py",
+    "def_unit.py",
+    "packdata.py",
+    "stack.py"
+]

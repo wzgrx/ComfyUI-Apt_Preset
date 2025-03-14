@@ -28,6 +28,11 @@ Examlpe: Flux Mode (Arbitrary Transfer)
 
 
 
+3. A very simple integrated control node. All controls can be derived from this node.
+   一个非常简单的控制节点，所有的控制方法，只需从该节点引出即可
+![image](https://github.com/user-attachments/assets/6448859c-f968-4dc1-b6aa-17e6d416f416)
+
+
 ## 👨🏻‍🔧 Installation
 
 Clone the repository to the **custom_nodes** directory and install dependencies
