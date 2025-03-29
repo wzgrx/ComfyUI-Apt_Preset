@@ -2407,7 +2407,7 @@ class stack_sum_Unpack:
 
 
 
-class sum_stack_pack:
+class sum_stack_all:
 
     @classmethod
     def INPUT_TYPES(s):
@@ -2505,7 +2505,7 @@ class sum_stack_pack:
 
 
 
-class sum_stack_all:
+class sum_stack_image:
 
     @classmethod
     def INPUT_TYPES(s):
