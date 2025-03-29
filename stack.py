@@ -2030,7 +2030,7 @@ class Apply_Redux:
 
 
 
-class sum_stack_image:
+class sum_stack_basic:
 
     @classmethod
     def INPUT_TYPES(s):
