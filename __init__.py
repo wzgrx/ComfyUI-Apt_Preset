@@ -46,12 +46,12 @@ NODE_CLASS_MAPPINGS = {
 "sum_lora": sum_lora,
 "sum_controlnet": sum_controlnet,
 
-
+"sum_stack_basic": sum_stack_basic,
 "sum_stack_SD3": sum_stack_SD3,
 "sum_stack_flux": sum_stack_flux,
-"sum_stack_image": sum_stack_image,
-"sum_stack_AD": sum_stack_AD,
 "sum_stack_all": sum_stack_all,
+"sum_stack_AD": sum_stack_AD,
+
 
 "load_FLUX": load_FLUX,
 "load_basic": load_basic,
