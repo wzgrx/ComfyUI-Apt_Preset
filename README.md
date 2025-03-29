@@ -1,7 +1,7 @@
 
 ## **Make the workflow easier**
 
-##update record更新记录
+## 👨update record更新记录
 
 1、2025.3.29  add node “stack_sum_pack”  
 
