@@ -1,621 +1,441 @@
-import numpy as np
-import torch
-import os
+
+#region-------------------------------import-----------------------
+from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
+import comfy.controlnet
 import comfy.sd
-import comfy.utils
-import comfy.lora
 import folder_paths
-
-
-from comfy.cli_args import args
-import comfy.samplers
-import comfy.controlnet 
-import nodes
-
-
-
-import comfy.ops
-import torch.nn as nn
-from torch import nn
-from torch.nn import functional as F
-from einops import rearrange
-from comfy.ldm.modules.attention import optimized_attention
-from comfy.ldm.modules.diffusionmodules.mmdit import (RMSNorm,JointBlock,)
-import math
-from diffusers.models.embeddings import Timesteps, TimestepEmbedding
-
-
-
-#region----------动能组-------condi_IPAdapterSD3-----------------------------------
-
-
-class AdaLayerNorm(nn.Module):
-
-
-    def __init__(self, embedding_dim: int, time_embedding_dim=None, mode="normal"):
-        super().__init__()
-
-        self.silu = nn.SiLU()
-        num_params_dict = dict(
-            zero=6,
-            normal=2,
-        )
-        num_params = num_params_dict[mode]
-        self.linear = nn.Linear(
-            time_embedding_dim or embedding_dim, num_params * embedding_dim, bias=True
-        )
-        self.norm = nn.LayerNorm(embedding_dim, elementwise_affine=False, eps=1e-6)
-        self.mode = mode
-
-    def forward(
-        self,
-        x,
-        hidden_dtype=None,
-        emb=None,
-    ):
-        emb = self.linear(self.silu(emb))
-        if self.mode == "normal":
-            shift_msa, scale_msa = emb.chunk(2, dim=1)
-            x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-            return x
-
-        elif self.mode == "zero":
-            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(
-                6, dim=1
-            )
-            x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-            return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
-
-
-class IPAttnProcessor(nn.Module):
-
-    def __init__(
-        self,
-        hidden_size=None,
-        cross_attention_dim=None,
-        ip_hidden_states_dim=None,
-        ip_encoder_hidden_states_dim=None,
-        head_dim=None,
-        timesteps_emb_dim=1280,
-    ):
-        super().__init__()
-
-        self.norm_ip = AdaLayerNorm(
-            ip_hidden_states_dim, time_embedding_dim=timesteps_emb_dim
-        )
-        self.to_k_ip = nn.Linear(ip_hidden_states_dim, hidden_size, bias=False)
-        self.to_v_ip = nn.Linear(ip_hidden_states_dim, hidden_size, bias=False)
-        self.norm_q = RMSNorm(head_dim, 1e-6)
-        self.norm_k = RMSNorm(head_dim, 1e-6)
-        self.norm_ip_k = RMSNorm(head_dim, 1e-6)
-
-    def forward(
-        self,
-        ip_hidden_states,
-        img_query,
-        img_key=None,
-        img_value=None,
-        t_emb=None,
-        n_heads=1,
-    ):
-        if ip_hidden_states is None:
-            return None
-
-        if not hasattr(self, "to_k_ip") or not hasattr(self, "to_v_ip"):
-            return None
-
-        # norm ip input
-        norm_ip_hidden_states = self.norm_ip(ip_hidden_states, emb=t_emb)
-
-        # to k and v
-        ip_key = self.to_k_ip(norm_ip_hidden_states)
-        ip_value = self.to_v_ip(norm_ip_hidden_states)
-
-        # reshape
-        img_query = rearrange(img_query, "b l (h d) -> b h l d", h=n_heads)
-        img_key = rearrange(img_key, "b l (h d) -> b h l d", h=n_heads)
-        # note that the image is in a different shape: b l h d
-        # so we transpose to b h l d
-        # or do we have to transpose here?
-        img_value = torch.transpose(img_value, 1, 2)
-        ip_key = rearrange(ip_key, "b l (h d) -> b h l d", h=n_heads)
-        ip_value = rearrange(ip_value, "b l (h d) -> b h l d", h=n_heads)
-
-        # norm
-        img_query = self.norm_q(img_query)
-        img_key = self.norm_k(img_key)
-        ip_key = self.norm_ip_k(ip_key)
-
-        # cat img
-        key = torch.cat([img_key, ip_key], dim=2)
-        value = torch.cat([img_value, ip_value], dim=2)
-
-        #
-        ip_hidden_states = F.scaled_dot_product_attention(
-            img_query, key, value, dropout_p=0.0, is_causal=False
-        )
-        ip_hidden_states = rearrange(ip_hidden_states, "b h l d -> b l (h d)")
-        ip_hidden_states = ip_hidden_states.to(img_query.dtype)
-        return ip_hidden_states
-
-
-class JointBlockIPWrapper:
-    """To be used as a patch_replace with Comfy"""
-
-    def __init__(
-        self,
-        original_block: JointBlock,
-        adapter: IPAttnProcessor,
-        ip_options=None,
-    ):
-        self.original_block = original_block
-        self.adapter = adapter
-        if ip_options is None:
-            ip_options = {}
-        self.ip_options = ip_options
-
-    def block_mixing(self, context, x, context_block, x_block, c):
-        """
-        Comes from mmdit.py. Modified to add ipadapter attention.
-        """
-        context_qkv, context_intermediates = context_block.pre_attention(context, c)
-
-        if x_block.x_block_self_attn:
-            x_qkv, x_qkv2, x_intermediates = x_block.pre_attention_x(x, c)
-        else:
-            x_qkv, x_intermediates = x_block.pre_attention(x, c)
-
-        qkv = tuple(torch.cat((context_qkv[j], x_qkv[j]), dim=1) for j in range(3))
-
-        attn = optimized_attention(
-            qkv[0],
-            qkv[1],
-            qkv[2],
-            heads=x_block.attn.num_heads,
-        )
-        context_attn, x_attn = (
-            attn[:, : context_qkv[0].shape[1]],
-            attn[:, context_qkv[0].shape[1] :],
-        )
-        # if the current timestep is not in the ipadapter enabling range, then the resampler wasn't run
-        # and the hidden states will be None
-        if (
-            self.ip_options["hidden_states"] is not None
-            and self.ip_options["t_emb"] is not None
-        ):
-            # IP-Adapter
-            ip_attn = self.adapter(
-                self.ip_options["hidden_states"],
-                *x_qkv,
-                self.ip_options["t_emb"],
-                x_block.attn.num_heads,
-            )
-            x_attn = x_attn + ip_attn * self.ip_options["weight"]
-
-        # Everything else is unchanged
-        if not context_block.pre_only:
-            context = context_block.post_attention(context_attn, *context_intermediates)
-
-        else:
-            context = None
-        if x_block.x_block_self_attn:
-            attn2 = optimized_attention(
-                x_qkv2[0],
-                x_qkv2[1],
-                x_qkv2[2],
-                heads=x_block.attn2.num_heads,
-            )
-            x = x_block.post_attention_x(x_attn, attn2, *x_intermediates)
-        else:
-            x = x_block.post_attention(x_attn, *x_intermediates)
-        return context, x
-
-    def __call__(self, args, _):
-
-        #   ```
-        c, x = self.block_mixing(
-            args["txt"],
-            args["img"],
-            self.original_block.context_block,
-            self.original_block.x_block,
-            c=args["vec"],
-        )
-        return {"txt": c, "img": x}
-
-
-
-import math
+import comfy.utils
+import hashlib
+from random import random, uniform
 import torch
-import torch.nn as nn
-from diffusers.models.embeddings import Timesteps, TimestepEmbedding
+import numpy as np
+from nodes import common_ksampler, CLIPTextEncode, ControlNetApplyAdvanced, VAEDecode, VAEEncode, InpaintModelConditioning
+from comfy.cldm.control_types import UNION_CONTROLNET_TYPES
+from .py.IPAdapterSD3 import Apply_IPA_SD3
+from .py.IPAdapterPlus import ipadapter_execute, IPAdapterUnifiedLoader
+from .py.AdvancedControlNet.utils import *
+from .py.AdvancedControlNet.nodes_main import AdvancedControlNetApply
+from .py.AdvancedControlNet.utils import StrengthInterpolation as SI
+import node_helpers
+from .def_unit import *
+import cv2
+
+#region---------AD-----------
+from typing import Dict, List
+from comfy.model_patcher import ModelPatcher
+from .py.AnimateDiffEvolved.ad_settings import AnimateDiffSettings
+from .py.AnimateDiffEvolved.context import ContextOptionsGroup
+from .py.AnimateDiffEvolved.utils_model import Folders, BetaSchedules, get_available_motion_models
+from .py.AnimateDiffEvolved.utils_motion import ADKeyframeGroup
+from .py.AnimateDiffEvolved.motion_lora import MotionLoraList
+from .py.AnimateDiffEvolved.model_injection import (ModelPatcherHelper, InjectionParams, MotionModelGroup, get_mm_attachment, load_motion_module_gen1)
+from .py.AnimateDiffEvolved.sampling import outer_sample_wrapper, sliding_calc_cond_batch
+from .py.AnimateDiffEvolved.sample_settings import SampleSettings
 
 
-# FFN
-def FeedForward(dim, mult=4):
-    inner_dim = int(dim * mult)
-    return nn.Sequential(
-        nn.LayerNorm(dim),
-        nn.Linear(dim, inner_dim, bias=False),
-        nn.GELU(),
-        nn.Linear(inner_dim, dim, bias=False),
-    )
+#endregion-------AD-----------
 
 
-def reshape_tensor(x, heads):
-    bs, length, width = x.shape
-    # (bs, length, width) --> (bs, length, n_heads, dim_per_head)
-    x = x.view(bs, length, heads, -1)
-    # (bs, length, n_heads, dim_per_head) --> (bs, n_heads, length, dim_per_head)
-    x = x.transpose(1, 2)
-    # (bs, n_heads, length, dim_per_head) --> (bs*n_heads, length, dim_per_head)
-    x = x.reshape(bs, heads, length, -1)
-    return x
+
+WEIGHT_TYPES = ["linear", "ease in", "ease out", 'ease in-out', 'reverse in-out', 'weak input', 'weak output', 'weak middle', 'strong middle', 'style transfer', 'composition', 'strong style transfer', 'style and composition', 'style transfer precise', 'composition precise']
 
 
-class PerceiverAttention(nn.Module):
-    def __init__(self, *, dim, dim_head=64, heads=8):
-        super().__init__()
-        self.scale = dim_head**-0.5
-        self.dim_head = dim_head
-        self.heads = heads
-        inner_dim = dim_head * heads
-
-        self.norm1 = nn.LayerNorm(dim)
-        self.norm2 = nn.LayerNorm(dim)
-
-        self.to_q = nn.Linear(dim, inner_dim, bias=False)
-        self.to_kv = nn.Linear(dim, inner_dim * 2, bias=False)
-        self.to_out = nn.Linear(inner_dim, dim, bias=False)
-
-    def forward(self, x, latents, shift=None, scale=None):
-        """
-        Args:
-            x (torch.Tensor): image features
-                shape (b, n1, D)
-            latent (torch.Tensor): latent features
-                shape (b, n2, D)
-        """
-        x = self.norm1(x)
-        latents = self.norm2(latents)
-
-        if shift is not None and scale is not None:
-            latents = latents * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
-
-        b, l, _ = latents.shape
-
-        q = self.to_q(latents)
-        kv_input = torch.cat((x, latents), dim=-2)
-        k, v = self.to_kv(kv_input).chunk(2, dim=-1)
-
-        q = reshape_tensor(q, self.heads)
-        k = reshape_tensor(k, self.heads)
-        v = reshape_tensor(v, self.heads)
-
-        # attention
-        scale = 1 / math.sqrt(math.sqrt(self.dim_head))
-        weight = (q * scale) @ (k * scale).transpose(
-            -2, -1
-        )  # More stable with f16 than dividing afterwards
-        weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
-        out = weight @ v
-
-        out = out.permute(0, 2, 1, 3).reshape(b, l, -1)
-
-        return self.to_out(out)
+#endregion-----------------------------import----------------------------
 
 
-class Resampler(nn.Module):
-    def __init__(
-        self,
-        dim=1024,
-        depth=8,
-        dim_head=64,
-        heads=16,
-        num_queries=8,
-        embedding_dim=768,
-        output_dim=1024,
-        ff_mult=4,
-        *args,
-        **kwargs,
-    ):
-        super().__init__()
+#region---------------------收纳----------------------------
 
-        self.latents = nn.Parameter(torch.randn(1, num_queries, dim) / dim**0.5)
+class Stack_ControlNet:
+    @classmethod
+    def INPUT_TYPES(cls):
 
-        self.proj_in = nn.Linear(embedding_dim, dim)
+        return {"required": {
+                },
+                "optional": {
+                    "controlnet_1": (["None"] + folder_paths.get_filename_list("controlnet"),),
+                    "controlnet_strength_1": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
 
-        self.proj_out = nn.Linear(dim, output_dim)
-        self.norm_out = nn.LayerNorm(output_dim)
+                    "controlnet_2": (["None"] + folder_paths.get_filename_list("controlnet"),),
+                    "controlnet_strength_2": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
 
-        self.layers = nn.ModuleList([])
-        for _ in range(depth):
-            self.layers.append(
-                nn.ModuleList(
-                    [
-                        PerceiverAttention(dim=dim, dim_head=dim_head, heads=heads),
-                        FeedForward(dim=dim, mult=ff_mult),
-                    ]
-                )
-            )
+                    "controlnet_3": (["None"] + folder_paths.get_filename_list("controlnet"),),
+                    "controlnet_strength_3": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
 
-    def forward(self, x):
+                    "image_1": ("IMAGE",),
+                    "image_2": ("IMAGE",),
+                    "image_3": ("IMAGE",),
+                },
+        }
 
-        latents = self.latents.repeat(x.size(0), 1, 1)
+    RETURN_TYPES = ("CN_STACK", )
+    RETURN_NAMES = ("CONTROLNET_STACK", )
+    FUNCTION = "controlnet_stacker"
+    CATEGORY = "Apt_Preset/stack"
 
-        x = self.proj_in(x)
+    def controlnet_stacker(self, controlnet_1, controlnet_strength_1, 
+                        controlnet_2, controlnet_strength_2, 
+                        controlnet_3, controlnet_strength_3, 
+                        image_1=None, image_2=None, image_3=None, ):
 
-        for attn, ff in self.layers:
-            latents = attn(x, latents) + latents
-            latents = ff(latents) + latents
+        controlnet_list= []
 
-        latents = self.proj_out(latents)
-        return self.norm_out(latents)
+        if controlnet_1 != "None" and image_1 is not None:
+            controlnet_path = folder_paths.get_full_path("controlnet", controlnet_1)
+            controlnet_1 = comfy.controlnet.load_controlnet(controlnet_path)
+            controlnet_list.extend([(controlnet_1, image_1, controlnet_strength_1)]),
 
+        if controlnet_2 != "None"  and image_2 is not None:
+            controlnet_path = folder_paths.get_full_path("controlnet", controlnet_2)
+            controlnet_2 = comfy.controlnet.load_controlnet(controlnet_path)
+            controlnet_list.extend([(controlnet_2, image_2, controlnet_strength_2)]),
 
-class TimeResampler(nn.Module):
-    def __init__(
-        self,
-        dim=1024,
-        depth=8,
-        dim_head=64,
-        heads=16,
-        num_queries=8,
-        embedding_dim=768,
-        output_dim=1024,
-        ff_mult=4,
-        timestep_in_dim=320,
-        timestep_flip_sin_to_cos=True,
-        timestep_freq_shift=0,
-    ):
-        super().__init__()
+        if controlnet_3 != "None"  and image_3 is not None:
+            controlnet_path = folder_paths.get_full_path("controlnet", controlnet_3)
+            controlnet_3 = comfy.controlnet.load_controlnet(controlnet_path)
+            controlnet_list.extend([(controlnet_3, image_3, controlnet_strength_3)]),
 
-        self.latents = nn.Parameter(torch.randn(1, num_queries, dim) / dim**0.5)
-
-        self.proj_in = nn.Linear(embedding_dim, dim)
-
-        self.proj_out = nn.Linear(dim, output_dim)
-        self.norm_out = nn.LayerNorm(output_dim)
-
-        self.layers = nn.ModuleList([])
-        for _ in range(depth):
-            self.layers.append(
-                nn.ModuleList(
-                    [
-                        # msa
-                        PerceiverAttention(dim=dim, dim_head=dim_head, heads=heads),
-                        # ff
-                        FeedForward(dim=dim, mult=ff_mult),
-                        # adaLN
-                        nn.Sequential(nn.SiLU(), nn.Linear(dim, 4 * dim, bias=True)),
-                    ]
-                )
-            )
-
-        # time
-        self.time_proj = Timesteps(
-            timestep_in_dim, timestep_flip_sin_to_cos, timestep_freq_shift
-        )
-        self.time_embedding = TimestepEmbedding(timestep_in_dim, dim, act_fn="silu")
+        return (controlnet_list, )
 
 
-    def forward(self, x, timestep, need_temb=False):
-        timestep_emb = self.embedding_time(x, timestep)  # bs, dim
+class Stack_ControlNet1:
 
-        latents = self.latents.repeat(x.size(0), 1, 1)
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
 
-        x = self.proj_in(x)
-        x = x + timestep_emb[:, None]
+            },
+            "optional": {
+                "controlnet": (["None"] + folder_paths.get_filename_list("controlnet"),),
+                "strength": ("FLOAT", {"default": 0.8, "min": -10.0, "max": 10.0, "step": 0.01}),
+                "cn_stack": ("CN_STACK",),
 
-        for attn, ff, adaLN_modulation in self.layers:
-            shift_msa, scale_msa, shift_mlp, scale_mlp = adaLN_modulation(
-                timestep_emb
-            ).chunk(4, dim=1)
-            latents = attn(x, latents, shift_msa, scale_msa) + latents
+            }
+        }
 
-            res = latents
-            for idx_ff in range(len(ff)):
-                layer_ff = ff[idx_ff]
-                latents = layer_ff(latents)
-                if idx_ff == 0 and isinstance(layer_ff, nn.LayerNorm):  # adaLN
-                    latents = latents * (
-                        1 + scale_mlp.unsqueeze(1)
-                    ) + shift_mlp.unsqueeze(1)
-            latents = latents + res
+    RETURN_TYPES = ("CN_STACK",)
+    RETURN_NAMES = ("cn_stack",)
+    FUNCTION = "controlnet_stacker"
+    CATEGORY = "Apt_Preset/stack"
 
-            # latents = ff(latents) + latents
+    def controlnet_stacker(self, controlnet, strength, image=None, cn_stack=None):
 
-        latents = self.proj_out(latents)
-        latents = self.norm_out(latents)
+        controlnet_list = []
+        if cn_stack is not None:
+            controlnet_list.extend([cn for cn in cn_stack if cn[0] != "None"])
 
-        if need_temb:
-            return latents, timestep_emb
+        if controlnet != "None" and image is not None:
+            controlnet_path = folder_paths.get_full_path("controlnet", controlnet)
+            controlnet = comfy.controlnet.load_controlnet(controlnet_path)
+            controlnet_list.append((controlnet, image, strength,))
+
+        return (controlnet_list,)
+
+
+class Apply_ControlNetStack:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                            "switch": (["Off","On"],),
+                            "positive": ("CONDITIONING", ),
+                            "negative": ("CONDITIONING",),
+                            "controlnet_stack": ("CN_STACK", ),
+                            },
+            "optional": {
+                "vae": ("VAE",),
+            }
+
+
+        }                    
+
+    RETURN_TYPES = ("CONDITIONING", "CONDITIONING", )
+    RETURN_NAMES = ("positive", "negative", )
+    FUNCTION = "apply_controlnet_stack"
+    CATEGORY = "Apt_Preset/stack"
+
+    def apply_controlnet_stack(self, positive, negative, switch, vae=None, controlnet_stack=None,):
+
+        if switch == "Off":
+            return (positive, negative, )
+    
+        if controlnet_stack is not None:
+            for controlnet_tuple in controlnet_stack:
+                controlnet, image, strength = controlnet_tuple
+                
+                conditioning = ControlNetApplyAdvanced().apply_controlnet( positive, negative, controlnet, image, strength, 0, 1, vae, extra_concat=[])
+                positive, negative = conditioning[0], conditioning[1]
+
+        return (positive, negative, )
+
+
+
+
+
+class Stack_text:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        json_data, styles = load_styles_from_file()
+        populate_items(styles, "style-preview")
+        cls.json_data = json_data
+
+        return {"required": {
+                "pos": ("STRING", {"default": "","multiline": True}),
+                "neg": ("STRING", {"default": "", "multiline": False}),
+                "style": (none2list(style_list()[0]), {"default": "None"}),
+                },
+        }
+
+    RETURN_TYPES = ("TEXT_STACK",  )
+    RETURN_NAMES = ("text_tack", )
+    FUNCTION = "lora_stacker"
+    CATEGORY = "Apt_Preset/stack"
+    def lora_stacker(self, style,  pos,neg ):
+        text_stack=list()
+
+        if style != "None":
+            pos += f"{pos}, {style_list()[1][style_list()[0].index(style)][1]}"
+            neg += f"{neg}, {style_list()[1][style_list()[0].index(style)][2]}" if len(style_list()[1][style_list()[0].index(style)]) > 2 else ""
+        
+
+
+        text_stack.extend([(pos, neg, )]),
+        return (text_stack, )
+
+
+class Apply_textStack:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+                "clip": ("CLIP",),
+                "text_stack": ("TEXT_STACK",),
+                },
+        }
+
+    RETURN_TYPES = ("CONDITIONING", "CONDITIONING")
+    RETURN_NAMES = ("positive", "negative")
+    FUNCTION = "textStack"
+    CATEGORY = "Apt_Preset/stack"
+    def textStack(self, clip, text_stack):
+        positive_list = []
+        negative_list = []
+        for text in text_stack:
+            pos, neg = text
+            if pos is not None and pos != '':
+                (positive,) = CLIPTextEncode().encode(clip, pos)
+                (negative,) = CLIPTextEncode().encode(clip, neg)
+                positive_list.append(positive)
+                negative_list.append(negative)
+
+        # 合并所有 positive 和 negative 结果
+        if positive_list and negative_list:
+            positive = sum(positive_list, [])
+            negative = sum(negative_list, [])
         else:
-            return latents
+            # 如果 text_stack 为空或者所有 pos 都是空，返回空列表
+            positive = []
+            negative = []
 
-    def embedding_time(self, sample, timestep):
-
-        # 1. time
-        timesteps = timestep
-        if not torch.is_tensor(timesteps):
-            # TODO: this requires sync between CPU and GPU. So try to pass timesteps as tensors if you can
-            # This would be a good case for the `match` statement (Python 3.10+)
-            is_mps = sample.device.type == "mps"
-            if isinstance(timestep, float):
-                dtype = torch.float32 if is_mps else torch.float64
-            else:
-                dtype = torch.int32 if is_mps else torch.int64
-            timesteps = torch.tensor([timesteps], dtype=dtype, device=sample.device)
-        elif len(timesteps.shape) == 0:
-            timesteps = timesteps[None].to(sample.device)
-
-        # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
-        timesteps = timesteps.expand(sample.shape[0])
-
-        t_emb = self.time_proj(timesteps)
-
-        # timesteps does not contain any weights and will always return f32 tensors
-        # but time_embedding might actually be running in fp16. so we need to cast here.
-        # there might be better ways to encapsulate this.
-        t_emb = t_emb.to(dtype=sample.dtype)
-
-        emb = self.time_embedding(t_emb, None)
-        return emb
+        return (positive, negative)
 
 
+class Stack_LoRA:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        loras = ["None"] + folder_paths.get_filename_list("loras")
+        
+        return {
+            "required": {
+                "lora_name_1": (loras,),
+                "weight_1": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                "lora_name_2": (loras,),
+                "weight_2": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                "lora_name_3": (loras,),
+                "weight_3": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+            },
+            "optional": {
+                "lora_stack": ("LORASTACK",)
+            },
+        }
+
+    RETURN_TYPES = ("LORASTACK",)
+    RETURN_NAMES = ("lora_stack",)
+    FUNCTION = "lora_stacker"
+    CATEGORY = "Apt_Preset/stack"
 
 
+    def lora_stacker(self, lora_name_1, weight_1, lora_name_2, weight_2, lora_name_3, weight_3, lora_stack=None):
+        """
+        将多个 LoRA 配置添加到堆栈中。
+        """
+        lora_list = []
+
+        # 如果传入了已有的 lora_stack，将其内容合并到 lora_list 中
+        if lora_stack is not None:
+            lora_list.extend([lora for lora in lora_stack if lora[0] != "None"])
+
+        # 如果 LoRA 配置有效，则将其添加到列表中
+        if lora_name_1 != "None":
+            lora_list.append((lora_name_1, weight_1))
+        if lora_name_2 != "None":
+            lora_list.append((lora_name_2, weight_2))
+        if lora_name_3 != "None":
+            lora_list.append((lora_name_3, weight_3))
+
+        return (lora_list,)
 
 
+class Apply_LoRAStack:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "lora_stack": ("LORASTACK",),
+            }
+        }
+
+    RETURN_TYPES = ("MODEL", "CLIP",)
+    RETURN_NAMES = ("MODEL", "CLIP",)
+    FUNCTION = "apply_lora_stack"
+    CATEGORY = "Apt_Preset/stack"
+
+    def apply_lora_stack(self, model, clip, lora_stack=None):
+        if not lora_stack:
+            return (model, clip,)
+
+        model_lora = model
+        clip_lora = clip
+
+        for tup in lora_stack:
+            lora_name, weight = tup  
+            lora_path = folder_paths.get_full_path("loras", lora_name)
+            lora = comfy.utils.load_torch_file(lora_path, safe_load=True)
+            model_lora, clip_lora = comfy.sd.load_lora_for_models(model_lora, clip_lora, lora, weight, weight )
+
+        return (model_lora, clip_lora,)
 
 
+class Stack_condi:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {
+                "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "mask_1": ("MASK", ),
+                "mask_2": ("MASK", ),
+                "mask_3": ("MASK", ),
+                "mask_4": ("MASK", ),
+                "mask_5": ("MASK", ),
+                "mask_1_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_2_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_3_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_4_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_5_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "set_cond_area": (["default", "mask bounds"],),
+                "neg": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "Poor quality"}),
+            }
+        }
+        
+    RETURN_TYPES = ("STACK_CONDI",)
+    RETURN_NAMES = ("condi_stack", )
+    FUNCTION = "stack_condi"
+    CATEGORY = "Apt_Preset/stack"
+
+    def stack_condi(self, pos1, pos2, pos3, pos4, pos5, neg, set_cond_area, mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength, mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None):
+        condi_stack = list()
+        
+        # 打包逻辑：每组 pos、mask 和 mask_strength 是配套的
+        def pack_group(pos, mask, mask_strength):
+            if mask is not None:  # 如果 mask 存在，则打包整组
+                return {
+                    "pos": pos,
+                    "mask": mask,
+                    "mask_strength": mask_strength,
+                }
+            return None  # 如果 mask 不存在，则忽略整组
+        
+        # 打包每组信息
+        group1 = pack_group(pos1, mask_1, mask_1_strength)
+        group2 = pack_group(pos2, mask_2, mask_2_strength)
+        group3 = pack_group(pos3, mask_3, mask_3_strength)
+        group4 = pack_group(pos4, mask_4, mask_4_strength)
+        group5 = pack_group(pos5, mask_5, mask_5_strength)
+        
+        # 将打包的组添加到 condi_stack
+        if group1 is not None:
+            condi_stack.append(group1)
+        if group2 is not None:
+            condi_stack.append(group2)
+        if group3 is not None:
+            condi_stack.append(group3)
+        if group4 is not None:
+            condi_stack.append(group4)
+        if group5 is not None:
+            condi_stack.append(group5)
+        
+        # 打包负面提示和 set_cond_area
+        condi_stack.append({
+            "neg": neg,
+            "set_cond_area": set_cond_area,
+        })
+        
+        return (condi_stack,)
 
 
+class Apply_condiStack:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "clip": ("CLIP",),
+            "stack_condi": ("STACK_CONDI",),
+        }}
+
+    RETURN_TYPES = ("CONDITIONING", "CONDITIONING")
+    RETURN_NAMES = ("positive", "negative")
+    FUNCTION = "condiStack"
+    CATEGORY = "Apt_Preset/stack"
+
+    def condiStack(self, clip, stack_condi):
+        neg_data = stack_condi[-1]
+        neg = neg_data["neg"]
+        set_cond_area = neg_data["set_cond_area"]
+
+        negative, = CLIPTextEncode().encode(clip, neg)
+        positive = []
+        set_area_to_bounds = (set_cond_area != "default")
+
+        for group in stack_condi[:-1]:
+            pos = group["pos"]
+            mask = group["mask"]
+            mask_strength = group["mask_strength"]
+
+            encoded_pos, = CLIPTextEncode().encode(clip, pos)
+
+            if mask is not None:
+                if len(mask.shape) < 3:
+                    mask = mask.unsqueeze(0)
+                for t in encoded_pos:
+                    append_helper(t, mask, positive, set_area_to_bounds, mask_strength)
+                    
+        positive = positive
+
+        return (positive, negative)
 
 
+class Stack_IPA:
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-MODELS_DIR = os.path.join(folder_paths.models_dir, "ipadapter")
-if "ipadapter" not in folder_paths.folder_names_and_paths:
-    current_paths = [MODELS_DIR]
-else:
-    current_paths, _ = folder_paths.folder_names_and_paths["ipadapter"]
-folder_paths.folder_names_and_paths["ipadapter"] = (
-    current_paths,
-    folder_paths.supported_pt_extensions,
-)
-
-
-def patch(
-    patcher,
-    ip_procs,
-    resampler: TimeResampler,
-    clip_embeds,
-    weight=1.0,
-    start=0.0,
-    end=1.0,
-):
-    """
-    Patches a model_sampler to add the ipadapter
-    """
-    mmdit = patcher.model.diffusion_model
-    timestep_schedule_max = patcher.model.model_config.sampling_settings.get(
-        "timesteps", 1000
-    )
-    # hook the model's forward function
-    # so that when it gets called, we can grab the timestep and send it to the resampler
-    ip_options = {
-        "hidden_states": None,
-        "t_emb": None,
-        "weight": weight,
-    }
-
-    def ddit_wrapper(forward, args):
-        # this is between 0 and 1, so the adapters can calculate start_point and end_point
-        # actually, do we need to get the sigma value instead?
-        t_percent = 1 - args["timestep"].flatten()[0].cpu().item()
-        if start <= t_percent <= end:
-            batch_size = args["input"].shape[0] // len(args["cond_or_uncond"])
-            # if we're only doing cond or only doing uncond, only pass one of them through the resampler
-            embeds = clip_embeds[args["cond_or_uncond"]]
-            # slight efficiency optimization todo: pass the embeds through and then afterwards
-            # repeat to the batch size
-            embeds = torch.repeat_interleave(embeds, batch_size, dim=0)
-            # the resampler wants between 0 and MAX_STEPS
-            timestep = args["timestep"] * timestep_schedule_max
-            image_emb, t_emb = resampler(embeds, timestep, need_temb=True)
-            # these will need to be accessible to the IPAdapters
-            ip_options["hidden_states"] = image_emb
-            ip_options["t_emb"] = t_emb
-        else:
-            ip_options["hidden_states"] = None
-            ip_options["t_emb"] = None
-
-        return forward(args["input"], args["timestep"], **args["c"])
-
-    patcher.set_model_unet_function_wrapper(ddit_wrapper)
-    # patch each dit block
-    for i, block in enumerate(mmdit.joint_blocks):
-        wrapper = JointBlockIPWrapper(block, ip_procs[i], ip_options)
-        patcher.set_model_patch_replace(wrapper, "dit", "double_block", i)
-
-
-class SD3IPAdapter:
-    def __init__(self, checkpoint: str, device):
-        self.device = device
-        # load the checkpoint right away
-        self.state_dict = torch.load(
-            os.path.join(MODELS_DIR, checkpoint),
-            map_location=self.device,
-            weights_only=True,
-        )
-        # todo: infer some of the params from the checkpoint instead of hardcoded
-        self.resampler = TimeResampler(
-            dim=1280,
-            depth=4,
-            dim_head=64,
-            heads=20,
-            num_queries=64,
-            embedding_dim=1152,
-            output_dim=2432,
-            ff_mult=4,
-            timestep_in_dim=320,
-            timestep_flip_sin_to_cos=True,
-            timestep_freq_shift=0,
-        )
-        self.resampler.eval()
-        self.resampler.to(self.device, dtype=torch.float16)
-        self.resampler.load_state_dict(self.state_dict["image_proj"])
-
-        # now we'll create the attention processors
-        # ip_adapter.keys looks like [0.proj, 0.to_k, ..., 1.proj, 1.to_k, ...]
-        n_procs = len(
-            set(x.split(".")[0] for x in self.state_dict["ip_adapter"].keys())
-        )
-        self.procs = torch.nn.ModuleList(
-            [
-                # this is hardcoded for SD3.5L
-                IPAttnProcessor(
-                    hidden_size=2432,
-                    cross_attention_dim=2432,
-                    ip_hidden_states_dim=2432,
-                    ip_encoder_hidden_states_dim=2432,
-                    head_dim=64,
-                    timesteps_emb_dim=1280,
-                ).to(self.device, dtype=torch.float16)
-                for _ in range(n_procs)
-            ]
-        )
-        self.procs.load_state_dict(self.state_dict["ip_adapter"])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-class Stack_IPA_SD3:
     def __init__(self):
         self.unfold_batch = False
 
@@ -624,150 +444,2062 @@ class Stack_IPA_SD3:
         return {
             "required": {
 
-                "ipadapter": (folder_paths.get_filename_list("ipadapter"), {"default": "SD3.5-Large-IP-Adapter.bin"}),
-                "image_embed": (folder_paths.get_filename_list("clip_vision"), {"default": "sigclip_vision_patch14_384.safetensors"}),
-                "weight": ("FLOAT",{"default": 1.0, "min": -1.0, "max": 5.0, "step": 0.05},),
+                "preset": ([ 'STANDARD (medium strength)','LIGHT - SD1.5 only (low strength)', 'VIT-G (medium strength)', 'PLUS (high strength)', 'PLUS FACE (portraits)', 'FULL FACE - SD1.5 only (portraits stronger)'], ),
+                "weight": ("FLOAT", { "default": 1.0, "min": -1, "max": 5, "step": 0.05 }),
+                "weight_type": (WEIGHT_TYPES, ),
+                "combine_embeds": (["concat", "add", "subtract", "average", "norm average"],),
+                "start_at": ("FLOAT", { "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.001 }),
+                "end_at": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.001 }),
+                "embeds_scaling": (['V only', 'K+V', 'K+V w/ C penalty', 'K+mean(V) w/ C penalty'], ),
             },
             "optional": {
-                            "image": ("IMAGE",),
-                "mask": ("MASK", ),
+                "image": ("IMAGE",),
+                "attn_mask": ("MASK",),
+                "ipa_stack": ("IPA_STACK",),
+                #"image_negative": ("IMAGE",),
             }
         }
 
-    RETURN_TYPES = ("IPA3_STACK",)
-    RETURN_NAMES = ("ipa3_stack",)
+    RETURN_TYPES = ("IPA_STACK",)
+    RETURN_NAMES = ("ipa_stack",)
     FUNCTION = "ipa_stack"
     CATEGORY = "Apt_Preset/stack"
 
-    def ipa_stack(self, image, ipadapter, image_embed, weight, mask=None,):
+    def ipa_stack(self,   preset, weight, weight_type, combine_embeds, start_at, end_at, embeds_scaling,image=None, attn_mask=None, image_negative=None, ipa_stack=None):
+        
+        if image is None:
+            return (None,)
+        
         # 初始化ipa_list
         ipa_list = []
+
+        # 如果传入了ipa_stack，将其中的内容添加到ipa_list中
+        if ipa_stack is not None:
+            ipa_list.extend([ipa for ipa in ipa_stack if ipa[0] != "None"])
+
         # 将当前IPA的相关信息打包成一个元组，并添加到ipa_list中
         ipa_info = (
             image,
-            ipadapter,
-            image_embed,
+            preset,
             weight,
-            mask,
+            weight_type,
+            combine_embeds,
+            start_at,
+            end_at,
+            embeds_scaling,
+            attn_mask,
+            image_negative,
         )
         ipa_list.append(ipa_info)
 
         return (ipa_list,)
 
 
-class Apply_IPA_SD3:
+class Apply_IPA:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "model": ("MODEL",),
-                "ipa3_stack": ("IPA3_STACK",),
+                "ipa_stack": ("IPA_STACK",),
             }
         }
 
-    RETURN_TYPES = ("MODEL",)
-    RETURN_NAMES = ("model",)
+    RETURN_TYPES = ("MODEL", )
+    RETURN_NAMES = ("model", )
     FUNCTION = "apply_ipa_stack"
     CATEGORY = "Apt_Preset/stack"
 
-    def apply_ipa_stack(self, model, ipa3_stack):
-        if not ipa3_stack:
-            raise ValueError("ipa3_stack 不能为空")
+    def apply_ipa_stack(self, model, ipa_stack):
+
+        if not ipa_stack:
+            raise ValueError("ipa_stack 不能为空")
 
         # 初始化变量
+        image0 = None
+        mask0 = None
         work_model = model.clone()
 
         # 遍历 ipa_stack 中的每个 IPA 配置
-        for ipa_info in ipa3_stack:
+        for ipa_info in ipa_stack:
             (
                 image,
-                ipadapter_name,
-                image_embed_name,
+                preset,
                 weight,
-                mask,
+                weight_type,
+                combine_embeds,
+                start_at,
+                end_at,
+                embeds_scaling,
+                attn_mask,
+                image_negative,
             ) = ipa_info
 
-            # 创建IPAdapter实例
-            ipadapter = SD3IPAdapter(ipadapter_name, "cuda")
-            
-            # 加载并处理图像嵌入
-            clip_path = folder_paths.get_full_path_or_raise("clip_vision", image_embed_name)
-            image_embed = comfy.clip_vision.load(clip_path)
-            image_embed = image_embed.encode_image(image, crop=True)
-            
-            # 设置模型
-            image_embed = image_embed.penultimate_hidden_states
-            embeds = torch.cat([image_embed, torch.zeros_like(image_embed)], dim=0).to(
-                ipadapter.device, dtype=torch.float16
-            )
-            
-            # 应用patch
-            patch(
-                work_model,
-                ipadapter.procs,
-                ipadapter.resampler,
-                embeds,
-                weight=weight,
-                start=0,
-                end=1,
+            # 记录第一个 image 和 mask
+            if image0 is None:
+                image0 = image
+            if mask0 is None:
+                mask0 = attn_mask
+
+            # 加载 IPAdapter 模型
+            model, ipadapter = IPAdapterUnifiedLoader().load_models(
+                work_model, preset, lora_strength=0.0, provider="CPU", ipadapter=None
             )
 
-        return (work_model,)
+            if 'ipadapter' in ipadapter:
+                ipadapter_model = ipadapter['ipadapter']['model']
+                clip_vision = ipadapter['clipvision']['model']
+            else:
+                ipadapter_model = ipadapter
+
+
+            ipa_args = {
+                "image": image,
+                "image_negative": image_negative,
+                "weight": weight,
+                "weight_type": weight_type,
+                "combine_embeds": combine_embeds,
+                "start_at": start_at,
+                "end_at": end_at,
+                "attn_mask": attn_mask,
+                "embeds_scaling": embeds_scaling,
+                "insightface": None,  # 如果需要 insightface，可以从 ipa_stack 中传递
+                "layer_weights": None,  # 如果需要 layer_weights，可以从 ipa_stack 中传递
+                "encode_batch_size": 0,  # 默认值
+                "style_boost": None,  # 如果需要 style_boost，可以从 ipa_stack 中传递
+                "composition_boost": None,  # 如果需要 composition_boost，可以从 ipa_stack 中传递
+                "enhance_tiles": 1,  # 默认值
+                "enhance_ratio": 1.0,  # 默认值
+                "weight_kolors": 1.0,  # 默认值
+            }
+
+            # 应用 IPA 配置
+            model, _ = ipadapter_execute(work_model, ipadapter_model, clip_vision, **ipa_args)
+
+        return (model,)       #model在下面运行正确，但是这里会报错，要统一元祖或统一模型对象
 
 
 
-class IPAdapterSD3LOAD:
+class Stack_adv_CN:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "strength": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 10.0, "step": 0.01}),
+            },
+            "optional": {
+                "cn_stack": ("ADV_CN_STACK",),
+                "controlnet": ("CONTROL_NET", ),
+                "image": ("IMAGE", ),
+                "mask_optional": ("MASK", ),
+                "latent_kf_override": ("LATENT_KEYFRAME", ),
+            },
+            "hidden": {
+                "autosize": ("ACNAUTOSIZE", {"padding": 0}),
+            }
+        }
+
+    RETURN_TYPES = ("ADV_CN_STACK","CONTROL_NET",)
+    RETURN_NAMES = ("cn_stack","controlnet")
+    FUNCTION = "controlnet_stacker"
+    CATEGORY = "Apt_Preset/stack"
+
+    def controlnet_stacker(self, controlnet, image, strength, cn_stack=None, mask_optional=None,
+                        latent_kf_override=None):
+        controlnet_list = []
+
+        if cn_stack is not None:
+            controlnet_list.extend([cn for cn in cn_stack if cn[0] != "None"])
+
+        if controlnet != "None" and image is not None:
+            controlnet_list.append((
+                controlnet,    # 第 1 个元素
+                image,         # 第 2 个元素
+                strength,      # 第 3 个元素
+                mask_optional, # 第 6 个元素
+                latent_kf_override  # 第 7 个元素
+            ))
+        return (controlnet_list,controlnet)
+
+
+
+
+class Stack_adv_CN_easy:
+
+    controlnets = ["None"] + folder_paths.get_filename_list("controlnet")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+
+            },
+            "optional": {
+                "cn_stack": ("ADV_CN_STACK",),
+                "controlnet": (cls.controlnets,),
+                "strength": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "image": ("IMAGE", ),
+                "mask_optional": ("MASK", ),
+                "latent_kf_override": ("LATENT_KEYFRAME", ),
+            },
+            "hidden": {
+                "autosize": ("ACNAUTOSIZE", {"padding": 0}),
+            }
+        }
+
+    RETURN_TYPES = ("ADV_CN_STACK","CONTROL_NET",)
+    RETURN_NAMES = ("cn_stack","controlnet")
+    FUNCTION = "controlnet_stacker"
+    CATEGORY = "Apt_Preset/stack"
+
+    def controlnet_stacker(self, controlnet, image, strength, cn_stack=None, mask_optional=None,
+                        latent_kf_override=None):
+        controlnet_list = []
+
+        if cn_stack is not None:
+            controlnet_list.extend([cn for cn in cn_stack if cn[0] != "None"])
+
+        if controlnet != "None" and image is not None:
+
+            controlnet_path = folder_paths.get_full_path("controlnet", controlnet)
+            controlnet = comfy.controlnet.load_controlnet(controlnet_path)
+
+            controlnet_list.append(( controlnet, image,  strength, mask_optional, latent_kf_override ))
+
+        return (controlnet_list,controlnet)
+
+
+
+class Apply_adv_CN:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "positive": ("CONDITIONING", ),
+                "cn_stack": ("ADV_CN_STACK",),
+            },
+            
+            }
+
+
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("positive",)
+    FUNCTION = "apply_controlnet"
+    CATEGORY = "Apt_Preset/stack"
+
+    def apply_controlnet(self, positive, cn_stack=None):
+        if cn_stack is not None:
+            # 创建 AdvancedControlNetApply 的实例
+
+            for cn in cn_stack:
+                # 解包 cn，确保变量数量与元组结构一致
+                controlnet, image, strength, mask_optional, latent_kf_override = cn
+                
+                positive =  AdvancedControlNetApply.apply_controlnet(self, 
+                    positive=positive, 
+                    negative=None, 
+                    control_net=controlnet, 
+                    image=image,
+                    mask_optional=mask_optional, 
+                    strength=strength, 
+                    start_percent=0, 
+                    end_percent=1,
+                    timestep_kf=None,  
+                    latent_kf_override=latent_kf_override, 
+                    weights_override=None,
+                    control_apply_to_uncond=True
+                )[0]
+        return (positive,)
+
+
+class AD_sch_IPA:
+
+    def __init__(self):
+        self.unfold_batch = False
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "preset": ([ 'STANDARD (medium strength)','LIGHT - SD1.5 only (low strength)', 'VIT-G (medium strength)', 'PLUS (high strength)', 'PLUS FACE (portraits)', 'FULL FACE - SD1.5 only (portraits stronger)'], ),
+                "weight": ("FLOAT", { "default": 1.0, "min": -1, "max": 5, "step": 0.05 }),
+                #"weight_type": (["none", "style", "content"], ),
+                #"combine_embeds": (["concat", "add", "subtract", "average", "norm average"],),
+                #"start_at": ("FLOAT", { "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.001 }),
+                #"end_at": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.001 }),
+                "embeds_scaling": (['V only', 'K+V', 'K+V w/ C penalty', 'K+mean(V) w/ C penalty'], ),
+                "points_string": ("STRING", {"default": "0:(0.0),\n7:(1.0),\n15:(0.0)\n", "multiline": True}),
+                "invert": ("BOOLEAN", {"default": False}),
+                "frames": ("INT", {"default": 16,"min": 2, "max": 255, "step": 1}),
+                #"width": ("INT", {"default": 512,"min": 1, "max": 4096, "step": 1}),
+                #"height": ("INT", {"default": 512,"min": 1, "max": 4096, "step": 1}),
+                "interpolation": (["linear", "ease_in", "ease_out", "ease_in_out"],),
+            },
+            "optional": {
+                "ipa_stack": ("IPA_STACK",),
+                "image": ("IMAGE",),
+            }
+        }
+
+    RETURN_TYPES = ("IPA_STACK",)
+    RETURN_NAMES = ("ipa_stack",)
+    FUNCTION = "ipa_stack"
+    CATEGORY = "Apt_Preset/stack"
+
+    def createfademask(self, frames, width, height, invert, points_string, interpolation):
+        
+        def ease_in(t):
+            return t * t
+        
+        def ease_out(t):
+            return 1 - (1 - t) * (1 - t)
+
+        def ease_in_out(t):
+            return 3 * t * t - 2 * t * t * t
+        
+        # Parse the input string into a list of tuples
+        points = []
+        points_string = points_string.rstrip(',\n')
+        for point_str in points_string.split(','):
+            frame_str, color_str = point_str.split(':')
+            frame = int(frame_str.strip())
+            color = float(color_str.strip()[1:-1])  # Remove parentheses around color
+            points.append((frame, color))
+
+        # Check if the last frame is already in the points
+        if len(points) == 0 or points[-1][0] != frames - 1:
+            # If not, add it with the color of the last specified frame
+            points.append((frames - 1, points[-1][1] if points else 0))
+
+        # Sort the points by frame number
+        points.sort(key=lambda x: x[0])
+
+        batch_size = frames
+        out = []
+        image_batch = np.zeros((batch_size, height, width), dtype=np.float32)
+
+        # Index of the next point to interpolate towards
+        next_point = 1
+
+        for i in range(batch_size):
+            while next_point < len(points) and i > points[next_point][0]:
+                next_point += 1
+
+            # Interpolate between the previous point and the next point
+            prev_point = next_point - 1
+            t = (i - points[prev_point][0]) / (points[next_point][0] - points[prev_point][0])
+            if interpolation == "ease_in":
+                t = ease_in(t)
+            elif interpolation == "ease_out":
+                t = ease_out(t)
+            elif interpolation == "ease_in_out":
+                t = ease_in_out(t)
+            elif interpolation == "linear":
+                pass  # No need to modify `t` for linear interpolation
+
+            color = points[prev_point][1] - t * (points[prev_point][1] - points[next_point][1])
+            color = np.clip(color, 0, 255)
+            image = np.full((height, width), color, dtype=np.float32)
+            image_batch[i] = image
+
+        output = torch.from_numpy(image_batch)
+        mask = output
+        out.append(mask)
+
+        if invert:
+            return 1.0 - torch.cat(out, dim=0)
+        return torch.cat(out, dim=0)
+
+    def ipa_stack(self, image, preset, weight, embeds_scaling, points_string, invert, frames, interpolation, ipa_stack=None):
+        
+        start_at=0
+        end_at=1
+        weight_type = "style"
+        combine_embeds = "add"
+        
+        
+        attn_mask = self.createfademask(frames, 512, 512, invert, points_string, interpolation)
+        
+        image_negative = None
+        ipa_list = []
+        if ipa_stack is not None:
+            ipa_list.extend([ipa for ipa in ipa_stack if ipa[0] != "None"])
+
+        ipa_info = (
+            image,
+            preset,
+            weight,
+            weight_type,
+            combine_embeds,
+            start_at,
+            end_at,
+            embeds_scaling,
+            attn_mask,
+            image_negative,
+        )
+        ipa_list.append(ipa_info)
+
+        return (ipa_list,)
+
+
+class stack_AD_diff:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model_name": (get_available_motion_models(),),
+                "beta_schedule": (BetaSchedules.ALIAS_LIST, {"default": BetaSchedules.AUTOSELECT}),
+            },
+            "optional": {
+                "context_options": ("CONTEXT_OPTIONS",),
+                "motion_lora": ("MOTION_LORA",),
+                "motion_scale": ("FLOAT", {"default": 1.0, "min": 0.0, "step": 0.001}),
+                "apply_v2_models_properly": ("BOOLEAN", {"default": True}),
+            }
+        }
+    
+    RETURN_TYPES = ("AD_STACK",)
+    RETURN_NAMES = ("ad_stack",)
+    FUNCTION = "pack_ad_params"
+    CATEGORY = "Apt_Preset/stack"
+
+    def pack_ad_params(self,
+        model_name: str, 
+        beta_schedule: str,
+        context_options: ContextOptionsGroup=None, 
+        motion_lora: MotionLoraList=None, 
+        motion_scale: float=1.0,
+        apply_v2_models_properly: bool=False,
+    ):
+
+        # 初始化ipa_list
+        ad_stack = []
+        
+        ipa_info = (
+            model_name,
+            beta_schedule,
+            context_options,
+            motion_lora,
+            motion_scale,
+            apply_v2_models_properly,
+        )
+        ad_stack.append(ipa_info)
+        return (ad_stack,)
+
+
+class Apply_AD_diff:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "model": ("MODEL",),
-                "ipadapter": (folder_paths.get_filename_list("ipadapter"), {"default": "SD3.5-Large-IP-Adapter.bin"}),
+                "ad_stack": ("AD_STACK",),
+            }
+        }
+    
+    RETURN_TYPES = ("MODEL",)
+    RETURN_NAMES = ("model",)
+    FUNCTION = "apply_ad_params"
+    CATEGORY = "Apt_Preset/stack"
 
-                "image_embed": (folder_paths.get_filename_list("clip_vision"), {"default": "sigclip_vision_patch14_384.safetensors"}), 
-                "image": ("IMAGE",),
-                "weight": ("FLOAT",{"default": 1.0, "min": -1.0, "max": 5.0, "step": 0.05},),
-            },
-            "optional": { 
-                "mask": ("MASK", ), 
+    def apply_ad_params(self, model: ModelPatcher, ad_stack):
+
+        if ad_stack is not None:
+
+            for ad_params in ad_stack:
+                (
+            model_name,
+            beta_schedule,
+            context_options,
+            motion_lora,
+            motion_scale,
+            apply_v2_models_properly,
+            ) = ad_params
+
+
+        motion_model = load_motion_module_gen1(model_name, model, motion_lora=motion_lora)
+        # set injection params
+        params = InjectionParams(
+                unlimited_area_hack=False,
+                apply_v2_properly=apply_v2_models_properly,
+        )
+        if context_options:
+            params.set_context(context_options)
+        
+        motion_model_settings = AnimateDiffSettings()
+        motion_model_settings.attn_scale = motion_scale
+        params.set_motion_model_settings(motion_model_settings)
+
+        attachment = get_mm_attachment(motion_model)
+        attachment.scale_multival = motion_model_settings.attn_scale
+
+        model = model.clone()
+        helper = ModelPatcherHelper(model)
+        helper.set_all_properties(
+            outer_sampler_wrapper=outer_sample_wrapper,
+            calc_cond_batch_wrapper=sliding_calc_cond_batch,
+            params=params,
+            motion_models=MotionModelGroup(motion_model),
+        )
+
+        if beta_schedule == BetaSchedules.AUTOSELECT and helper.get_motion_models():
+            beta_schedule = helper.get_motion_models()[0].model.get_best_beta_schedule(log=True)
+        new_model_sampling = BetaSchedules.to_model_sampling(beta_schedule, model)
+        if new_model_sampling is not None:
+            model.add_object_patch("model_sampling", new_model_sampling)
+        
+        del motion_model
+        return (model,)
+
+
+class Stack_latent:
+    ratio_sizes, ratio_dict = read_ratios()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {},
+            "optional": {
+                "latent": ("LATENT",),
+                "pixels": ("IMAGE",),
+                "mask": ("MASK",),
+                "noise_mask": ("BOOLEAN", {"default": True}),
+                "smoothness": ("INT", {"default": 1, "min": 0, "max": 150, "step": 1, "display": "slider"}),
+                "ratio_selected": (['None'] + cls.ratio_sizes, {"default": "None"}),
+                "batch_size": ("INT", {"default": 1, "min": 1, "max": 300})
             }
         }
 
-    RETURN_TYPES = ("MODEL",)
-    RETURN_NAMES = ("model",)
+    RETURN_TYPES = ("LATENT_STACK",)
+    RETURN_NAMES = ("latent_stack",)
+    FUNCTION = "stack_latent"
+    CATEGORY = "Apt_Preset/stack"
+
+    def stack_latent(self, latent=None, pixels=None, mask=None, noise_mask=True, smoothness=1, ratio_selected="None", batch_size=1):
+        latent_info = (latent, pixels, mask, noise_mask, smoothness, ratio_selected, batch_size)
+        # 这里直接将单个 latent_info 作为一个只含一个元素的列表，代表 stack
+        latent_stack = [latent_info]
+        return (latent_stack,)
+
+
+class Apply_latent:
+    ratio_sizes, ratio_dict = read_ratios()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "positive": ("CONDITIONING", ),
+                "negative": ("CONDITIONING", ),
+                "vae": ("VAE",),
+                "latent_stack": ("LATENT_STACK",),
+            }
+        }
+
+    RETURN_TYPES = ("MODEL","CONDITIONING","CONDITIONING","LATENT",)
+    RETURN_NAMES = ("model","positive","negative","latent",)
+    FUNCTION = "apply_latent_stack"
+    CATEGORY = "Apt_Preset/stack"
+
+    def apply_latent_stack(self, model, positive, negative, vae, latent_stack):
+        # 先初始化一个默认的 latent ，避免后续操作中 latent 为 None 的情况
+        default_width = 512
+        default_height = 512
+        batch_size = 1
+
+        for latent_info in latent_stack:
+            latent, pixels, mask, noise_mask, smoothness, ratio_selected, batch_size = latent_info
+
+            if ratio_selected != "None":
+                width = self.ratio_dict[ratio_selected]["width"]
+                height = self.ratio_dict[ratio_selected]["height"]
+                latent = {"samples": torch.zeros([batch_size, 4, height // 8, width // 8])}
+                return model, positive, negative, latent
+
+            if latent is None :
+                latent = {"samples": torch.zeros([batch_size, 4, default_height // 8, default_width // 8])}
+                
+            if pixels is not None:
+                latent = VAEEncode().encode(vae, pixels)[0]
+
+            if mask is not None:
+                mask = tensor2pil(mask)
+                feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+                mask = pil2tensor(feathered_image)
+                positive, negative, latent = InpaintModelConditioning().encode(positive, negative, pixels, vae, mask, noise_mask)
+                model = DifferentialDiffusion().apply(model)[0]
+
+            latent = latentrepeat(latent, batch_size)[0]
+
+            return model, positive, negative, latent
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#region------------------AD prompt schedule------------------------
+
+#region------------------AD def----------------------
+
+import numexpr
+import torch
+import torch.nn.functional as F
+import numpy as np
+import pandas as pd
+import re
+import json
+import comfy.samplers
+from .def_unit import *
+
+class ScheduleSettings:
+    def __init__(
+            self,
+            text_g: str,
+            pre_text_G: str,
+            app_text_G: str,
+            text_L: str,
+            pre_text_L: str,
+            app_text_L: str,
+            max_frames: int,
+            current_frame: int,
+            print_output: bool,
+            pw_a: float,
+            pw_b: float,
+            pw_c: float,
+            pw_d: float,
+            start_frame: int,
+            end_frame:int,
+            width: int,
+            height: int,
+            crop_w: int,
+            crop_h: int,
+            target_width: int,
+            target_height: int,
+    ):
+        self.text_g=text_g
+        self.pre_text_G=pre_text_G
+        self.app_text_G=app_text_G
+        self.text_l=text_L
+        self.pre_text_L=pre_text_L
+        self.app_text_L=app_text_L
+        self.max_frames=max_frames
+        self.current_frame=current_frame
+        self.print_output=print_output
+        self.pw_a=pw_a
+        self.pw_b=pw_b
+        self.pw_c=pw_c
+        self.pw_d=pw_d
+        self.start_frame=start_frame
+        self.end_frame=end_frame
+        self.width=width
+        self.height=height
+        self.crop_w=crop_w
+        self.crop_h=crop_h
+        self.target_width=target_width
+        self.target_height=target_height
+
+    def set_sync_option(self, sync_option: bool):
+        self.sync_context_to_pe = sync_option
+
+
+defaultPrompt = """"0" :"",
+"30" :"",
+"60" :"",
+"90" :"",
+"120" :""
+"""
+
+
+defaultValue = """0:(0),
+30:(0),
+60:(0),
+90:(0),
+120:(0)
+"""
+
+
+def batch_parse_key_frames(string, max_frames):
+    # because math functions (i.e. sin(t)) can utilize brackets
+    # it extracts the value in form of some stuff
+    # which has previously been enclosed with brackets and
+    # with a comma or end of line existing after the closing one
+    string = re.sub(r',\s*$', '', string)
+    frames = dict()
+    for match_object in string.split(","):
+        frameParam = match_object.split(":")
+        max_f = max_frames - 1  # needed for numexpr even though it doesn't look like it's in use.
+        frame = int(sanitize_value(frameParam[0])) if check_is_number(
+            sanitize_value(frameParam[0].strip())) else int(numexpr.evaluate(
+            frameParam[0].strip().replace("'", "", 1).replace('"', "", 1)[::-1].replace("'", "", 1).replace('"', "",1)[::-1]))
+        frames[frame] = frameParam[1].strip()
+    if frames == {} and len(string) != 0:
+        raise RuntimeError('Key Frame string not correctly formatted')
+    return frames
+
+
+def sanitize_value(value):
+    # Remove single quotes, double quotes, and parentheses
+    value = value.replace("'", "").replace('"', "").replace('(', "").replace(')', "")
+    return value
+
+
+def batch_get_inbetweens(key_frames, max_frames, integer=False, interp_method='Linear', is_single_string=False):
+    key_frame_series = pd.Series([np.nan for a in range(max_frames)])
+    max_f = max_frames - 1  # needed for numexpr even though it doesn't look like it's in use.
+    value_is_number = False
+    for i in range(0, max_frames):
+        if i in key_frames:
+            value = str(key_frames[i])  # Convert to string to ensure it's treated as an expression
+            value_is_number = check_is_number(sanitize_value(value))
+            if value_is_number:
+                key_frame_series[i] = sanitize_value(value)
+        if not value_is_number:
+            t = i
+            # workaround for values formatted like 0:("I am test") //used for sampler schedules
+            key_frame_series[i] = numexpr.evaluate(value) if not is_single_string else sanitize_value(value)
+        elif is_single_string:  # take previous string value and replicate it
+            key_frame_series[i] = key_frame_series[i - 1]
+    key_frame_series = key_frame_series.astype(float) if not is_single_string else key_frame_series  # as string
+
+    if interp_method == 'Cubic' and len(key_frames.items()) <= 3:
+        interp_method = 'Quadratic'
+    if interp_method == 'Quadratic' and len(key_frames.items()) <= 2:
+        interp_method = 'Linear'
+
+    key_frame_series[0] = key_frame_series[key_frame_series.first_valid_index()]
+    key_frame_series[max_frames - 1] = key_frame_series[key_frame_series.last_valid_index()]
+    key_frame_series = key_frame_series.interpolate(method=interp_method.lower(), limit_direction='both')
+
+    if integer:
+        return key_frame_series.astype(int)
+    return key_frame_series
+
+#--------------------------------------------------------------------------------------
+def batch_prompt_schedule(settings:ScheduleSettings,clip):
+    # Clear whitespace and newlines from json
+    animation_prompts = process_input_text(settings.text_g)
+
+    # Add pre_text and app_text then split the combined prompt into positive and negative prompts
+    pos, neg = batch_split_weighted_subprompts(animation_prompts, settings.pre_text_G, settings.app_text_G)
+
+    # Interpolate the positive prompt weights over frames
+    pos_cur_prompt, pos_nxt_prompt, weight = interpolate_prompt_seriesA(pos, settings)
+    neg_cur_prompt, neg_nxt_prompt, weight = interpolate_prompt_seriesA(neg, settings)
+
+    # Apply composable diffusion across the batch
+    p = BatchPoolAnimConditioning(pos_cur_prompt, pos_nxt_prompt, weight, clip, settings)
+    n = BatchPoolAnimConditioning(neg_cur_prompt, neg_nxt_prompt, weight, clip, settings)
+
+    # return positive and negative conditioning as well as the current and next prompts for each
+    return (p, n,)
+
+
+def process_input_text(text: str) -> dict:
+    input_text = text.replace('\n', '')
+    input_text = "{" + input_text + "}"
+    input_text = re.sub(r',\s*}', '}', input_text)
+    animation_prompts = json.loads(input_text.strip())
+    return animation_prompts
+
+
+def BatchPoolAnimConditioning(cur_prompt_series, nxt_prompt_series, weight_series, clip, settings:ScheduleSettings):
+    pooled_out = []
+    cond_out = []
+    max_size = 0
+
+    if settings.end_frame == 0:
+        settings.end_frame = settings.max_frames
+        print("end_frame at 0, using max_frames instead!")
+
+    if settings.start_frame >= settings.end_frame:
+        settings.start_frame = 0
+        print("start_frame larger than or equal to end_frame, using max_frames instead!")
+
+    if max_size == 0:
+        for i in range(0, settings.end_frame):
+            tokens = clip.tokenize(str(cur_prompt_series[i]))
+            cond_to, pooled_to = clip.encode_from_tokens(tokens, return_pooled=True)
+            max_size = max(max_size, cond_to.shape[1])
+    for i in range(settings.start_frame, settings.end_frame):
+        tokens = clip.tokenize(str(cur_prompt_series[i]))
+        cond_to, pooled_to = clip.encode_from_tokens(tokens, return_pooled=True)
+
+        if i < len(nxt_prompt_series):
+            tokens = clip.tokenize(str(nxt_prompt_series[i]))
+            cond_from, pooled_from = clip.encode_from_tokens(tokens, return_pooled=True)
+        else:
+            cond_from, pooled_from = torch.zeros_like(cond_to), torch.zeros_like(pooled_to)
+
+        interpolated_conditioning = addWeighted([[cond_to, {"pooled_output": pooled_to}]],
+                                                [[cond_from, {"pooled_output": pooled_from}]],
+                                                weight_series[i],max_size)
+
+        interpolated_cond = interpolated_conditioning[0][0]
+        interpolated_pooled = interpolated_conditioning[0][1].get("pooled_output", pooled_from)
+
+        cond_out.append(interpolated_cond)
+        pooled_out.append(interpolated_pooled)
+
+    final_pooled_output = torch.cat(pooled_out, dim=0)
+    final_conditioning = torch.cat(cond_out, dim=0)
+
+    return [[final_conditioning, {"pooled_output": final_pooled_output}]]
+
+
+def addWeighted(conditioning_to, conditioning_from, conditioning_to_strength, max_size=0):
+    out = []
+
+    if len(conditioning_from) > 1:
+        print("Warning: ConditioningAverage conditioning_from contains more than 1 cond, only the first one will actually be applied to conditioning_to.")
+
+    cond_from = conditioning_from[0][0]
+    pooled_output_from = conditioning_from[0][1].get("pooled_output", None)
+
+    for i in range(len(conditioning_to)):
+        t1 = conditioning_to[i][0]
+        pooled_output_to = conditioning_to[i][1].get("pooled_output", pooled_output_from)
+        if max_size == 0:
+            max_size = max(t1.shape[1], cond_from.shape[1])
+        t0, max_size = pad_with_zeros(cond_from, max_size)
+        t1, max_size = pad_with_zeros(t1, t0.shape[1])  # Padding t1 to match max_size
+        t0, max_size = pad_with_zeros(t0, t1.shape[1])
+
+        tw = torch.mul(t1, conditioning_to_strength) + torch.mul(t0, (1.0 - conditioning_to_strength))
+        t_to = conditioning_to[i][1].copy()
+
+        t_to["pooled_output"] = pooled_output_from
+        n = [tw, t_to]
+        out.append(n)
+
+    return out
+
+
+def pad_with_zeros(tensor, target_length):
+    current_length = tensor.shape[1]
+
+    if current_length < target_length:
+        # Calculate the required padding length
+        pad_length = target_length - current_length
+
+        # Calculate padding on both sides to maintain the tensor's original shape
+        left_pad = pad_length // 2
+        right_pad = pad_length - left_pad
+
+        # Pad the tensor along the second dimension
+        tensor = F.pad(tensor, (0, 0, left_pad, right_pad))
+
+    return tensor, target_length
+
+
+def batch_split_weighted_subprompts(text, pre_text, app_text):
+    pos = {}
+    neg = {}
+    pre_text = str(pre_text)
+    app_text = str(app_text)
+
+    if "--neg" in pre_text:
+        pre_pos, pre_neg = pre_text.split("--neg")
+    else:
+        pre_pos, pre_neg = pre_text, ""
+
+    if "--neg" in app_text:
+        app_pos, app_neg = app_text.split("--neg")
+    else:
+        app_pos, app_neg = app_text, ""
+
+    for frame, prompt in text.items():
+        negative_prompts = ""
+        positive_prompts = ""
+        prompt_split = prompt.split("--neg")
+
+        if len(prompt_split) > 1:
+            positive_prompts, negative_prompts = prompt_split[0], prompt_split[1]
+        else:
+            positive_prompts = prompt_split[0]
+
+        pos[frame] = ""
+        neg[frame] = ""
+        pos[frame] += (str(pre_pos) + " " + positive_prompts + " " + str(app_pos))
+        neg[frame] += (str(pre_neg) + " " + negative_prompts + " " + str(app_neg))
+        if pos[frame].endswith('0'):
+            pos[frame] = pos[frame][:-1]
+        if neg[frame].endswith('0'):
+            neg[frame] = neg[frame][:-1]
+    return pos, neg
+
+
+def check_is_number(value):
+    float_pattern = r'^(?=.)([+-]?([0-9]*)(\.([0-9]+))?)$'
+    return re.match(float_pattern, value)
+
+
+def convert_pw_to_tuples(settings):
+    if isinstance(settings.pw_a, (int, float, np.float64)):
+        settings.pw_a = tuple([settings.pw_a] * settings.max_frames)
+    if isinstance(settings.pw_b, (int, float, np.float64)):
+        settings.pw_b = tuple([settings.pw_b] * settings.max_frames)
+    if isinstance(settings.pw_c, (int, float, np.float64)):
+        settings.pw_c = tuple([settings.pw_c] * settings.max_frames)
+    if isinstance(settings.pw_d, (int, float, np.float64)):
+        settings.pw_d = tuple([settings.pw_d] * settings.max_frames)
+
+
+def interpolate_prompt_seriesA(animation_prompts, settings:ScheduleSettings):
+
+    max_f = settings.max_frames  # needed for numexpr even though it doesn't look like it's in use.
+    parsed_animation_prompts = {}
+
+
+    for key, value in animation_prompts.items():
+        if check_is_number(key):  # default case 0:(1 + t %5), 30:(5-t%2)
+            parsed_animation_prompts[key] = value
+        else:  # math on the left hand side case 0:(1 + t %5), maxKeyframes/2:(5-t%2)
+            parsed_animation_prompts[int(numexpr.evaluate(key))] = value
+
+    sorted_prompts = sorted(parsed_animation_prompts.items(), key=lambda item: int(item[0]))
+
+    # Automatically set the first keyframe to 0 if it's missing
+    if sorted_prompts[0][0] != "0":
+        sorted_prompts.insert(0, ("0", sorted_prompts[0][1]))
+
+    # Automatically set the last keyframe to the maximum number of frames
+    if sorted_prompts[-1][0] != str(settings.max_frames):
+        sorted_prompts.append((str(settings.max_frames), sorted_prompts[-1][1]))
+
+    # Setup containers for interpolated prompts
+    nan_list = [np.nan for a in range(settings.max_frames)]
+    cur_prompt_series = pd.Series(nan_list,dtype=object)
+    nxt_prompt_series = pd.Series(nan_list,dtype=object)
+
+    # simple array for strength values
+    weight_series = [np.nan] * settings.max_frames
+
+    # in case there is only one keyed prompt, set all prompts to that prompt
+    if settings.max_frames == 1:
+        for i in range(0, len(cur_prompt_series) - 1):
+            current_prompt = sorted_prompts[0][1]
+            cur_prompt_series[i] = str(current_prompt)
+            nxt_prompt_series[i] = str(current_prompt)
+
+    #make sure prompt weights are tuples and convert them if not
+    convert_pw_to_tuples(settings)
+
+    # Initialized outside of loop for nan check
+    current_key = 0
+    next_key = 0
+
+    # For every keyframe prompt except the last
+    for i in range(0, len(sorted_prompts) - 1):
+        # Get current and next keyframe
+        current_key = int(sorted_prompts[i][0])
+        next_key = int(sorted_prompts[i + 1][0])
+
+        # Ensure there's no weird ordering issues or duplication in the animation prompts
+        # (unlikely because we sort above, and the json parser will strip dupes)
+        if current_key >= next_key:
+            print(
+                f"WARNING: Sequential prompt keyframes {i}:{current_key} and {i + 1}:{next_key} are not monotonously increasing; skipping interpolation.")
+            continue
+
+        # Get current and next keyframes' positive and negative prompts (if any)
+        current_prompt = sorted_prompts[i][1]
+        next_prompt = sorted_prompts[i + 1][1]
+
+        # Calculate how much to shift the weight from current to next prompt at each frame.
+        weight_step = 1 / (next_key - current_key)
+
+        for f in range(max(current_key, 0), min(next_key, len(cur_prompt_series))):
+            next_weight = weight_step * (f - current_key)
+            current_weight = 1 - next_weight
+
+            # add the appropriate prompts and weights to their respective containers.
+            weight_series[f] = 0.0
+            cur_prompt_series[f] = str(current_prompt)
+            nxt_prompt_series[f] = str(next_prompt)
+
+            weight_series[f] += current_weight
+
+        current_key = next_key
+        next_key = settings.max_frames
+        current_weight = 0.0
+
+    index_offset = 0
+
+    # Evaluate the current and next prompt's expressions
+    for i in range(settings.start_frame, min(settings.end_frame,len(cur_prompt_series))):
+        cur_prompt_series[i] = prepare_batch_promptA(cur_prompt_series[i], settings, i)
+        nxt_prompt_series[i] = prepare_batch_promptA(nxt_prompt_series[i], settings, i)
+        if settings.print_output == True:
+            # Show the to/from prompts with evaluated expressions for transparency.
+            if(settings.start_frame >= i):
+                if(settings.end_frame > 0):
+                    if(settings.end_frame > i):
+                        print("\n", "Max Frames: ", settings.max_frames, "\n", "frame index: ", (settings.start_frame + i),
+                              "\n", "Current Prompt: ",
+                              cur_prompt_series[i], "\n", "Next Prompt: ", nxt_prompt_series[i], "\n", "Strength : ",
+                              weight_series[i], "\n")
+                else:
+                    print("\n", "Max Frames: ", settings.max_frames, "\n", "frame index: ", (settings.start_frame + i), "\n", "Current Prompt: ",
+                          cur_prompt_series[i], "\n", "Next Prompt: ", nxt_prompt_series[i], "\n", "Strength : ",
+                          weight_series[i], "\n")
+        index_offset = index_offset + 1
+
+    # Output methods depending if the prompts are the same or if the current frame is a keyframe.
+    # if it is an in-between frame and the prompts differ, composable diffusion will be performed.
+    return (cur_prompt_series, nxt_prompt_series, weight_series)
+
+
+def prepare_batch_promptA(prompt, settings:ScheduleSettings, index):
+    max_f = settings.max_frames - 1
+    pattern = r'`.*?`'  # set so the expression will be read between two backticks (``)
+    regex = re.compile(pattern)
+    prompt_parsed = str(prompt)
+
+    for match in regex.finditer(prompt_parsed):
+        matched_string = match.group(0)
+        parsed_string = matched_string.replace(
+            't',
+            f'{index}').replace("pw_a",
+            f"{settings.pw_a[index]}").replace("pw_b",
+            f"{settings.pw_b[index]}").replace("pw_c",
+            f"{settings.pw_c[index]}").replace("pw_d",
+            f"{settings.pw_d[index]}").replace("max_f",
+            f"{max_f}").replace('`', '')  # replace t, max_f and `` respectively
+        parsed_value = numexpr.evaluate(parsed_string)
+        prompt_parsed = prompt_parsed.replace(matched_string, str(parsed_value))
+    return prompt_parsed.strip()
+
+
+#endregion--------------------------------def-------------------------------------------------
+
+
+class AD_sch_prompt:
+    @classmethod 
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True, "default": defaultPrompt}),
+                "max_frames": ("INT", {"default": 120.0, "min": 1.0, "max": 999999.0, "step": 1.0}),
+
+            },
+            "optional": {
+
+                "pre_text": ("STRING", {"multiline": False}),
+                "app_text": ("STRING", {"multiline": False}),
+                "pw_a": ("FLOAT", {"default": 0.0, "min": -9999.0, "max": 9999.0, "step": 0.1}),
+                "pw_b": ("FLOAT", {"default": 0.0, "min": -9999.0, "max": 9999.0, "step": 0.1}),
+                "pw_c": ("FLOAT", {"default": 0.0, "min": -9999.0, "max": 9999.0, "step": 0.1}),
+                "pw_d": ("FLOAT", {"default": 0.0, "min": -9999.0, "max": 9999.0, "step": 0.1}),
+            }
+        }
+
+    RETURN_TYPES = ("PROMPT_SCHEDULE_STACK",)
+    RETURN_NAMES = ("pos_sch_stack",)
+    FUNCTION = "stack_schedule"
+    CATEGORY = "Apt_Preset/AD"
+
+    def stack_schedule(self, text, max_frames, pre_text=None, app_text=None, pw_a=None, pw_b=None, pw_c=None, pw_d=None, ):
+        schedule_list = []
+        schedule_info = (text, max_frames, pre_text, app_text, pw_a, pw_b, pw_c, pw_d,)
+        schedule_list.append(schedule_info)
+
+        return (schedule_list,)
+
+
+class Apply_prompt_Schedule:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "clip": ("CLIP",),
+                "pos_sch_stack": ("PROMPT_SCHEDULE_STACK",),
+            }
+        }
+
+    RETURN_TYPES = ("CONDITIONING", "CONDITIONING")
+    RETURN_NAMES = ("positive", "negative")
+    FUNCTION = "apply_schedules"
+    CATEGORY = "Apt_Preset/stack"
+
+    def apply_schedules(self, clip, pos_sch_stack):
+        if not pos_sch_stack:
+            return (None, None,)
+        
+        positive = None
+        negative = None
+
+        # Apply each schedule in stack
+        for schedule_info in pos_sch_stack:
+            text, max_frames, pre_text, app_text, pw_a, pw_b, pw_c, pw_d = schedule_info
+            
+            # Generate conditioning from schedule parameters
+            settings = ScheduleSettings(
+                text_g=text,
+                pre_text_G=pre_text,
+                app_text_G=app_text,
+                text_L=None,
+                pre_text_L=None,
+                app_text_L=None,
+                max_frames=max_frames,
+                current_frame=None,
+                print_output=None,
+                pw_a=pw_a,
+                pw_b=pw_b,
+                pw_c=pw_c,
+                pw_d=pw_d,
+                start_frame=0,
+                end_frame=max_frames,
+                width=None,
+                height=None,
+                crop_w=None,
+                crop_h=None,
+                target_width=None,
+                target_height=None,
+            )
+            
+        positive, negative = batch_prompt_schedule(settings, clip)
+
+        return (positive, negative,)
+
+
+#endregion------------------prompt schedule------------------------
+
+
+#endregion---------------------收纳----------------------------
+
+
+
+
+
+
+#region   Redux stack
+
+
+class YC_LG_Redux:   #作为函数调用
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            
+            "positive": ("CONDITIONING",),
+            "style_model": (folder_paths.get_filename_list("style_models"), {"default": "flux1-redux-dev.safetensors"}),
+            "clip_vision": (folder_paths.get_filename_list("clip_vision"), {"default": "sigclip_vision_patch14_384.safetensors"}),
+            "image": ("IMAGE",),
+            "crop": (["center", "mask_area", "none"], {
+                "default": "none",
+                "tooltip": "裁剪模式：center-中心裁剪, mask_area-遮罩区域裁剪, none-不裁剪"
+            }),
+            "sharpen": ("FLOAT", {
+                "default": 0.0,
+                "min": -5.0,
+                "max": 5.0,
+                "step": 0.1,
+                "tooltip": "锐化强度：负值为模糊，正值为锐化，0为不处理"
+            }),
+            "patch_res": ("INT", {
+                "default": 16,
+                "min": 1,
+                "max": 64,
+                "step": 1,
+                "tooltip": "patch分辨率，数值越大分块越细致"
+            }),
+            "style_strength": ("FLOAT", {
+                "default": 1.0,
+                "min": 0.0,
+                "max": 2.0,
+                "step": 0.01,
+                "tooltip": "风格强度，越高越偏向参考图片"
+            }),
+            "prompt_strength": ("FLOAT", { 
+                "default": 1.0,
+                "min": 0.0,
+                "max": 2.0,
+                "step": 0.01,
+                "tooltip": "文本提示词强度，越高文本特征越强"
+            }),
+            "blend_mode": (["lerp", "feature_boost", "frequency"], {
+                "default": "lerp",
+                "tooltip": "风格强度的计算方式：\n" +
+                        "lerp - 线性混合 - 高度参考原图\n" +
+                        "feature_boost - 特征增强 - 增强真实感\n" +
+                        "frequency - 频率增强 - 增强高频细节"
+            }),
+            "noise_level": ("FLOAT", { 
+                "default": 0.0,
+                "min": 0.0,
+                "max": 1.0,
+                "step": 0.01,
+                "tooltip": "添加随机噪声的强度，可用于修复错误细节"
+            }),
+        },
+        "optional": { 
+            "mask": ("MASK", ), 
+            "guidance": ("FLOAT", {"default": 30, "min": 0.0, "max": 100.0, "step": 0.1}),
+        }}
+        
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("positive",)
     
-    FUNCTION = "apply_ipadapter"
+    FUNCTION = "apply_stylemodel"
     CATEGORY = "Apt_Preset/tool"
 
-    def apply_ipadapter( self, model, ipadapter, image, image_embed, weight, mask=None ):
+    def crop_to_mask_area(self, image, mask):
+        if len(image.shape) == 4:
+            B, H, W, C = image.shape
+            image = image.squeeze(0)
+        else:
+            H, W, C = image.shape
         
-        ipadapter = SD3IPAdapter(ipadapter, "cuda")
+        if len(mask.shape) == 3:
+            mask = mask.squeeze(0)
         
-        clip_path = folder_paths.get_full_path_or_raise("clip_vision", image_embed)
-        image_embed = comfy.clip_vision.load(clip_path)
+        nonzero_coords = torch.nonzero(mask)
+        if len(nonzero_coords) == 0:
+            return image, mask
+        
+        top = nonzero_coords[:, 0].min().item()
+        bottom = nonzero_coords[:, 0].max().item()
+        left = nonzero_coords[:, 1].min().item()
+        right = nonzero_coords[:, 1].max().item()
+        
+        width = right - left
+        height = bottom - top
+        size = max(width, height)
+        
+        center_y = (top + bottom) // 2
+        center_x = (left + right) // 2
+        
+        half_size = size // 2
+        new_top = max(0, center_y - half_size)
+        new_bottom = min(H, center_y + half_size)
+        new_left = max(0, center_x - half_size)
+        new_right = min(W, center_x + half_size)
+        
+        cropped_image = image[new_top:new_bottom, new_left:new_right]
+        cropped_mask = mask[new_top:new_bottom, new_left:new_right]
+        
+        cropped_image = cropped_image.unsqueeze(0)
+        cropped_mask = cropped_mask.unsqueeze(0)
+        
+        return cropped_image, cropped_mask
+    
+    def apply_image_preprocess(self, image, strength):
+        original_shape = image.shape
+        original_device = image.device
+        
+        if torch.is_tensor(image):
+            if len(image.shape) == 4:
+                image_np = (image[0].cpu().numpy() * 255).astype(np.uint8)
+            else:
+                image_np = (image.cpu().numpy() * 255).astype(np.uint8)
+        
+        if strength < 0:
+            abs_strength = abs(strength)
+            kernel_size = int(3 + abs_strength * 12) // 2 * 2 + 1
+            sigma = 0.3 + abs_strength * 2.7
+            processed = cv2.GaussianBlur(image_np, (kernel_size, kernel_size), sigma)
+        elif strength > 0:
+            kernel = np.array([[-1,-1,-1],
+                             [-1, 9,-1],
+                             [-1,-1,-1]]) * strength + np.array([[0,0,0],
+                                                               [0,1,0],
+                                                               [0,0,0]]) * (1 - strength)
+            processed = cv2.filter2D(image_np, -1, kernel)
+            processed = np.clip(processed, 0, 255)
+        else:
+            processed = image_np
+        
+        processed_tensor = torch.from_numpy(processed.astype(np.float32) / 255.0).to(original_device)
+        if len(original_shape) == 4:
+            processed_tensor = processed_tensor.unsqueeze(0)
+        
+        return processed_tensor
+    
+    def apply_style_strength(self, cond, txt, strength, mode="lerp"):
+        if mode == "lerp":
+            if txt.shape[1] != cond.shape[1]:
+                txt_mean = txt.mean(dim=1, keepdim=True)
+                txt_expanded = txt_mean.expand(-1, cond.shape[1], -1)
+                return torch.lerp(txt_expanded, cond, strength)
+            return torch.lerp(txt, cond, strength)
+        
+        elif mode == "feature_boost":
+            mean = torch.mean(cond, dim=-1, keepdim=True)
+            std = torch.std(cond, dim=-1, keepdim=True)
+            normalized = (cond - mean) / (std + 1e-6)
+            boost = torch.tanh(normalized * (strength * 2.0))
+            return cond * (1 + boost * 2.0)
+    
+        elif mode == "frequency":
+            try:
+                B, N, C = cond.shape
+                x = cond.float()
+                fft = torch.fft.rfft(x, dim=-1)
+                magnitudes = torch.abs(fft)
+                phases = torch.angle(fft)
+                freq_dim = fft.shape[-1]
+                freq_range = torch.linspace(0, 1, freq_dim, device=cond.device)
+                alpha = 2.0 * strength
+                beta = 0.5
+                filter_response = 1.0 + alpha * torch.pow(freq_range, beta)
+                filter_response = filter_response.view(1, 1, -1)
+                enhanced_magnitudes = magnitudes * filter_response
+                enhanced_fft = enhanced_magnitudes * torch.exp(1j * phases)
+                enhanced = torch.fft.irfft(enhanced_fft, n=C, dim=-1)
+                mean = enhanced.mean(dim=-1, keepdim=True)
+                std = enhanced.std(dim=-1, keepdim=True)
+                enhanced_norm = (enhanced - mean) / (std + 1e-6)
+                mix_ratio = torch.sigmoid(torch.tensor(strength * 2 - 1))
+                result = torch.lerp(cond, enhanced_norm.to(cond.dtype), mix_ratio)
+                residual = (result - cond) * strength
+                final = cond + residual
+                return final
+            except Exception as e:
+                print(f"频率处理出错: {e}")
+                print(f"输入张量形状: {cond.shape}")
+                return cond
+                
+        return cond
+    
+    def apply_stylemodel(self, style_model, clip_vision, image, positive, 
+                        patch_res=16, style_strength=1.0, prompt_strength=1.0, 
+                        noise_level=0.0, crop="none", sharpen=0.0, guidance=30,
+                        blend_mode="lerp", mask=None, ):
+        
+        
+        conditioning = positive
 
-        image_embed = image_embed.encode_image(image, crop=True)
+        style_model_path = folder_paths.get_full_path_or_raise("style_models", style_model)
+        style_model = comfy.sd.load_style_model(style_model_path)
+
+        clip_path = folder_paths.get_full_path_or_raise("clip_vision", clip_vision)
+        clip_vision = comfy.clip_vision.load(clip_path)
 
 
-
-
-        # set model
-        new_model = model.clone()
-        # add uncond embedding
-        image_embed = image_embed.penultimate_hidden_states
-        embeds = torch.cat([image_embed, torch.zeros_like(image_embed)], dim=0).to(
-            ipadapter.device, dtype=torch.float16
+        
+        processed_image = image.clone()
+        if sharpen != 0:
+            processed_image = self.apply_image_preprocess(processed_image, sharpen)
+        if crop == "mask_area" and mask is not None:
+            processed_image, mask = self.crop_to_mask_area(processed_image, mask)
+            clip_vision_output = clip_vision.encode_image(processed_image, crop=False)
+        else:
+            crop_image = True if crop == "center" else False
+            clip_vision_output = clip_vision.encode_image(processed_image, crop=crop_image)
+        
+        cond = style_model.get_cond(clip_vision_output)
+        
+        B = cond.shape[0]
+        H = W = int(math.sqrt(cond.shape[1]))
+        C = cond.shape[2]
+        cond = cond.reshape(B, H, W, C)
+        
+        new_H = H * patch_res // 16
+        new_W = W * patch_res // 16
+        
+        cond = torch.nn.functional.interpolate(
+            cond.permute(0, 3, 1, 2),
+            size=(new_H, new_W),
+            mode='bilinear',
+            align_corners=False
         )
-        patch(
-            new_model,
-            ipadapter.procs,
-            ipadapter.resampler,
-            embeds,
-            weight=weight,
-            start=0,
-            end=1,
+        
+        cond = cond.permute(0, 2, 3, 1)
+        cond = cond.reshape(B, -1, C)
+        cond = cond.flatten(start_dim=0, end_dim=1).unsqueeze(dim=0)
+        
+        c_out = []
+        for t in conditioning:
+            txt, keys = t
+            keys = keys.copy()
+            
+            if prompt_strength != 1.0:
+                txt_enhanced = txt * (prompt_strength ** 3)
+                txt_repeated = txt_enhanced.repeat(1, 2, 1)
+                txt = txt_repeated
+            
+            if style_strength != 1.0:
+                processed_cond = self.apply_style_strength(
+                    cond, txt, style_strength, blend_mode
+                )
+            else:
+                processed_cond = cond
+    
+            if mask is not None:
+                feature_size = int(math.sqrt(processed_cond.shape[1]))
+                processed_mask = torch.nn.functional.interpolate(
+                    mask.unsqueeze(1) if mask.dim() == 3 else mask,
+                    size=(feature_size, feature_size),
+                    mode='bilinear',
+                    align_corners=False
+                ).flatten(1).unsqueeze(-1)
+                
+                if txt.shape[1] != processed_cond.shape[1]:
+                    txt_mean = txt.mean(dim=1, keepdim=True)
+                    txt_expanded = txt_mean.expand(-1, processed_cond.shape[1], -1)
+                else:
+                    txt_expanded = txt
+                
+                processed_cond = processed_cond * processed_mask + \
+                               txt_expanded * (1 - processed_mask)
+    
+            if noise_level > 0:
+                noise = torch.randn_like(processed_cond)
+                noise = (noise - noise.mean()) / (noise.std() + 1e-8)
+                processed_cond = torch.lerp(processed_cond, noise, noise_level)
+                processed_cond = processed_cond * (1.0 + noise_level)
+                
+            c_out.append([torch.cat((txt, processed_cond), dim=1), keys])
+        
+        
+        
+        positive = node_helpers.conditioning_set_values(c_out, {"guidance": guidance})
+
+        
+        return (positive,)
+
+
+
+
+class Stack_Redux:
+    def __init__(self):
+        self.unfold_batch = False
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+
+                "style_model": (folder_paths.get_filename_list("style_models"), {"default": "flux1-redux-dev.safetensors"}),
+                "clip_vision": (folder_paths.get_filename_list("clip_vision"), {"default": "sigclip_vision_patch14_384.safetensors"}),
+
+                "crop": (["center", "mask_area", "none"], {
+                    "default": "none",
+                    "tooltip": "裁剪模式：center-中心裁剪, mask_area-遮罩区域裁剪, none-不裁剪"
+                }),
+                "sharpen": ("FLOAT", {
+                    "default": 0.0,
+                    "min": -5.0,
+                    "max": 5.0,
+                    "step": 0.1,
+                    "tooltip": "锐化强度：负值为模糊，正值为锐化，0为不处理"
+                }),
+                "patch_res": ("INT", {
+                    "default": 16,
+                    "min": 1,
+                    "max": 64,
+                    "step": 1,
+                    "tooltip": "patch分辨率，数值越大分块越细致"
+                }),
+                "style_strength": ("FLOAT", {
+                    "default": 1.0,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.01,
+                    "tooltip": "风格强度，越高越偏向参考图片"
+                }),
+                "prompt_strength": ("FLOAT", { 
+                    "default": 1.0,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.01,
+                    "tooltip": "文本提示词强度，越高文本特征越强"
+                }),
+                "blend_mode": (["lerp", "feature_boost", "frequency"], {
+                    "default": "lerp",
+                    "tooltip": "风格强度的计算方式：\n" +
+                            "lerp - 线性混合 - 高度参考原图\n" +
+                            "feature_boost - 特征增强 - 增强真实感\n" +
+                            "frequency - 频率增强 - 增强高频细节"
+                }),
+                "noise_level": ("FLOAT", { 
+                    "default": 0.0,
+                    "min": 0.0,
+                    "max": 1.0,
+                    "step": 0.01,
+                    "tooltip": "添加随机噪声的强度，可用于修复错误细节"
+                }),
+            },
+            "optional": { 
+                "image": ("IMAGE",),
+                "mask": ("MASK", ), 
+                "guidance": ("FLOAT", {"default": 30, "min": 0.0, "max": 100.0, "step": 0.1}),
+                "redux_stack": ("REDUX_STACK",),  # 新增输入
+            }
+        }
+
+    RETURN_TYPES = ("REDUX_STACK",)
+    RETURN_NAMES = ("redux_stack",)
+    FUNCTION = "redux_stack"
+    CATEGORY = "Apt_Preset/stack"
+
+    def redux_stack(self,style_model, clip_vision,  crop, sharpen, patch_res, style_strength, prompt_strength, blend_mode, noise_level, image=None,mask=None, guidance=30, redux_stack=None):
+
+        if image is None:
+            return (None,)
+        
+
+        # 初始化redux_list
+        redux_list = []
+
+        # 如果传入了redux_stack，将其中的内容添加到redux_list中
+        if redux_stack is not None:
+            redux_list.extend([redux for redux in redux_stack if redux[0] != "None"])
+
+        # 将当前Redux的相关信息打包成一个元组，并添加到redux_list中
+        redux_info = (
+            style_model,
+            clip_vision,
+            image,
+            crop,
+            sharpen,
+            patch_res,
+            style_strength,
+            prompt_strength,
+            blend_mode,
+            noise_level,
+            mask,
+            guidance
         )
-        return (new_model,)
+        redux_list.append(redux_info)
+
+        return (redux_list,)
+
+
+
+
+class Apply_Redux:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+            "positive": ("CONDITIONING",),
+            "redux_stack": ("REDUX_STACK",),
+            }
+        }
+
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("positive",)
+    FUNCTION = "apply_redux_stack"
+    CATEGORY = "Apt_Preset/stack"
+
+    def apply_redux_stack(self, positive, redux_stack):
+        if not redux_stack:
+            raise ValueError("redux_stack 不能为空")
+
+        chx_yc_lg_redux = YC_LG_Redux()
+
+        # 遍历 redux_stack 中的每个 Redux 配置
+        for redux_info in redux_stack:
+            (
+                style_model,
+                clip_vision,
+                image,
+                crop,
+                sharpen,
+                patch_res,
+                style_strength,
+                prompt_strength,
+                blend_mode,
+                noise_level,
+                mask,
+                guidance
+            ) = redux_info
+
+            # 直接调用 chx_YC_LG_Redux 类中的 apply_stylemodel 方法
+            positive = chx_yc_lg_redux.apply_stylemodel(
+                style_model, clip_vision, image, positive, 
+                patch_res=patch_res, style_strength=style_strength, prompt_strength=prompt_strength, 
+                noise_level=noise_level, crop=crop, sharpen=sharpen, guidance=guidance,
+                blend_mode=blend_mode, mask=mask
+            )[0]
+
+        return (positive,)
+
+
+
 
 #endregion
+
+
+
+
+
+
+
+
+class sum_stack_basic:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "model":("MODEL", ),
+                "positive": ("CONDITIONING",),
+                "lora_stack": ("LORASTACK",),
+                "ipa_stack": ("IPA_STACK",),
+
+                "text_stack": ("TEXT_STACK",),
+                "condi_stack": ("STACK_CONDI", ),
+                "cn_stack": ("CN_STACK",),
+                "latent_stack": ("LATENT_STACK",),
+            },
+            "hidden": {},
+        }
+        
+    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT" ,"IMAGE" )
+    RETURN_NAMES = ("context", "model", "positive", "negative","latent", "image" )
+    FUNCTION = "merge"
+    CATEGORY = "Apt_Preset/load"
+
+    def merge(self, context=None, model=None, positive=None, lora_stack=None, ipa_stack=None, text_stack=None, condi_stack=None, cn_stack=None, latent_stack=None):
+        
+        if model is None:
+            model = context.get("model")
+        if positive is None:
+            positive = context.get("positive")
+
+        clip = context.get("clip")
+        negative = context.get("negative")
+        latent = context.get("latent", None)
+        image_orc = context.get("images", None)
+        vae = context.get("vae", None)
+
+        if lora_stack is not None:
+            model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
+
+        if ipa_stack is not None:
+            model, = Apply_IPA().apply_ipa_stack(model, ipa_stack)
+
+        if text_stack and text_stack is not None:
+            if text_stack is not None:
+                positive, negative = Apply_textStack().textStack(clip,text_stack)
+
+
+        if condi_stack is not None:
+            positive, negative = Apply_condiStack().condiStack(clip, condi_stack)
+
+
+        if cn_stack is not None:  # 常规cn
+            positive, negative = Apply_ControlNetStack().apply_controlnet_stack(
+                positive=positive, 
+                negative=negative, 
+                switch="On", 
+                vae=vae,
+                controlnet_stack=cn_stack
+            )
+
+
+        if latent_stack is not None:
+            model, positive, negative, latent = Apply_latent().apply_latent_stack(model, positive, negative, vae, latent_stack)
+
+
+
+        context = new_context(context, clip=clip, positive=positive, negative=negative, model=model, latent = latent)
+        return (context, model, positive, negative, latent, image_orc)
+
+
+
+
+
+class sum_stack_AD:
+
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "model":("MODEL", ),
+                "positive": ("CONDITIONING",),
+                "lora_stack": ("LORASTACK",),
+                "ad_stack": ("AD_STACK",),
+
+                "ipa_stack": ("IPA_STACK",),
+                "pos_sch_stack": ("PROMPT_SCHEDULE_STACK",),
+                "cn_stack": ("ADV_CN_STACK",),
+                "latent_stack": ("LATENT_STACK",),
+            },
+            "hidden": {},
+        }
+        
+    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT",)
+    RETURN_NAMES = ("context", "model", "positive", "negative", "latent",)
+    FUNCTION = "merge"
+    CATEGORY = "Apt_Preset/load"
+
+
+    def merge(self, model=None,ad_stack=None, positive=None, ipa_stack=None, lora_stack=None, pos_sch_stack=None, cn_stack=None, context=None,latent_stack=None,):
+        
+        clip = context.get("clip", None)
+        negative = context.get("negative", None)
+        vae = context.get("vae", None)
+        latent = context.get("latent",None)
+
+        if model is None:
+            model = context.get("model")
+        
+        if positive is None:
+            positive = context.get("positive")
+        
+        if lora_stack is not None:
+            model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
+            # 确保 model 是模型对象，而不是元组，非model[-1]，已经处理了
+            if isinstance(model, tuple):
+                model = model[0]
+
+        if ipa_stack is not None:
+            model, = Apply_IPA().apply_ipa_stack(model, ipa_stack)
+
+        if ad_stack is not None:
+            model = Apply_AD_diff().apply_ad_params(model, ad_stack)
+            # 确保 model 是模型对象，而不是元组
+            if isinstance(model, tuple):
+                model = model[0]
+
+
+        if pos_sch_stack is not None:
+            positive, negative = Apply_prompt_Schedule().apply_schedules(clip, pos_sch_stack)
+
+
+        if cn_stack is not None:
+            positive, = Apply_adv_CN().apply_controlnet(positive, cn_stack)
+
+
+        if latent_stack is not None:
+            model, positive, negative, latent = Apply_latent().apply_latent_stack(model, positive, negative, vae, latent_stack)
+
+
+
+        context = new_context(context, clip=clip, positive=positive, latent=latent, negative=negative, model=model)
+        return (context, model, positive, negative, latent )
+
+
+
+
+
+class sum_stack_flux:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "model":("MODEL", ),
+                "positive": ("CONDITIONING",),
+                "lora_stack": ("LORASTACK",),
+                "text_stack": ("TEXT_STACK",),
+                "redux_stack": ("REDUX_STACK",),
+                "condi_stack": ("STACK_CONDI", ),
+                "cn_stack": ("CN_STACK",),
+                "latent_stack": ("LATENT_STACK",),
+
+            },
+            "hidden": {},
+        }
+        
+    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT" ,"IMAGE" )
+    RETURN_NAMES = ("context", "model", "positive", "negative","latent", "image" )
+    FUNCTION = "merge"
+    CATEGORY = "Apt_Preset/load"
+
+    def merge(self, context=None, model=None, positive=None, lora_stack=None, redux_stack=None, text_stack=None, condi_stack=None,  cn_stack=None, latent_stack=None):
+        
+        if model is None:
+            model = context.get("model")
+        if positive is None:
+            positive = context.get("positive")
+
+        clip = context.get("clip")
+        negative = context.get("negative")
+        latent = context.get("latent", None)
+        image_orc = context.get("images", None)
+        vae = context.get("vae", None)
+
+
+        if lora_stack is not None:
+            model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
+
+        if text_stack and text_stack is not None:
+            positive, negative = Apply_textStack().textStack(clip,text_stack)
+
+
+        if redux_stack is not None:
+            positive, =  Apply_Redux().apply_redux_stack(positive, redux_stack,)
+
+
+
+        if condi_stack is not None:
+            positive, negative = Apply_condiStack().condiStack(clip, condi_stack)
+
+
+        if cn_stack is not None:  # 常规cn
+            positive, negative = Apply_ControlNetStack().apply_controlnet_stack(
+                positive=positive, 
+                negative=negative, 
+                switch="On", 
+                vae=vae,
+                controlnet_stack=cn_stack
+            )
+
+
+        if latent_stack is not None:
+            model, positive, negative, latent = Apply_latent().apply_latent_stack(model, positive, negative, vae, latent_stack)
+
+
+
+        context = new_context(context, clip=clip, positive=positive, negative=negative, model=model, latent = latent)
+        return (context, model, positive, negative, latent, image_orc)
+
+
+
+
+
+class sum_stack_SD3:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "model":("MODEL", ),
+                "positive": ("CONDITIONING",),
+                "lora_stack": ("LORASTACK",),
+                "ipa3_stack": ("IPA3_STACK",),
+
+                "text_stack": ("TEXT_STACK",),
+                "condi_stack": ("STACK_CONDI", ),
+                "cn_stack": ("CN_STACK",),
+                "latent_stack": ("LATENT_STACK",),
+            },
+            "hidden": {},
+        }
+        
+    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT" ,"IMAGE" )
+    RETURN_NAMES = ("context", "model", "positive", "negative","latent", "image" )
+    FUNCTION = "merge"
+    CATEGORY = "Apt_Preset/load"
+
+    def merge(self, context=None, model=None, positive=None, lora_stack=None, ipa3_stack=None, text_stack=None, condi_stack=None,  cn_stack=None, latent_stack=None):
+        
+        if model is None:
+            model = context.get("model")
+        if positive is None:
+            positive = context.get("positive")
+
+        clip = context.get("clip")
+        negative = context.get("negative")
+        latent = context.get("latent", None)
+        image_orc = context.get("images", None)
+        vae = context.get("vae", None)
+
+
+        if ipa3_stack is not None:
+            model, =  Apply_IPA_SD3().apply_ipa_stack(model, ipa3_stack)
+
+
+        if lora_stack is not None:
+            model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
+
+        if text_stack and text_stack is not None:
+            positive, negative = Apply_textStack().textStack(clip,text_stack)
+
+
+        if condi_stack is not None:
+            positive, negative = Apply_condiStack().condiStack(clip, condi_stack)
+
+
+        if cn_stack is not None:  # 常规cn
+            positive, negative = Apply_ControlNetStack().apply_controlnet_stack(
+                positive=positive, 
+                negative=negative, 
+                switch="On", 
+                vae=vae,
+                controlnet_stack=cn_stack
+            )
+
+
+        if latent_stack is not None:
+            model, positive, negative, latent = Apply_latent().apply_latent_stack(model, positive, negative, vae, latent_stack)
+
+
+        context = new_context(context, clip=clip, positive=positive, negative=negative, model=model, latent = latent)
+        return (context, model, positive, negative, latent, image_orc)
+
+
+
+class stack_sum_pack:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+            },
+            "optional": {
+                "lora_stack": ("LORASTACK",),
+                "ipa3_stack": ("IPA3_STACK",),
+                "ipa_stack": ("IPA_STACK",),
+                "text_stack": ("TEXT_STACK",),
+                "redux_stack": ("REDUX_STACK",),
+                "condi_stack": ("STACK_CONDI", ),
+                "cn_stack": ("CN_STACK",),
+                "latent_stack": ("LATENT_STACK",),
+            }
+        }
+
+    RETURN_TYPES = ("STACK_PACK",)
+    RETURN_NAMES = ("stack_pack",)
+    FUNCTION = "stackpack"
+    CATEGORY = "Apt_Preset/unpack"
+
+    def stackpack(self, ipa3_stack=None, ipa_stack=None, redux_stack=None, lora_stack=None, text_stack=None, condi_stack=None, cn_stack=None, latent_stack=None):
+        stack_pack= ipa3_stack, ipa_stack, redux_stack, lora_stack, text_stack, condi_stack, cn_stack, latent_stack
+        return (stack_pack,)
+
+
+
+class stack_sum_Unpack:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+
+            },
+            "optional": {   "stack_pack": ("STACK_PACK",)}
+        }
+
+    RETURN_TYPES = ("LORASTACK", "IPA3_STACK", "IPA_STACK", "TEXT_STACK","REDUX_STACK",  "STACK_CONDI", "CN_STACK", "LATENT_STACK")
+    RETURN_NAMES = ("lora_stack","ipa3_stack", "ipa_stack", "text_stack", "redux_stack", "condi_stack", "cn_stack", "latent_stack")
+    FUNCTION = "unpack"
+    CATEGORY = "Apt_Preset/unpack"
+
+    def unpack(self, stack_pack):
+        ipa3_stack, ipa_stack, redux_stack, lora_stack, text_stack, condi_stack, cn_stack, latent_stack = stack_pack
+        return ( lora_stack, ipa3_stack, ipa_stack, text_stack, redux_stack, condi_stack, cn_stack, latent_stack)
+
+
+
+
+
+class sum_stack_all:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "model":("MODEL", ),
+                "positive": ("CONDITIONING",),
+                "stack_pack": ("STACK_PACK",),
+
+            },
+            "hidden": {},
+        }
+        
+    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT" ,"IMAGE" )
+    RETURN_NAMES = ("context", "model", "positive", "negative","latent", "image" )
+    FUNCTION = "merge"
+    CATEGORY = "Apt_Preset/load"
+
+    def merge(self, context=None, model=None, positive=None, stack_pack=None,):
+        
+        if model is None:
+            model = context.get("model")
+        if positive is None:
+            positive = context.get("positive")
+
+        clip = context.get("clip")
+        negative = context.get("negative")
+        latent = context.get("latent", None)
+        image_orc = context.get("images", None)
+        vae = context.get("vae", None)
+
+
+        # 初始化所有变量为 None
+        ipa3_stack = None
+        ipa_stack = None
+        redux_stack = None
+        lora_stack = None
+        text_stack = None
+        condi_stack = None
+        cn_stack = None
+        latent_stack = None
+
+
+
+        if stack_pack is not None:
+            ipa3_stack, ipa_stack, redux_stack, lora_stack, text_stack, condi_stack, cn_stack, latent_stack = stack_pack
+
+
+        if lora_stack is not None:
+            model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
+
+
+        if ipa3_stack is not None:
+            model, =  Apply_IPA_SD3().apply_ipa_stack(model, ipa3_stack)
+
+
+        if ipa_stack is not None:
+            model, = Apply_IPA().apply_ipa_stack(model, ipa_stack)
+
+        if text_stack and text_stack is not None:
+            if text_stack is not None:
+                positive, negative = Apply_textStack().textStack(clip,text_stack)
+
+
+        if redux_stack is not None:
+            positive, =  Apply_Redux().apply_redux_stack(positive, redux_stack,)
+
+
+        if condi_stack is not None:
+            positive, negative = Apply_condiStack().condiStack(clip, condi_stack)
+
+
+        if cn_stack is not None:  # 常规cn
+            positive, negative = Apply_ControlNetStack().apply_controlnet_stack(
+                positive=positive, 
+                negative=negative, 
+                switch="On", 
+                vae=vae,
+                controlnet_stack=cn_stack
+            )
+
+
+        if latent_stack is not None:
+            model, positive, negative, latent = Apply_latent().apply_latent_stack(model, positive, negative, vae, latent_stack)
+
+
+
+        context = new_context(context, clip=clip, positive=positive, negative=negative, model=model, latent = latent)
+        return (context, model, positive, negative, latent, image_orc)
+
+
 
