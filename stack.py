@@ -2381,9 +2381,9 @@ class stack_sum_Unpack:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "stack_pack": ("STACK_PACK",)
+
             },
-            "optional": {}
+            "optional": {                "stack_pack": ("STACK_PACK",)}
         }
 
     RETURN_TYPES = ("LORASTACK", "IPA3_STACK", "IPA_STACK", "TEXT_STACK","REDUX_STACK",  "STACK_CONDI", "CN_STACK", "LATENT_STACK")
