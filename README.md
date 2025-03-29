@@ -3,7 +3,7 @@
 
 ## 👨update record更新记录
 
-1、2025.3.29  add node “stack_sum_pack”  
+1、2025.3.29  add node “sum_stack_all”  
 
 
 
