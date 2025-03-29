@@ -51,7 +51,7 @@ NODE_CLASS_MAPPINGS = {
 "sum_stack_flux": sum_stack_flux,
 "sum_stack_image": sum_stack_image,
 "sum_stack_AD": sum_stack_AD,
-
+"sum_stack_all": sum_stack_all,
 
 "load_FLUX": load_FLUX,
 "load_basic": load_basic,
@@ -115,15 +115,18 @@ NODE_CLASS_MAPPINGS = {
 
 
 #--unpack------------------------------------------#
-"param_preset": param_preset,
-"Unpack_param": Unpack_param,
-"Model_Preset":Model_Preset,
-"Unpack_Model": Unpack_Model,
+"param_preset_pack": param_preset,
+"param_preset_Unpack": Unpack_param,
+"Model_Preset_pack":Model_Preset,
+"Model_Preset_Unpack": Unpack_Model,
 
-"CN_preset1": CN_preset1,
-"Unpack_CN": Unpack_CN,
-"photoshop_preset":photoshop_preset,
-"Unpack_photoshop":Unpack_photoshop,
+"CN_preset1_pack": CN_preset1,
+"CN_preset1_Unpack": Unpack_CN,
+"photoshop_preset_pack":photoshop_preset,
+"photoshop_preset_Unpack":Unpack_photoshop,
+
+"stack_sum_pack": stack_sum_pack,
+"stack_sum_Unpack": stack_sum_Unpack,
 
 
 #-stack-------------------------------------------#
