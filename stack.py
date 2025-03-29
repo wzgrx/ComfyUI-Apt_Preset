@@ -2407,7 +2407,7 @@ class stack_sum_Unpack:
 
 
 
-class sum_stack_all:
+class sum_stack_pack:
 
     @classmethod
     def INPUT_TYPES(s):
@@ -2457,6 +2457,99 @@ class sum_stack_all:
 
         if stack_pack is not None:
             ipa3_stack, ipa_stack, redux_stack, lora_stack, text_stack, condi_stack, cn_stack, latent_stack = stack_pack
+
+
+        if lora_stack is not None:
+            model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
+
+
+        if ipa3_stack is not None:
+            model, =  Apply_IPA_SD3().apply_ipa_stack(model, ipa3_stack)
+
+
+        if ipa_stack is not None:
+            model, = Apply_IPA().apply_ipa_stack(model, ipa_stack)
+
+        if text_stack and text_stack is not None:
+            if text_stack is not None:
+                positive, negative = Apply_textStack().textStack(clip,text_stack)
+
+
+        if redux_stack is not None:
+            positive, =  Apply_Redux().apply_redux_stack(positive, redux_stack,)
+
+
+        if condi_stack is not None:
+            positive, negative = Apply_condiStack().condiStack(clip, condi_stack)
+
+
+        if cn_stack is not None:  # 常规cn
+            positive, negative = Apply_ControlNetStack().apply_controlnet_stack(
+                positive=positive, 
+                negative=negative, 
+                switch="On", 
+                vae=vae,
+                controlnet_stack=cn_stack
+            )
+
+
+        if latent_stack is not None:
+            model, positive, negative, latent = Apply_latent().apply_latent_stack(model, positive, negative, vae, latent_stack)
+
+
+
+        context = new_context(context, clip=clip, positive=positive, negative=negative, model=model, latent = latent)
+        return (context, model, positive, negative, latent, image_orc)
+
+
+
+
+
+class sum_stack_all:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "model":("MODEL", ),
+                "positive": ("CONDITIONING",),
+                "lora_stack": ("LORASTACK",),
+                "ipa3_stack": ("IPA3_STACK",),
+                "ipa_stack": ("IPA_STACK",),
+
+                "text_stack": ("TEXT_STACK",),
+                "redux_stack": ("REDUX_STACK",),
+                "condi_stack": ("STACK_CONDI", ),
+                "cn_stack": ("CN_STACK",),
+                "latent_stack": ("LATENT_STACK",),
+
+
+
+            },
+            "hidden": {},
+        }
+        
+    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT" ,"IMAGE" )
+    RETURN_NAMES = ("context", "model", "positive", "negative","latent", "image" )
+    FUNCTION = "merge"
+    CATEGORY = "Apt_Preset/load"
+
+    def merge(self, context=None, model=None, positive=None, ipa3_stack=None, ipa_stack=None, redux_stack=None, lora_stack=None, text_stack=None, condi_stack=None,  cn_stack=None, latent_stack=None):
+        
+        if model is None:
+            model = context.get("model")
+        if positive is None:
+            positive = context.get("positive")
+
+        clip = context.get("clip")
+        negative = context.get("negative")
+        latent = context.get("latent", None)
+        image_orc = context.get("images", None)
+        vae = context.get("vae", None)
+
 
 
         if lora_stack is not None:
