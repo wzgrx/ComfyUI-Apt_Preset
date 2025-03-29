@@ -52,7 +52,7 @@ _all_contextput_output_data = {
     "clip": ("clip","CLIP", "clip"),
     "images": ("images", "IMAGE", "images"),
     "mask": ("mask", "MASK", "mask"),
-    "any": ("any", ANY_TYPE, "any"),
+
     "guidance": ("guidance", "FLOAT", "guidance"),
     "steps": ("steps", "INT", "steps"),
     "cfg": ("cfg", "FLOAT", "cfg"),
@@ -104,7 +104,7 @@ ALL_CTX_OPTIONAL_INPUTS, ALL_CTX_RETURN_TYPES, ALL_CTX_RETURN_NAMES = _create_co
 
 
 
-_original_ctx_inputs_list = ["context", "model", "positive", "negative", "latent", "vae", "clip", "images", "mask","any"]
+_original_ctx_inputs_list = ["context", "model", "positive", "negative", "latent", "vae", "clip", "images", "mask",]
 ORIG_CTX_OPTIONAL_INPUTS, ORIG_CTX_RETURN_TYPES, ORIG_CTX_RETURN_NAMES = _create_context_data(_original_ctx_inputs_list)
 
 
