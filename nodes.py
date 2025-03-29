@@ -227,7 +227,7 @@ class Date_basic:
     FUNCTION = "sample"
     CATEGORY = "Apt_Preset/data"
 
-    def sample(self, context=None,model=None,positive=None,negative=None,latent=None,vae =None,clip =None,images =None, mask =None,any =None):
+    def sample(self, context=None,model=None,positive=None,negative=None,latent=None,vae =None,clip =None,images =None, mask =None,):
         
 
         if model is None:
@@ -249,7 +249,7 @@ class Date_basic:
             mask = context.get("mask")
         
         context = new_context(context,model=model,positive=positive,negative=negative,latent=latent,vae=vae,clip=clip,images=images,mask=mask,)
-        return (context, model, positive, negative, latent, vae, clip, images, mask, any )
+        return (context, model, positive, negative, latent, vae, clip, images, mask,)
 
 
 class Date_basic_easy:   
@@ -723,8 +723,7 @@ class load_basic:
                 "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
             },
             
-            "optional": { "any": (ANY_TYPE,),
-                        #"device": (["default", "cpu"], {"advanced": True}),
+            "optional": { 
                         },
             
             
@@ -740,7 +739,7 @@ class load_basic:
 
 
     def process_settings(self, node_id,  lora_strength, clipnum, 
-                        width, height, batch, steps, cfg, sampler, scheduler, any=None, device="default", 
+                        width, height, batch, steps, cfg, sampler, scheduler,  device="default", 
                         vae=None, lora=None, ckpt_name=None,  pos="default", neg="default", preset=[]):
         
         # 非编码后的数据
@@ -809,7 +808,6 @@ class load_basic:
             "latent": {"samples": latent},      
             "vae": vae,
             "clip": clip,
-            "any": any,
             "steps": steps,
             "cfg": cfg,
             "sampler": sampler,
@@ -862,8 +860,7 @@ class load_FLUX:
                 #"neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
             },
             
-            "optional": { "any": (ANY_TYPE,),
-                        #"device": (["default", "cpu"], {"advanced": True}),
+            "optional": { 
                         },
             
             
@@ -879,7 +876,7 @@ class load_FLUX:
 
 
     def process_settings(self, node_id, lora_strength, 
-                        width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, guidance, any=None,clip_type=None,device="default", 
+                        width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, guidance, clip_type=None,device="default", 
                         vae=None, lora=None, unet_name=None, clip1=None, 
                         clip2=None, pos="default", neg="", preset=[]):
         
@@ -960,7 +957,6 @@ class load_FLUX:
             "latent": {"samples": latent},      
             "vae": vae,
             "clip": clip,
-            "any": any,
             "steps": steps,
             "cfg": cfg,
             "sampler": sampler,
@@ -1011,8 +1007,7 @@ class load_SD35:
                 #"neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
             },
             
-            "optional": { "any": (ANY_TYPE,),
-                        #"device": (["default", "cpu"], {"advanced": True}),
+            "optional": { 
                         },
             
             
@@ -1028,7 +1023,7 @@ class load_SD35:
 
 
     def process_settings(self, node_id, lora_strength, 
-                        width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, any=None,device="default", 
+                        width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, device="default", 
                         vae=None, lora=None, clip1=None, unet_name=None,
                         clip2=None, clip3=None, pos="default", neg="", preset=[]):
         
@@ -1104,7 +1099,7 @@ class load_SD35:
             "latent": {"samples": latent},      
             "vae": vae,
             "clip": clip,
-            "any": any,
+
             "steps": steps,
             "cfg": cfg,
             "sampler": sampler,
@@ -1388,7 +1383,6 @@ class sum_editor:
                 "vae": ("VAE",), 
                 "latent": ("LATENT",),
                 "image": ("IMAGE",),
-                "chx_Merge": ("RUN_CONTEXT",),
                 
                 "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == no change"}),
                 "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == no change"}),
@@ -1403,8 +1397,8 @@ class sum_editor:
             }
         }
 
-    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT", "VAE","CLIP",  "IMAGE", ANY_TYPE,)
-    RETURN_NAMES = ("context", "model","positive", "negative", "latent", "vae","clip", "image", "any" )
+    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT", "VAE","CLIP",  "IMAGE",)
+    RETURN_NAMES = ("context", "model","positive", "negative", "latent", "vae","clip", "image", )
     FUNCTION = "text"
     CATEGORY = "Apt_Preset/load"
 
@@ -1414,10 +1408,8 @@ class sum_editor:
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
         return ({"samples": latent}, )
 
-    def text(self, context=None, model=None, clip=None, positive=None, negative=None, pos="", neg="", image=None, vae=None, latent=None, chx_Merge=None,steps=None, cfg=None, sampler=None, scheduler=None, style=None, batch_size=1, ratio_selected=None, ):
+    def text(self, context=None, model=None, clip=None, positive=None, negative=None, pos="", neg="", image=None, vae=None, latent=None, steps=None, cfg=None, sampler=None, scheduler=None, style=None, batch_size=1, ratio_selected=None, ):
         
-        if chx_Merge is not None :
-            context = Data_chx_Merge().merge(context, chx_Merge, chx_Merge)[0] 
         if model is None:
             model = context.get("model")
         if clip is None:
@@ -1469,7 +1461,7 @@ class sum_editor:
         positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
         context = new_context(context, model=model , latent=latent , clip=clip, vae=vae, positive=positive, negative=negative, images=image,steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler,) 
         
-        return (context, model, positive, negative, latent, vae, clip,  image, context.get("any",None))
+        return (context, model, positive, negative, latent, vae, clip,  image, )
 
 
 class sum_latent:
