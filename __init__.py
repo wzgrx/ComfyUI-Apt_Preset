@@ -51,8 +51,8 @@ NODE_CLASS_MAPPINGS = {
 #"sum_stack_flux": sum_stack_flux,
 "sum_stack_AD": sum_stack_AD,
 
+"sum_stack_image": sum_stack_image,
 "sum_stack_all": sum_stack_all,
-"sum_stack_pack": sum_stack_pack,
 
 "load_FLUX": load_FLUX,
 "load_basic": load_basic,
