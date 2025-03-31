@@ -181,28 +181,34 @@ class Stack_text:
         populate_items(styles, "style-preview")
         cls.json_data = json_data
 
-        return {"required": {
-                "pos": ("STRING", {"default": "","multiline": True}),
+        return {
+            "optional": {
+                "text_stack": ("TEXT_STACK",),
+                "pos": ("STRING", {"default": "", "multiline": True}),
                 "neg": ("STRING", {"default": "", "multiline": False}),
-                "style": (none2list(style_list()[0]), {"default": "None"}),
-                },
+                "style": (none2list(style_list()[0]), {"default": "None"})
+            }
         }
 
     RETURN_TYPES = ("TEXT_STACK",  )
-    RETURN_NAMES = ("text_tack", )
+    RETURN_NAMES = ("text_stack", )
     FUNCTION = "lora_stacker"
     CATEGORY = "Apt_Preset/stack"
-    def lora_stacker(self, style,  pos,neg ):
-        text_stack=list()
+    def lora_stacker(self, style,  pos, neg, text_stack=None, Add_text=""):
+        stack = []
+        if text_stack:
+            # 过滤掉逗号分隔符
+            valid_items = [item for item in text_stack if isinstance(item, (tuple, list)) and len(item) == 2]
+            stack.extend(valid_items)
+            if valid_items:
+                stack.append(',')
 
         if style != "None":
-            pos += f"{pos}, {style_list()[1][style_list()[0].index(style)][1]}"
-            neg += f"{neg}, {style_list()[1][style_list()[0].index(style)][2]}" if len(style_list()[1][style_list()[0].index(style)]) > 2 else ""
-        
+            pos += f", {style_list()[1][style_list()[0].index(style)][1]}"
+            neg += f", {style_list()[1][style_list()[0].index(style)][2]}" if len(style_list()[1][style_list()[0].index(style)]) > 2 else ""
 
-
-        text_stack.extend([(pos, neg, )]),
-        return (text_stack, )
+        stack.append((pos, neg))
+        return (stack, )
 
 
 class Apply_textStack:
@@ -222,20 +228,19 @@ class Apply_textStack:
     def textStack(self, clip, text_stack):
         positive_list = []
         negative_list = []
-        for text in text_stack:
-            pos, neg = text
-            if pos is not None and pos != '':
-                (positive,) = CLIPTextEncode().encode(clip, pos)
-                (negative,) = CLIPTextEncode().encode(clip, neg)
-                positive_list.append(positive)
-                negative_list.append(negative)
+        for item in text_stack:
+            if isinstance(item, (tuple, list)) and len(item) == 2:
+                pos, neg = item
+                if pos is not None and pos != '':
+                    (positive,) = CLIPTextEncode().encode(clip, pos)
+                    (negative,) = CLIPTextEncode().encode(clip, neg)
+                    positive_list.append(positive)
+                    negative_list.append(negative)
 
-        # 合并所有 positive 和 negative 结果
         if positive_list and negative_list:
             positive = sum(positive_list, [])
             negative = sum(negative_list, [])
         else:
-            # 如果 text_stack 为空或者所有 pos 都是空，返回空列表
             positive = []
             negative = []
 
