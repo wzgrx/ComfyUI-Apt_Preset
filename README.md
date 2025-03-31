@@ -4,7 +4,7 @@
 ## 👨update record更新记录
 
 1、2025.3.29  add node “sum_stack_all”  
-
+2、2025.3.31  update Stack_text ,Support adding multiple styles at the same time
 
 
 ## 👨🏻‍🎨 Usage Guide使用指南
