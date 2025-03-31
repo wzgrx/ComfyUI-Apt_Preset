@@ -171,8 +171,6 @@ class Apply_ControlNetStack:
 
 
 
-
-
 class Stack_text:
 
     @classmethod
@@ -190,25 +188,40 @@ class Stack_text:
             }
         }
 
-    RETURN_TYPES = ("TEXT_STACK",  )
+    RETURN_TYPES = ("TEXT_STACK", )
     RETURN_NAMES = ("text_stack", )
     FUNCTION = "lora_stacker"
     CATEGORY = "Apt_Preset/stack"
-    def lora_stacker(self, style,  pos, neg, text_stack=None, Add_text=""):
-        stack = []
+    def lora_stacker(self, style,  pos, neg, text_stack=None, Add_text=""):  # 添加 text_stack 参数
+        stack = list()
+        # 如果 text_stack 有输入，则将其内容添加到 stack 中
         if text_stack:
-            # 过滤掉逗号分隔符
-            valid_items = [item for item in text_stack if isinstance(item, (tuple, list)) and len(item) == 2]
-            stack.extend(valid_items)
-            if valid_items:
-                stack.append(',')
+            stack.extend(text_stack)
+            stack.append(',')  # 添加逗号隔开
 
         if style != "None":
-            pos += f", {style_list()[1][style_list()[0].index(style)][1]}"
-            neg += f", {style_list()[1][style_list()[0].index(style)][2]}" if len(style_list()[1][style_list()[0].index(style)]) > 2 else ""
+            style_index = style_list()[0].index(style)
+            style_pos = style_list()[1][style_index][1]
+            style_neg = style_list()[1][style_index][2] if len(style_list()[1][style_index]) > 2 else ""
 
-        stack.append((pos, neg))
-        return (stack, )
+            # 检查并替换 {prompt}
+            if "{prompt}" in style_pos:
+                new_style_pos = style_pos.replace("{prompt}", pos)
+                pos = new_style_pos
+            else:
+                pos += f", {style_pos}"
+
+            if "{prompt}" in style_neg:
+                new_style_neg = style_neg.replace("{prompt}", neg)
+                neg = new_style_neg
+            else:
+                neg += f", {style_neg}"
+
+        stack.extend([(pos, neg)])
+
+
+        return (stack,)
+
 
 
 class Apply_textStack:
