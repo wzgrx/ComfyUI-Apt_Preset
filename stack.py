@@ -19,6 +19,7 @@ from .py.AdvancedControlNet.utils import StrengthInterpolation as SI
 import node_helpers
 from .def_unit import *
 import cv2
+from PIL import Image, ImageFilter
 
 #region---------AD-----------
 from typing import Dict, List
