@@ -15,7 +15,7 @@ import math
 from pickle import NONE
 from telnetlib import OUTMRK
 import comfy.sample
-from colorama import Fore
+
 from typing import List
 from comfy_extras.chainner_models import model_loading
 import folder_paths
