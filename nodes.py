@@ -43,7 +43,7 @@ from typing import Optional, Tuple, Dict, Any, Union, cast
 from comfy.comfy_types.node_typing import IO
 from comfy_extras.nodes_custom_sampler import RandomNoise, CFGGuider, BasicScheduler, KSamplerSelect, SamplerCustomAdvanced
 from comfy_extras.nodes_sd3 import TripleCLIPLoader
-from colorama import Fore
+
 from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
 from comfy_extras.nodes_controlnet import SetUnionControlNetType
 from comfy_extras.nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
