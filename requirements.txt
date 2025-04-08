@@ -5,3 +5,5 @@ aiohttp
 Pillow
 spandrel
 tqdm
+numexpr
+toolz
