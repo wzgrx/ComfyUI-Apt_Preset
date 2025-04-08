@@ -6,7 +6,6 @@ from ..def_unit import new_context
 from typing import Any
 import numpy as np
 import torch
-import torch.jit
 import torch.nn.functional as F
 
 from torch import Tensor
@@ -229,13 +228,33 @@ def inject_patched_calculate_weight():
 #-------------------new-----------------------------------------------
 
 
+
+
+
+import os
+
+
+
+
+
+
+MODELS_DIR = os.path.join(folder_paths.models_dir, "inpaint")
+if "inpaint" not in folder_paths.folder_names_and_paths:
+    current_paths = [MODELS_DIR]
+else:
+    current_paths, _ = folder_paths.folder_names_and_paths["inpaint"]
+folder_paths.folder_names_and_paths["inpaint"] = (
+    current_paths,
+    folder_paths.supported_pt_extensions,
+)
+
+
 class pre_inpaint:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                     "context": ("RUN_CONTEXT",),
-
                 "pixels": ("IMAGE",),
                 "mask": ("MASK",),
                 "head": (folder_paths.get_filename_list("inpaint"), {"default": "fooocus_inpaint_head.pth"}),
