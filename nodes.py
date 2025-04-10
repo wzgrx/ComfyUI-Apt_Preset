@@ -19,19 +19,13 @@ import aiohttp
 from aiohttp import web
 from PIL import Image, ImageFilter
 from tqdm import tqdm
-import torchvision.transforms.functional as TF
-import torch.nn.functional as F
+#import torchvision.transforms.functional as TF
+#import torch.nn.functional as F
 import cv2
 import nodes
 # 本地库
 
 import comfy
-import comfy.sd
-import comfy.utils
-import comfy.lora
-import comfy.samplers
-import comfy.controlnet
-import comfy.sample
 import folder_paths
 import node_helpers
 import latent_preview
@@ -41,7 +35,7 @@ from comfy.cli_args import args
 from comfy.cldm.control_types import UNION_CONTROLNET_TYPES
 from typing import Optional, Tuple, Dict, Any, Union, cast
 from comfy.comfy_types.node_typing import IO
-from comfy_extras.nodes_custom_sampler import RandomNoise, CFGGuider, BasicScheduler, KSamplerSelect, SamplerCustomAdvanced
+from comfy_extras.nodes_custom_sampler import RandomNoise,  BasicScheduler, KSamplerSelect, SamplerCustomAdvanced, BasicGuider
 from comfy_extras.nodes_sd3 import TripleCLIPLoader
 
 from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
@@ -117,7 +111,7 @@ def getNewTomlnameExt(tomlname, folderpath, savetype):
 #region-----------基础节点context------------------------------------------------------------------------------#
 
 
-class Data_fullData:
+class Data_fullData:  #丢弃
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -144,7 +138,18 @@ class Data_fullData:
                 "batch": ("INT",{"forceInput": True}),
             },
         }
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "CONDITIONING","CONDITIONING","LATENT","VAE","CLIP","IMAGE","MASK","STRING","STRING","STRING","STRING","STRING","INT","INT","INT")
+    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "CONDITIONING","CONDITIONING","LATENT","VAE","CLIP","IMAGE","MASK",
+                    folder_paths.get_filename_list("clip"),
+                    folder_paths.get_filename_list("clip"),
+                    folder_paths.get_filename_list("clip"),  
+                    folder_paths.get_filename_list("unet"), 
+                    folder_paths.get_filename_list("checkpoints"),
+                    "STRING", 
+                    "STRING", 
+                    "INT",
+                    "INT",
+                    "INT",)
+    
     RETURN_NAMES = ("context", "model","positive","negative","latent","vae","clip","images","mask","clip1","clip2","clip3","unet_name","ckpt_name","pos","neg","width","height","batch")
     FUNCTION = "sample"
     CATEGORY = "Apt_Preset/data"
@@ -501,8 +506,8 @@ class sum_load:
             
             "optional": { 
                 "over_clip": ("CLIP",),  
+                "over_model": ("MODEL",),
                 "lora_stack": ("LORASTACK",),
-                "cn_stack": ("CN_STACK",),
                         },
 
             "hidden": { "node_id": "UNIQUE_ID",
@@ -517,7 +522,7 @@ class sum_load:
 
     def process_settings(self, node_id, run_Mode, lora_strength, clipnum, 
                         width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, guidance, over_clip=None,  clip_type=None,device="default", 
-                        vae=None, lora=None, unet_name=None, ckpt_name=None, clip1=None, lora_stack=None, cn_stack=None,
+                        vae=None, lora=None, unet_name=None, ckpt_name=None, clip1=None, lora_stack=None, over_model=None,
                         clip2=None, clip3=None, pos="default", neg="default", preset=[]):
         
         # 非编码后的数据
@@ -595,8 +600,12 @@ class sum_load:
 
         # Case 2: FLUX mode
         if run_Mode == "FLUX":
-            unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
-            model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
+            if over_model is not None:
+                model = over_model
+            else:
+                unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
+                model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
+
             if over_clip is None:
                 if clip1 == "None":
                     raise ValueError("In FLUX mode, clip1 cannot be None. Please enter a valid clip1.")
@@ -613,8 +622,12 @@ class sum_load:
 
         # Case 3: SD3.5 mode
         if run_Mode == "SD3.5":
-            unet_path = folder_paths.get_full_path_or_raise("unet", unet_name)
-            model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
+            if over_model is not None:
+                model = over_model
+            else:
+                unet_path = folder_paths.get_full_path_or_raise("unet", unet_name)
+                model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
+
             if over_clip is None:
                 if clip1 == "None":
                     raise ValueError("In SD3.5 mode, clip cannot be None. Please enter a valid clip1.")
@@ -629,8 +642,11 @@ class sum_load:
                 vae_path = folder_paths.get_full_path("vae", vae)
                 vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
+
+
         if lora_stack is not None:
             model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
+
 
         if lora != "None" and lora_strength != 0:
             model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
@@ -640,13 +656,6 @@ class sum_load:
             (positive,) = CLIPTextEncode().encode(clip, pos)
             (negative,) = CLIPTextEncode().encode(clip, neg)
         
-        if cn_stack is not None:  # 常规cn
-            positive, negative = Apply_ControlNetStack().apply_controlnet_stack(
-                positive=positive, 
-                negative=negative, 
-                switch="On", 
-                controlnet_stack=cn_stack
-            )
 
 
         if run_Mode == "FLUX":
@@ -1384,8 +1393,8 @@ class sum_editor:
                 "latent": ("LATENT",),
                 "image": ("IMAGE",),
                 
-                "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == no change"}),
-                "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == no change"}),
+                "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == None"}),
+                "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == None"}),
                 "sampler": (['None'] + comfy.samplers.KSampler.SAMPLERS, {"default": "None"}),  
                 "scheduler": (['None'] + comfy.samplers.KSampler.SCHEDULERS, {"default": "None"}), 
                 
@@ -1819,7 +1828,7 @@ class basic_Ksampler_custom:
             noise = RandomNoise().get_noise(seed)[0] 
             
         if guider is None:
-            guider = CFGGuider().get_guider(model, positive, negative, cfg)[0] 
+            guider = BasicGuider().get_guider(model, positive)[0] 
             
         if sigmas is None:
             sigmas = BasicScheduler().get_sigmas(model, scheduler, steps, denoise)[0]
@@ -2634,15 +2643,15 @@ class chx_easy_text:
         return {
             "required": {
                 "context": ("RUN_CONTEXT",),
-
-                "pos": ("STRING", {"default": "", "multiline": True}),
-                "neg": ("STRING", {"default": "", "multiline": False}),
-                "style": (none2list(style_list()[0]), {"default": "None"}),
             },
 
             "optional": {
                 "pos1": ("STRING", {"forceInput": True,"default": "", }),
                 "neg1":  ("STRING", {"forceInput": True,"default": "", }),
+                "pos": ("STRING", {"default": "", "multiline": True}),
+                "neg": ("STRING", {"default": "", "multiline": False}),
+                "style": (none2list(style_list()[0]), {"default": "None"}),
+
             }
         }
 
