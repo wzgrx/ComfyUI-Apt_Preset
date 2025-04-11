@@ -71,7 +71,8 @@ Users are responsible for ensuring compliance with all applicable laws and regul
 
 ## 关注我，我分持续分享插件的使用方法和优化的工作流，让人人都能轻松的搭建自己的工作流
 
-![image](https://github.com/user-attachments/assets/ba5cc7cd-98bb-40f9-bf79-9444e4f8b3a6)
+![image](https://github.com/user-attachments/assets/d1f53fe7-4a31-49e4-b8bb-fb5e71e5cf5f)
+
 
 
 
