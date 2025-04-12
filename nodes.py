@@ -152,7 +152,7 @@ class Data_fullData:  #丢弃
     
     RETURN_NAMES = ("context", "model","positive","negative","latent","vae","clip","images","mask","clip1","clip2","clip3","unet_name","ckpt_name","pos","neg","width","height","batch")
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
 
     def sample(self, context=None,model=None,positive=None,negative=None,latent=None,vae =None,clip =None,images =None, mask =None,
             clip1 = None,clip2 = None,clip3 = None,unet_name = None,ckpt_name = None,pos = None,neg = None,width = None,height = None,batch = None):
@@ -206,7 +206,7 @@ class Data_fullData:  #丢弃
 
 
 
-class Date_basic:   
+class Data_basic:   
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -230,7 +230,7 @@ class Date_basic:
     RETURN_TYPES = ("RUN_CONTEXT","MODEL", "CONDITIONING","CONDITIONING","LATENT","VAE","CLIP","IMAGE","MASK",)
     RETURN_NAMES = ("context", "model","positive","negative","latent","vae","clip","images","mask",)
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
 
     def sample(self, context=None,model=None,positive=None,negative=None,latent=None,vae =None,clip =None,images =None, mask =None,):
         
@@ -257,7 +257,7 @@ class Date_basic:
         return (context, model, positive, negative, latent, vae, clip, images, mask,)
 
 
-class Date_basic_easy:   
+class Data_basic_easy:   
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -278,7 +278,7 @@ class Date_basic_easy:
     RETURN_TYPES = ("RUN_CONTEXT","MODEL","CLIP", "CONDITIONING","CONDITIONING","LATENT",)
     RETURN_NAMES = ("context", "model","clip","positive","negative","latent",)
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
 
     def sample(self, context=None,model=None,positive=None,negative=None,clip =None, latent=None):
         
@@ -310,7 +310,7 @@ class Data_sample:
     RETURN_TYPES = ("RUN_CONTEXT","INT","FLOAT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS)
     RETURN_NAMES = ("context","steps","cfg","sampler","scheduler" )
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
 
     def sample(self, context, ):
         
@@ -345,7 +345,7 @@ class pre_make_context:
     RETURN_NAMES = ("context",)
     FUNCTION = "pipein"
 
-    CATEGORY = "Apt_Preset/pre_sample"
+    CATEGORY = "Apt_Preset/ksampler"
 
     def pipein(self, model = None, clip = None, positive = None, negative = None, vae = None, latent = None, steps = None, cfg = None, sampler = None, scheduler = None):
 
@@ -380,7 +380,7 @@ class Data_select:
     RETURN_NAMES = ("*",)
     FUNCTION = "pipeout"
 
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
 
     def pipeout(self, type, context=None):
 
@@ -427,7 +427,7 @@ class Data_presetData:
             "batch",
                     )
 
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
     FUNCTION = "convert"
 
     def convert(self, context=None):
@@ -1140,7 +1140,7 @@ class Data_preset_save:
     RETURN_TYPES = ()
     OUTPUT_NODE = True
     FUNCTION = "saveparam"
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
 
     def saveparam(self, param, tomlname, savetype):
         # 初始化 tomltext 为一个空字符串
@@ -1355,7 +1355,7 @@ class pre_sample_data:
     RETURN_TYPES = ("RUN_CONTEXT", )
     RETURN_NAMES = ("context", )
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/pre_sample"
+    CATEGORY = "Apt_Preset/ksampler"
 
     def sample(self, context, steps, cfg, sampler, scheduler):
         
@@ -3026,7 +3026,7 @@ class chx_YC_LG_Redux:
     RETURN_NAMES = ("context", "positive",)
     
     FUNCTION = "apply_stylemodel"
-    CATEGORY = "Apt_Preset/tool"
+    CATEGORY = "Apt_Preset/IPA"
 
     def crop_to_mask_area(self, image, mask):
         if len(image.shape) == 4:
@@ -3315,7 +3315,7 @@ class chx_Style_Redux:
     RETURN_NAMES = ("context", "positive",)
     
     FUNCTION = "apply_style"
-    CATEGORY = "Apt_Preset/tool"
+    CATEGORY = "Apt_Preset/IPA"
 
 
 
@@ -3470,7 +3470,7 @@ class chx_StyleModelApply:
     RETURN_TYPES = ("RUN_CONTEXT", "CONDITIONING",)
     RETURN_NAMES = ("context", "positive",)
     FUNCTION = "apply_stylemodel"
-    CATEGORY = "Apt_Preset/tool"
+    CATEGORY = "Apt_Preset/IPA"
 
     def apply_stylemodel(self, style_model, clip_vision, strength, strength_type, guidance=30, context=None, image=None):
         
