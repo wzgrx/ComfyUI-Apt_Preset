@@ -2,6 +2,8 @@ WEB_DIRECTORY = "./web"
 #__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
 
+
+from .Finenode.CSV_loader import *
 from .nodes import *
 from .stack import *
 from .packdata import *
@@ -12,15 +14,36 @@ from .py.Keyframe_schedule import AD_slice_Condi,AD_sch_prompt_adv,AD_DrawSchedu
 from .py.InpaintNodes import pre_inpaint
 from .py.Ksampler_VisualStyle import chx_Ksampler_VisualStyle
 from .py.Ksampler_dual_area import chx_Ksampler_dual_area
-from .py.IPAdapterSD3 import IPAdapterSD3LOAD,Stack_IPA_SD3,Apply_IPA_SD3
+from .py.IPAdapterSD3 import IPA_dapterSD3LOAD,Stack_IPA_SD3,Apply_IPA_SD3
 
+from .py.layered_infinite_zoom import AD_InfiniteZoom
 
 
 
 NODE_CLASS_MAPPINGS = {
 
+#-sum-------------------------------------------#
+"sum_load": sum_load,
+"sum_editor": sum_editor,
+"sum_latent": sum_latent,
+"sum_lora": sum_lora,
+"sum_controlnet": sum_controlnet,
+"sum_stack_AD": sum_stack_AD,
+"sum_stack_image": sum_stack_image,
+"sum_stack_all": sum_stack_all,
 
+"load_FLUX": load_FLUX,
+"load_basic": load_basic,
+"load_SD35": load_SD35,
 
+"Data_preset_save": Data_preset_save,
+"Data_chx_Merge":Data_chx_Merge,
+"Data_chx_MergeBig":Data_chx_MergeBig,
+"Data_presetData":Data_presetData,
+"Data_basic": Data_basic,
+"Data_basic_easy": Data_basic_easy,
+"Data_sample": Data_sample,
+"Data_select": Data_select,
 
 
 #--------AD------------------------------------------
@@ -39,34 +62,10 @@ NODE_CLASS_MAPPINGS = {
 "AD_DrawSchedule": AD_DrawSchedule,
 "AD_slice_Condi": AD_slice_Condi,
 
-#-sum-------------------------------------------#
-"sum_load": sum_load,
-"sum_editor": sum_editor,
-"sum_latent": sum_latent,
-"sum_lora": sum_lora,
-"sum_controlnet": sum_controlnet,
-
-#"sum_stack_basic": sum_stack_basic,
-#"sum_stack_SD3": sum_stack_SD3,
-#"sum_stack_flux": sum_stack_flux,
-"sum_stack_AD": sum_stack_AD,
-
-"sum_stack_image": sum_stack_image,
-"sum_stack_all": sum_stack_all,
-
-"load_FLUX": load_FLUX,
-"load_basic": load_basic,
-"load_SD35": load_SD35,
-
-#-pre_sample-------------------------------------------#
+#-sample-------------------------------------------#
 "pre_sample_data":  pre_sample_data,  
 "pre_make_context": pre_make_context,
 "pre_inpaint": pre_inpaint,
-
-
-
-
-#-sample-------------------------------------------#
 
 "basic_Ksampler_simple": basic_Ksampler_simple,  
 "basic_Ksampler_mid": basic_Ksampler_mid,    
@@ -80,54 +79,8 @@ NODE_CLASS_MAPPINGS = {
 "chx_ksampler_Deforum": chx_ksampler_Deforum,
 "chx_Ksampler_dual_area": chx_Ksampler_dual_area,
 "chx_Ksampler_refine": chx_Ksampler_refine,
-
 "chx_ksampler_tile": chx_ksampler_tile,   
 "chx_Ksampler_inpaint": chx_Ksampler_inpaint,
-
-
-#--context data-------------------------------------------#
-"Data_preset_save": Data_preset_save,
-"Data_chx_Merge":Data_chx_Merge,
-"Data_chx_MergeBig":Data_chx_MergeBig,
-"Data_fullData": Data_fullData,
-"Data_presetData":Data_presetData,
-
-"Date_basic": Date_basic,
-"Date_basic_easy": Date_basic_easy,
-"Data_sample": Data_sample,
-"Data_select": Data_select,
-
-
-#---------tool------------------------------------------#
-"chx_YC_LG_Redux": chx_YC_LG_Redux,
-"chx_Style_Redux": chx_Style_Redux,
-"chx_StyleModelApply":chx_StyleModelApply,
-"chx_re_fluxguide": chx_re_fluxguide,
-"chx_easy_text": chx_easy_text,   
-"chx_controlnet": chx_controlnet, 
-"chx_controlnet_union": chx_controlnet_union,
-"chx_mask_Mulcondi": mask_Mulcondition,
-
-"chx_Upscale_simple": chx_Upscale_simple,
-"chx_prompt_Schedule": chx_prompt_Schedule,
-"IPAdapterSD3LOAD":IPAdapterSD3LOAD,
-
-
-
-
-#--unpack------------------------------------------#
-"param_preset_pack": param_preset,
-"param_preset_Unpack": Unpack_param,
-"Model_Preset_pack":Model_Preset,
-"Model_Preset_Unpack": Unpack_Model,
-
-"CN_preset1_pack": CN_preset1,
-"CN_preset1_Unpack": Unpack_CN,
-"photoshop_preset_pack":photoshop_preset,
-"photoshop_preset_Unpack":Unpack_photoshop,
-
-"stack_sum_pack": stack_sum_pack,
-"stack_sum_Unpack": stack_sum_Unpack,
 
 
 #-stack-------------------------------------------#
@@ -142,7 +95,6 @@ NODE_CLASS_MAPPINGS = {
 "Apply_Redux": Apply_Redux,
 "Apply_latent": Apply_latent,
 "Apply_IPA_SD3":Apply_IPA_SD3,
-
 
 
 "Stack_latent": Stack_latent,
@@ -165,6 +117,71 @@ NODE_CLASS_MAPPINGS = {
 "chx_IPA_XL_adv": chx_IPA_XL_adv,
 "chx_IPA_region_combine": chx_IPA_region_combine,
 "chx_IPA_apply_combine": chx_IPA_apply_combine,
+"IPA_dapterSD3LOAD":IPA_dapterSD3LOAD,
+"chx_YC_LG_Redux": chx_YC_LG_Redux,
+"chx_Style_Redux": chx_Style_Redux,
+"chx_StyleModelApply":chx_StyleModelApply,
+
+
+#---------tool------------------------------------------#
+
+"chx_re_fluxguide": chx_re_fluxguide,
+"chx_easy_text": chx_easy_text,   
+"chx_controlnet": chx_controlnet, 
+"chx_controlnet_union": chx_controlnet_union,
+"chx_mask_Mulcondi": mask_Mulcondition,
+"chx_Upscale_simple": chx_Upscale_simple,
+"chx_prompt_Schedule": chx_prompt_Schedule,
+
+
+#--unpack------------------------------------------#
+"param_preset_pack": param_preset,
+"param_preset_Unpack": Unpack_param,
+"Model_Preset_pack":Model_Preset,
+"Model_Preset_Unpack": Unpack_Model,
+
+"CN_preset1_pack": CN_preset1,
+"CN_preset1_Unpack": Unpack_CN,
+"photoshop_preset_pack":photoshop_preset,
+"photoshop_preset_Unpack":Unpack_photoshop,
+
+"stack_sum_pack": stack_sum_pack,
+"stack_sum_Unpack": stack_sum_Unpack,
+
+
+
+
+
+
+
+
+#-------------------------------------搬迁------------------
+
+"text_CSV_load": text_CSV_load,
+
+"AD_InfiniteZoom": AD_InfiniteZoom,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
