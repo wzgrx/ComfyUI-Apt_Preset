@@ -177,7 +177,7 @@ class Data_chx_Merge:
 
     RETURN_TYPES = "RUN_CONTEXT",
     RETURN_NAMES = "context",
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
     FUNCTION = "merge"
     
 
@@ -207,7 +207,7 @@ class Data_chx_MergeBig:
 
     RETURN_TYPES = ("RUN_CONTEXT","MODEL","CONDITIONING","CONDITIONING","IMAGE","MASK",)
     RETURN_NAMES = ("context","model","positive","negative","images","mask",)
-    CATEGORY = "Apt_Preset/data"
+    CATEGORY = "Apt_Preset/load"
     FUNCTION = "merge"
     
 
