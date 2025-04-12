@@ -264,7 +264,7 @@ class pre_inpaint:
 
     RETURN_TYPES = ("RUN_CONTEXT",)
     RETURN_NAMES = ("context",)
-    CATEGORY = "Apt_Preset/pre_sample"
+    CATEGORY = "Apt_Preset/ksampler"
     FUNCTION = "patch"
 
     _inpaint_head_feature: Tensor | None = None
