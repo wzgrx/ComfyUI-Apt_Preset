@@ -715,7 +715,7 @@ class Apply_IPA_SD3:
 
 
 
-class IPAdapterSD3LOAD:
+class IPA_dapterSD3LOAD:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -736,7 +736,7 @@ class IPAdapterSD3LOAD:
     RETURN_NAMES = ("model",)
     
     FUNCTION = "apply_ipadapter"
-    CATEGORY = "Apt_Preset/tool"
+    CATEGORY = "Apt_Preset/IPA"
 
     def apply_ipadapter( self, model, ipadapter, image, image_embed, weight, mask=None ):
         
