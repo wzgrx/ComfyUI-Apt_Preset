@@ -7,3 +7,4 @@ spandrel
 tqdm
 numexpr
 toolz
+keyframed
