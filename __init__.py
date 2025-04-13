@@ -32,11 +32,14 @@ NODE_CLASS_MAPPINGS = {
 "sum_stack_image": sum_stack_image,
 "sum_stack_all": sum_stack_all,
 
+"sum_text": sum_text,   
+
+
 "load_FLUX": load_FLUX,
 "load_basic": load_basic,
 "load_SD35": load_SD35,
 
-"Data_preset_save": Data_preset_save,
+
 "Data_chx_Merge":Data_chx_Merge,
 "Data_chx_MergeBig":Data_chx_MergeBig,
 "Data_presetData":Data_presetData,
@@ -44,6 +47,8 @@ NODE_CLASS_MAPPINGS = {
 "Data_basic_easy": Data_basic_easy,
 "Data_sample": Data_sample,
 "Data_select": Data_select,
+"Data_preset_save": Data_preset_save,
+
 
 
 #--------AD------------------------------------------
@@ -126,7 +131,7 @@ NODE_CLASS_MAPPINGS = {
 #---------tool------------------------------------------#
 
 "chx_re_fluxguide": chx_re_fluxguide,
-"chx_easy_text": chx_easy_text,   
+
 "chx_controlnet": chx_controlnet, 
 "chx_controlnet_union": chx_controlnet_union,
 "chx_mask_Mulcondi": mask_Mulcondition,
