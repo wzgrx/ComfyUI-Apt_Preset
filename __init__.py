@@ -2,8 +2,6 @@ WEB_DIRECTORY = "./web"
 #__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
 
-
-from .Finenode.CSV_loader import *
 from .nodes import *
 from .stack import *
 from .packdata import *
@@ -161,8 +159,6 @@ NODE_CLASS_MAPPINGS = {
 
 
 #-------------------------------------搬迁------------------
-
-"text_CSV_load": text_CSV_load,
 
 "AD_InfiniteZoom": AD_InfiniteZoom,
 
