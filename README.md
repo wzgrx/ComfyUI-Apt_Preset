@@ -10,6 +10,7 @@
 ![PixPin_2025-04-10_19-35-50](https://github.com/user-attachments/assets/612bff5e-83eb-4a2e-aee1-f915f983935d)
 
 4、2025.4.12 update styles.csv , add more style
+5、2025.4.13  add sum_text
 
 ## 👨🏻‍🎨 Usage Guide使用指南
 1.The main loader sum\_load integrates 4 loading modes: basic, clip, flux, and sd 3.5, all parameters can be loaded directly from the preset.
