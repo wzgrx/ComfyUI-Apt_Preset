@@ -3570,8 +3570,8 @@ class sum_text:
                 "positive": ("STRING", {"default": "", "multiline": True, }),
                 "negative": ("STRING", {"default": "", "multiline": False,}),
 
-                "target": ("STRING", {"multiline": False,"default": "[object], [prompt]"}),
-                "replace": ("STRING", {"multiline": False,"default": "a girl, simle, "}),
+                "target": ("STRING", {"multiline": False,"default": "object, prompt, Texture"}),
+                "replace": ("STRING", {"multiline": False,"default": "a girl, simle, fire "}),
 
                 "pos1": ("STRING", {"default": "", "multiline": False, }),
                 "neg1":  ("STRING", {"default": "", "multiline": False, }),
