@@ -894,4 +894,45 @@ def run_tiler_for_steps(enlarged_img, base_model, vae, seed, cfg, sampler_name, 
     return result
 
 
-#endregion---------------class chx_ksampler_tile-----------------------
+
+
+
+
+
+def replace_text(text, target, replace):
+    def split_with_quotes(s):
+        pattern = r'"([^"]*)"|\s*([^,]+)'
+        matches = re.finditer(pattern, s)
+        return [match.group(1) or match.group(2).strip() for match in matches if match.group(1) or match.group(2).strip()]
+    
+    targets = split_with_quotes(target)
+    exchanges = split_with_quotes(replace)
+    
+
+    word_map = {}
+    for target, exchange in zip(targets, exchanges):
+
+        target_clean = target.strip('"').strip().lower()
+        exchange_clean = exchange.strip('"').strip()
+        word_map[target_clean] = exchange_clean
+    
+
+    sorted_targets = sorted(word_map.keys(), key=len, reverse=True)
+    
+    result = text
+    for target in sorted_targets:
+        if ' ' in target:
+            pattern = re.escape(target)
+        else:
+            pattern = r'\b' + re.escape(target) + r'\b'
+        
+        result = re.sub(pattern, word_map[target], result, flags=re.IGNORECASE)
+    return (result,)
+
+
+
+
+
+
+
+#endregion-------------------------------------
