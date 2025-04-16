@@ -4,14 +4,16 @@
 ## 👨update record更新记录
 
 1、2025.3.29  add node “sum_stack_all”  
+
 2、2025.3.31  update Stack_text 更新节点，支持多风格，更新风格预设为中文版
 
 3、2025.4.10  update sum_load Support over_model  更新sum_load支持over_model，可使用ComfyUI-nunchaku极速FLUX生成
-![PixPin_2025-04-10_19-35-50](https://github.com/user-attachments/assets/612bff5e-83eb-4a2e-aee1-f915f983935d)
 
 4、2025.4.12 update styles.csv , add more style
 
 5、2025.4.13  add sum_text
+
+6、2025.4.46  add cn_unnion stack
 
 ## 👨🏻‍🎨 Usage Guide使用指南
 1.The main loader sum\_load integrates 4 loading modes: basic, clip, flux, and sd 3.5, all parameters can be loaded directly from the preset.
