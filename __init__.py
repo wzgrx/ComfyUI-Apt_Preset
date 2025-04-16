@@ -13,7 +13,6 @@ from .py.InpaintNodes import pre_inpaint
 from .py.Ksampler_VisualStyle import chx_Ksampler_VisualStyle
 from .py.Ksampler_dual_area import chx_Ksampler_dual_area
 from .py.IPAdapterSD3 import IPA_dapterSD3LOAD,Stack_IPA_SD3,Apply_IPA_SD3
-
 from .py.layered_infinite_zoom import AD_InfiniteZoom
 
 
@@ -29,7 +28,6 @@ NODE_CLASS_MAPPINGS = {
 "sum_stack_AD": sum_stack_AD,
 "sum_stack_image": sum_stack_image,
 "sum_stack_all": sum_stack_all,
-
 "sum_text": sum_text,   
 
 
@@ -114,6 +112,13 @@ NODE_CLASS_MAPPINGS = {
 "Stack_ControlNet1":Stack_ControlNet1,
 
 
+
+"Stack_CN_union":Stack_CN_union,
+"Apply_CN_union":Apply_CN_union,
+
+
+
+
 #-IPA-------------------------------------------#
 "chx_IPA_basic": chx_IPA_basic,
 "chx_IPA_faceID": chx_IPA_faceID,
@@ -149,7 +154,7 @@ NODE_CLASS_MAPPINGS = {
 "photoshop_preset_Unpack":Unpack_photoshop,
 
 "stack_sum_pack": stack_sum_pack,
-"stack_sum_Unpack": stack_sum_Unpack,
+
 
 
 
