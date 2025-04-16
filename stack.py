@@ -1160,9 +1160,6 @@ class Apply_CN_union:
 
 
 
-
-
-
 #region------------------AD prompt schedule------------------------
 
 #region------------------AD def----------------------
@@ -2198,9 +2195,6 @@ class XXXstack_sum_Unpack:
     def unpack(self, stack_pack):
         ipa3_stack, ipa_stack, redux_stack, lora_stack, text_stack, condi_stack, cn_stack, latent_stack = stack_pack
         return ( lora_stack, ipa3_stack, ipa_stack, text_stack, redux_stack, condi_stack, cn_stack, latent_stack)
-
-
-
 
 
 
