@@ -1556,6 +1556,115 @@ class sum_latent:
 
 
 
+class sum_text:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+                "preset": (preset_list, ),
+            },
+
+            "optional": {
+                "positive": ("STRING", {"default": "", "multiline": True, }),
+                "negative": ("STRING", {"default": "", "multiline": False,}),
+
+                "target": ("STRING", {"multiline": False,"default": "object, prompt, Texture"}),
+                "replace": ("STRING", {"multiline": False,"default": "a girl, simle, fire "}),
+
+                "pos1": ("STRING", {"default": "", "multiline": False, }),
+                "neg1":  ("STRING", {"default": "", "multiline": False, }),
+                "style": (none2list(style_list()[0]), {"default": "None"}),
+            },
+
+            "hidden": { 
+                "node_id": "UNIQUE_ID",
+            },
+        }
+
+
+    RETURN_TYPES = ("RUN_CONTEXT","PDATA", )
+    RETURN_NAMES = ("context", "preset_save", )
+
+    FUNCTION = 'process_settings'
+    CATEGORY = "Apt_Preset/load"
+
+    def process_settings(self, node_id, context,  style="default", positive="", negative="",target="", replace="",pos1="", neg1="" , preset=[]):
+        
+        parameters_data = []
+        parameters_data.append({
+            "run_Mode": None,
+            "ckpt_name": None,
+            "clipnum": None,
+            "unet_name": None,
+            "unet_Weight_Dtype": None,
+            "clip_type": None,
+            "clip1": None,
+            "clip2": None,
+            "guidance": None,
+            "clip3": None,
+            "vae":  None, 
+            "lora": None,
+            "lora_strength": None,
+            "width": None,
+            "height": None,
+            "batch": None,
+            "steps": None,
+            "cfg": None,
+            "sampler": None,
+            "scheduler": None,
+            "positive": positive,
+            "negative": negative,
+            
+        })
+        
+
+
+        if pos1 is not None and pos1 != "":
+            positive = positive + "," + pos1
+        if neg1 is not None and neg1 != "":
+            negative = negative + "," + neg1
+
+        if target is not None and target!= "":
+            positive = replace_text(positive, target, replace)
+
+        if isinstance(positive, tuple):
+            if len(positive) > 0:
+                positive = str(positive[0])
+            else:
+                positive = ""
+
+
+        if style != "None":
+            positive += f"{positive}, {style_list()[1][style_list()[0].index(style)][1]}"
+            negative += f"{negative}, {style_list()[1][style_list()[0].index(style)][2]}" if len(style_list()[1][style_list()[0].index(style)]) > 2 else ""
+        
+        clip = context.get("clip")
+
+
+
+        if positive != None and positive != "":       
+            (positive,) = CLIPTextEncode().encode(clip, positive)   
+        else:
+            positive = context.get("positive")
+        
+        if negative != None and negative != "":
+            (negative,) = CLIPTextEncode().encode(clip, negative)
+        else:
+            negative = context.get("negative") 
+
+        context = new_context(context, positive=positive, negative=negative, )
+
+        return (context, parameters_data)
+
+    def handle_my_message(d):
+        
+        preset_data = ""
+        preset_path = os.path.join(presets_directory_path, d['message'])
+        with open(preset_path, 'r', encoding='utf-8') as f:    
+            preset_data = toml.load(f)
+        PromptServer.instance.send_sync("my.custom.message", {"message":preset_data, "node":d['node_id']})
+
 
 
 
@@ -2761,6 +2870,8 @@ class chx_controlnet_union:
         return (context, positive, negative, )
 
 
+
+
 class chx_condi_hook:
 
     @classmethod
@@ -3521,153 +3632,5 @@ class chx_re_fluxguide:
 
 
 
-#region-----------文本组--------------------------------------------------------------------------------------#--
-
-
-def replace_text(text, target, replace):
-    def split_with_quotes(s):
-        pattern = r'"([^"]*)"|\s*([^,]+)'
-        matches = re.finditer(pattern, s)
-        return [match.group(1) or match.group(2).strip() for match in matches if match.group(1) or match.group(2).strip()]
-    
-    targets = split_with_quotes(target)
-    exchanges = split_with_quotes(replace)
-    
-
-    word_map = {}
-    for target, exchange in zip(targets, exchanges):
-
-        target_clean = target.strip('"').strip().lower()
-        exchange_clean = exchange.strip('"').strip()
-        word_map[target_clean] = exchange_clean
-    
-
-    sorted_targets = sorted(word_map.keys(), key=len, reverse=True)
-    
-    result = text
-    for target in sorted_targets:
-        if ' ' in target:
-            pattern = re.escape(target)
-        else:
-            pattern = r'\b' + re.escape(target) + r'\b'
-        
-        result = re.sub(pattern, word_map[target], result, flags=re.IGNORECASE)
-    return (result,)
-
-
-
-
-class sum_text:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "preset": (preset_list, ),
-            },
-
-            "optional": {
-                "positive": ("STRING", {"default": "", "multiline": True, }),
-                "negative": ("STRING", {"default": "", "multiline": False,}),
-
-                "target": ("STRING", {"multiline": False,"default": "object, prompt, Texture"}),
-                "replace": ("STRING", {"multiline": False,"default": "a girl, simle, fire "}),
-
-                "pos1": ("STRING", {"default": "", "multiline": False, }),
-                "neg1":  ("STRING", {"default": "", "multiline": False, }),
-                "style": (none2list(style_list()[0]), {"default": "None"}),
-            },
-
-            "hidden": { 
-                "node_id": "UNIQUE_ID",
-            },
-        }
-
-
-    RETURN_TYPES = ("RUN_CONTEXT","PDATA", )
-    RETURN_NAMES = ("context", "preset_save", )
-
-    FUNCTION = 'process_settings'
-    CATEGORY = "Apt_Preset/load"
-
-    def process_settings(self, node_id, context,  style="default", positive="", negative="",target="", replace="",pos1="", neg1="" , preset=[]):
-        
-        parameters_data = []
-        parameters_data.append({
-            "run_Mode": None,
-            "ckpt_name": None,
-            "clipnum": None,
-            "unet_name": None,
-            "unet_Weight_Dtype": None,
-            "clip_type": None,
-            "clip1": None,
-            "clip2": None,
-            "guidance": None,
-            "clip3": None,
-            "vae":  None, 
-            "lora": None,
-            "lora_strength": None,
-            "width": None,
-            "height": None,
-            "batch": None,
-            "steps": None,
-            "cfg": None,
-            "sampler": None,
-            "scheduler": None,
-            "positive": positive,
-            "negative": negative,
-            
-        })
-        
-
-
-        if pos1 is not None and pos1 != "":
-            positive = positive + "," + pos1
-        if neg1 is not None and neg1 != "":
-            negative = negative + "," + neg1
-
-        if target is not None and target!= "":
-            positive = replace_text(positive, target, replace)
-
-        if isinstance(positive, tuple):
-            if len(positive) > 0:
-                positive = str(positive[0])
-            else:
-                positive = ""
-
-
-        if style != "None":
-            positive += f"{positive}, {style_list()[1][style_list()[0].index(style)][1]}"
-            negative += f"{negative}, {style_list()[1][style_list()[0].index(style)][2]}" if len(style_list()[1][style_list()[0].index(style)]) > 2 else ""
-        
-        clip = context.get("clip")
-
-
-
-        if positive != None and positive != "":       
-            (positive,) = CLIPTextEncode().encode(clip, positive)   
-        else:
-            positive = context.get("positive")
-        
-        if negative != None and negative != "":
-            (negative,) = CLIPTextEncode().encode(clip, negative)
-        else:
-            negative = context.get("negative") 
-
-        context = new_context(context, positive=positive, negative=negative, )
-
-        return (context, parameters_data)
-
-    def handle_my_message(d):
-        
-        preset_data = ""
-        preset_path = os.path.join(presets_directory_path, d['message'])
-        with open(preset_path, 'r', encoding='utf-8') as f:    
-            preset_data = toml.load(f)
-        PromptServer.instance.send_sync("my.custom.message", {"message":preset_data, "node":d['node_id']})
-
-
-
-#endregion-----------文本组--------------------------------------------------------------------------------------#--
 
 
