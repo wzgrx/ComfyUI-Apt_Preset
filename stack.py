@@ -1079,9 +1079,8 @@ class Apply_latent:
                 positive, negative, latent = InpaintModelConditioning().encode(positive, negative, pixels, vae, mask, noise_mask)
                 model = DifferentialDiffusion().apply(model)[0]
 
-            latent = latentrepeat(latent, batch_size)[0]
-
-            return model, positive, negative, latent
+        latent = latentrepeat(latent, batch_size)[0]
+        return model, positive, negative, latent
 
 
 class Stack_CN_union:
@@ -1156,6 +1155,9 @@ class Apply_CN_union:
             positive = out[0]
             negative = out[1]
         return (positive, negative, )
+
+
+
 
 
 
@@ -2195,6 +2197,11 @@ class XXXstack_sum_Unpack:
     def unpack(self, stack_pack):
         ipa3_stack, ipa_stack, redux_stack, lora_stack, text_stack, condi_stack, cn_stack, latent_stack = stack_pack
         return ( lora_stack, ipa3_stack, ipa_stack, text_stack, redux_stack, condi_stack, cn_stack, latent_stack)
+
+
+
+
+
 
 
 
