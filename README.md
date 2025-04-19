@@ -13,7 +13,9 @@
 
 5、2025.4.13  add sum_text
 
-6、2025.4.46  add cn_unnion stack
+6、2025.4.16  add cn_unnion stack
+
+7、2025.4.19  sum_load support WAN2.1 (run model : clip , more detailer in workflow) 
 
 ## 👨🏻‍🎨 Usage Guide使用指南
 1.The main loader sum\_load integrates 4 loading modes: basic, clip, flux, and sd 3.5, all parameters can be loaded directly from the preset.
