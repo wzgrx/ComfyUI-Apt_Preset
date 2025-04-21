@@ -81,6 +81,7 @@ NODE_CLASS_MAPPINGS = {
 "chx_Ksampler_mix": chx_Ksampler_mix,
 "chx_Ksampler_texture": chx_Ksampler_texture,
 "chx_ksampler_Deforum": chx_ksampler_Deforum,
+"chx_Ksampler_dual_paint": chx_Ksampler_dual_paint,
 "chx_Ksampler_dual_area": chx_Ksampler_dual_area,
 "chx_Ksampler_refine": chx_Ksampler_refine,
 "chx_ksampler_tile": chx_ksampler_tile,   
@@ -159,12 +160,6 @@ NODE_CLASS_MAPPINGS = {
 "photoshop_preset_Unpack":Unpack_photoshop,
 
 "stack_sum_pack": stack_sum_pack,
-
-
-
-
-
-
 
 
 
