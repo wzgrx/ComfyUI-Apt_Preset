@@ -44,6 +44,7 @@ from comfy_extras.nodes_controlnet import SetUnionControlNetType
 from comfy_extras.nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
 from math import ceil
 
+from nodes import KSampler, SetLatentNoiseMask, KSamplerAdvanced
 
 # 相对导入
 from .def_unit import *
@@ -3670,6 +3671,142 @@ class chx_re_fluxguide:
 
 
 #endregion-----------风格组--------------------------------------------------------------------------------------#--
+
+
+
+class chx_Ksampler_dual_paint:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+                "image": ("IMAGE",),
+                "mask": ("MASK",),
+                "smoothness":("INT", {"default": 1,  "min":0, "max": 150, "step": 1,"display": "slider"}),
+                "mask_area_denoise": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "image_area_denoise": ("FLOAT", {"default": 0.9, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "refine": ("BOOLEAN", {"default": True}),
+                "refine_denoise": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+            }
+        }
+
+    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE",)
+    RETURN_NAMES = ("context", "image",)
+    FUNCTION = "execute"
+    CATEGORY = "Apt_Preset/ksampler"
+
+    def execute(self,context, image, mask, smoothness, mask_area_denoise, image_area_denoise,refine,refine_denoise, seed,):
+        
+        vae = context.get("vae",None)
+        steps = context.get("steps",None)
+        cfg = context.get("cfg",None)
+        sampler = context.get("sampler",None)
+        scheduler = context.get("scheduler",None)
+
+        positive = context.get("positive",None)
+        negative = context.get("negative",None)
+        model = context.get("model",None)
+        latent = context.get("latent",None) 
+
+
+        phase_steps = math.ceil(steps / 2)
+        device = model.model.device if hasattr(model, 'model') else model.device
+        
+        vae_encoder = VAEEncode()
+        latent_dict = vae_encoder.encode(vae, image)[0]
+        input_latent = latent_dict["samples"].to(device)
+
+
+        if mask is not None :
+            mask=tensor2pil(mask)
+            if not isinstance(mask, Image.Image):
+                raise TypeError("mask is not a valid PIL Image object")
+            
+            feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+            mask=pil2tensor(feathered_image)
+
+
+        
+        mask = 1-mask.float().to(device)
+        
+        mask_resized = torch.nn.functional.interpolate(
+            mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])), 
+            size=(input_latent.shape[2], input_latent.shape[3]), 
+            mode='bilinear'
+        )
+        
+        mask_strength = mask_resized * (image_area_denoise - mask_area_denoise) + mask_area_denoise
+        
+        noise_mask = SetLatentNoiseMask()
+        latent_with_mask = noise_mask.set_mask({"samples": input_latent}, mask_strength)[0]
+        
+        advanced_sampler = KSamplerAdvanced()
+        
+        result = advanced_sampler.sample(
+            model=model,
+            add_noise=0.00,
+            noise_seed=seed,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            latent_image=latent_with_mask,
+            start_at_step=0,
+            end_at_step=phase_steps,
+            return_with_leftover_noise=False
+        )[0]
+        samples = result["samples"].to(device)
+        binary_mask = (mask_resized >= 0.5).float()
+        phase2_mask = binary_mask * 1.0 + (1 - binary_mask) * mask_area_denoise
+        
+        latent_phase2 = noise_mask.set_mask(
+            {"samples": samples},
+            phase2_mask
+        )[0]
+    
+        result = advanced_sampler.sample(
+            model=model,
+            add_noise=0.00,
+            noise_seed=seed + 1,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            latent_image=latent_phase2,
+            start_at_step=phase_steps,
+            end_at_step=steps,
+            return_with_leftover_noise=False
+        )[0]
+        samples = result["samples"].to(device)
+        
+        if refine:
+            sampler = KSampler()
+            result = sampler.sample(
+                model,
+                seed + 1,
+                steps,
+                cfg,
+                sampler,
+                scheduler,
+                positive,
+                negative,
+                {"samples": samples},
+                refine_denoise
+            )[0]
+            samples = result["samples"].to(device)
+        
+        latent= {"samples": samples}
+        images = VAEDecode().decode(vae, latent)[0]
+        
+        context = new_context(context,  latent=latent, images=images, )
+
+        return (context,images,)
+
 
 
 
