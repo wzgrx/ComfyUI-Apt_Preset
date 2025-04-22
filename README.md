@@ -21,11 +21,11 @@
 1.The main loader sum\_load integrates 4 loading modes: basic, clip, flux, and sd 3.5, all parameters can be loaded directly from the preset.
 主加载器sum\_load集成了4种加载模式：basic, clip, flux, and sd 3.5，所有参数可以从 preset 中直接加载.
 
-| **Basic**  | **Load checkpoint + clip set last layer**  |
-| ---------- | ------------------------------------------ |
-| **Clip**   | **Load checkpoint or unet + load clip**    |
-| **Flux**   | **Load diffusion model +DualCLIPLoader**   |
-| **SD 3.5** | **Load diffusion model +TripleCLIPLoader** |
+| **Basic**     | **Load checkpoint + clip set last layer**  |
+| **Clip**      | **Load checkpoint or unet + load clip**    |
+| **Flux**      | **Load unet +DualCLIPLoader**   |
+| **SD 3.5**    | **Load unet +TripleCLIPLoader** |
+| **only_clip** | **clip or DualCLIPLoader or TripleCLIPLoader** |
 ****
 
 ![image](https://github.com/user-attachments/assets/73d64eb6-fc41-44e7-9766-dce8f9ab74e6)
