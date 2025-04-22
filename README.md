@@ -23,7 +23,7 @@
 
 | **Basic**  | **Load checkpoint + clip set last layer**  |
 | ---------- | ------------------------------------------ |
-| **Clip**   | **Load checkpoint + load clip**            |
+| **Clip**   | **Load checkpoint or unet + load clip**    |
 | **Flux**   | **Load diffusion model +DualCLIPLoader**   |
 | **SD 3.5** | **Load diffusion model +TripleCLIPLoader** |
 ****
