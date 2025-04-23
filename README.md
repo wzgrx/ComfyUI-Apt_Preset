@@ -17,6 +17,7 @@
 
 7、2025.4.19  sum_load support WAN2.1 (run model : clip , more detailer in workflow) 
 
+
 ## 👨🏻‍🎨 Usage Guide使用指南
 1.The main loader sum\_load integrates 5 loading modes: basic, clip, flux, and sd 3.5, only_clip, all parameters can be loaded directly from the preset.
 主加载器sum\_load集成了4种加载模式：basic, clip, flux, and sd 3.5，only_clip,所有参数可以从 preset 中直接加载.
