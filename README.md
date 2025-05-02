@@ -56,14 +56,18 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 
 The code of this open-source project has referred to the following code during the development process. We express our sincere gratitude for their contributions in the relevant fields.
 
-| [ComfyUI](https://github.com/comfyanonymous/ComfyUI)                          | [ComfyUI\_VisualStylePrompting](https://github.com/ExponentialML/ComfyUI_VisualStylePrompting) | [ComfyUI-Inspire-Pack](https://github.com/ltdrdata/ComfyUI-Inspire-Pack) |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [ComfyUI-EasyDeforum](https://github.com/Chan-0312/ComfyUI-EasyDeforum)   | [ComfyUI-Advanced-ControlNet](https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet)  | [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)   |
-| [rgthree-comfy](https://github.com/rgthree/rgthree-comfy)                     | [ComfyUI\_mittimiLoadPreset2](https://github.com/mittimi/ComfyUI_mittimiLoadPreset2)       | [ComfyUI-Keyframed](https://github.com/dmarx/ComfyUI-Keyframed)      |
-| [ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus) | [ComfyUI-AnimateDiff-Evolved](https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved)      | [ComfyUI-Easy-Use](https://github.com/yolain/ComfyUI-Easy-Use)           |
-| [ComfyUI_essentials](https://github.com/cubiq/ComfyUI_essentials)         | [Comfyui__Flux_Style_Adjust](https://github.com/yichengup/Comfyui_Flux_Style_Adjust)           |                                                                          |
-|                                                                               |                                                                                                |                                                                          |
+| [ComfyUI](https://github.com/comfyanonymous/ComfyUI)                          | [ComfyUI\_VisualStylePrompting](https://github.com/ExponentialML/ComfyUI_VisualStylePrompting)   | [ComfyUI-Inspire-Pack](https://github.com/ltdrdata/ComfyUI-Inspire-Pack)    |
 
+| [ComfyUI-EasyDeforum](https://github.com/Chan-0312/ComfyUI-EasyDeforum)   | [ComfyUI-Advanced-ControlNet](https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet)   | [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)    |
+
+| [rgthree-comfy](https://github.com/rgthree/rgthree-comfy)                 | [ComfyUI\_mittimiLoadPreset2](https://github.com/mittimi/ComfyUI_mittimiLoadPreset2)       | [ComfyUI-Keyframed](https://github.com/dmarx/ComfyUI-Keyframed)       |
+
+| [ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus) | [ComfyUI-AnimateDiff-Evolved](https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved)     | [ComfyUI-Easy-Use](https://github.com/yolain/ComfyUI-Easy-Use)           |
+
+| [ComfyUI_essentials](https://github.com/cubiq/ComfyUI_essentials)         | [Comfyui__Flux_Style_Adjust](https://github.com/yichengup/Comfyui_Flux_Style_Adjust)          | [ComfyUI_LayerStyle_](https://github.com/chflame163/ComfyUI_LayerStyle)        |                                                                 
+|  [kijai/_ComfyUI_-KJNodes](https://github.com/kijai/ComfyUI-KJNodes)  
+
+  
 
 ## Disclaimer免责声明
 
