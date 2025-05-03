@@ -16,7 +16,7 @@ app.registerExtension({
             nodeData.name.startsWith('Model_') || 
             nodeData.name.startsWith('CN_') || 
             nodeData.name.startsWith('photoshop_') || 
-            nodeData.name.startsWith('load_')||
+            nodeData.name.startsWith('load_') ||
             nodeData.name.startsWith('IO_') ||
             nodeData.name.startsWith('view_') ||
             nodeData.name.startsWith('pack_') ||
@@ -38,24 +38,21 @@ app.registerExtension({
             nodeData.name.startsWith('sampler_') ||
             nodeData.name.startsWith('Amp_') ||
             nodeData.name.startsWith('AD_')
-
-
-
-
         )) {
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function() {
                 const r = onNodeCreated?.apply(this, arguments);
                 
-                // 设置固定宽度
-                this.size[0] = 300;
-                this.setSize([300, this.size[1]]);
+                // 设置初始宽度为 
+                this.size[0] = 260;
+                this.setSize([260, this.size[1]]);
                 
-                // 禁用节点的宽度调整
+                // 修改 computeSize 方法，确保宽度不小于 
                 const originalComputeSize = this.computeSize;
                 this.computeSize = function() {
                     const size = originalComputeSize.call(this);
-                    size[0] = 300; // 保持宽度固定
+                    // 确保宽度不小于 160
+                    size[0] = Math.max(160, size[0]); 
                     return size;
                 };
                 
