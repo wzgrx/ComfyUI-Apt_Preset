@@ -10,25 +10,14 @@ from .NodeChx.IPAdapterPlus import chx_IPA_basic,chx_IPA_faceID,chx_IPA_XL_adv,c
 from .NodeChx.IPAdapterSD3 import IPA_dapterSD3LOAD,Stack_IPA_SD3,Apply_IPA_SD3
 from .NodeChx.video_node import *
 from .NodeChx.Ksampler_all import *
-
-
 from .NodeBasic.c_packdata import *
-from .NodeBasic.C_math import *
-from .NodeBasic.C_model import *
+
 from .NodeBasic.C_mask import *
-from .NodeBasic.C_latent import *
+
 from .NodeBasic.C_viewIO import *
-from .NodeBasic.C_AD import *
-from .NodeBasic.C_image import *
-from .NodeBasic.C_promp import *
+
+
 from .NodeBasic.C_imgEffect import *
-from .NodeBasic.C_type import *
-from .NodeBasic.C_layout import *
-from .NodeBasic.C_GPT import *
-
-from .NodeBasic.C_test import *
-
-
 
 
 
@@ -175,19 +164,6 @@ NODE_CLASS_MAPPINGS = {
 "AD_sch_latent": AD_sch_latent,
 "AD_sch_adv_CN":AD_sch_adv_CN,
 
-"AD_sch_prompt_chx":AD_sch_prompt_chx,
-"AD_sch_prompt_preset": AD_sch_prompt_preset,
-"AD_sch_mask":AD_sch_mask,
-"AD_sch_value": AD_sch_value,
-"Amp_drive_value": Amp_drive_value,
-"Amp_drive_String": Amp_drive_String,
-"Amp_audio_Normalized": Amp_audio_Normalized,
-"Amp_drive_mask": Amp_drive_mask,
-
-"AD_MaskExpandBatch": AD_MaskExpandBatch, 
-"AD_ImageExpandBatch": AD_ImageExpandBatch,
-"AD_Dynamic_MASK": AD_Dynamic_MASK,
-"AD_batch_replace": AD_batch_replace,
 
 
 
@@ -229,88 +205,6 @@ NODE_CLASS_MAPPINGS = {
 
 #-------------math-------------------
 
-"list_num_range": list_num_range,
-"list_cycler_Value":list_cycler_Value,
-"list_input_text": list_input_text,
-"list_input_Value": list_input_Value,
-"list_ListGetByIndex": list_GetByIndex,
-"list_ListSlice": list_Slice,
-"list_MergeList": list_Merge, #wed   
-
-"batch_cycler_Prompt":batch_cycler_Prompt,
-"batch_cycler_Value":batch_cycler_Value,
-"batch_cycler_text" :batch_cycler_text,
-"batch_cycler_split_text":batch_cycler_split_text,
-"batch_cycler_image":batch_cycler_image,
-"batch_cycler_mask":batch_cycler_mask,
-
-
-"Remap_basic_data": Remap_basic_data,  
-"Remap_mask": Remap_mask,
-"math_BinaryOperation": math_BinaryOperation,  
-"math_BinaryCondition": math_BinaryCondition,
-"math_UnaryOperation": math_UnaryOperation,
-"math_UnaryCondition": math_UnaryCondition,
-"math_Exec": math_Exec,#wed----utils
-
-
-
-
-
-#-----------math---type-------------------
-"pack_Pack": Pack, #wed
-"pack_Unpack": Unpack, #wed
-
-"creat_mask_batch": creat_mask_batch, #wed
-"creat_mask_batch_input": creat_mask_batch_input,#wed
-"creat_image_batch": creat_image_batch, #wed
-"creat_image_batch_input": creat_image_batch_input,#wed
-"creat_any_List": creat_any_List,#wed
-
-
-"type_AnyCast": type_AnyCast, #wed
-"type_Anyswitch": type_Anyswitch,
-"type_BasiPIPE": type_BasiPIPE,
-"type_Image_List2Batch":type_Image_List2Batch,
-"type_Image_Batch2List":type_Image_Batch2List,
-"type_Mask_Batch2List":type_Mask_Batch2List,
-"type_Mask_List2Batch":type_Mask_List2Batch,
-"type_text_list2batch ": type_text_list2batch ,  
-"type_text_2_UTF8": type_text_2_UTF8 ,  
-
-
-
-
-#---------------model--------
-"model_adjust_color": Model_adjust_color,
-"model_diff_inpaint": model_diff_inpaint,
-"model_Regional": model_Regional,
-
-
-#----------------image------------------------
-"pad_uv_fill": pad_uv_fill,
-"pad_color_fill": pad_color_fill,
-"Image_LightShape": Image_LightShape,    
-"Image_Normal_light": Image_Normal_light,
-"Image_keep_OneColorr": Image_keep_OneColorr,  
-"Image_transform": Image_transform,    
-"Image_cutResize": Image_cutResize,
-"Image_Resize": Image_Resize,
-"Image_scale_adjust": Image_scale_adjust,
-
-
-"image_sumTransform": image_sumTransform,
-"Image_overlay": Image_overlay,
-"Image_overlay_mask": Image_overlay_mask,
-"Image_overlay_composite": Image_overlay_composite,
-"Image_overlay_transform": Image_overlay_transform,
-"Image_overlay_sum": Image_overlay_sum,
-"Image_Extract_Channel": Image_Extract_Channel,
-"Image_Apply_Channel": Image_Apply_Channel,
-"Image_RemoveAlpha": Image_RemoveAlpha,
-"image_selct_batch": image_selct_batch,
-"Image_scale_match": Image_scale_match,
-
 
 
 
@@ -331,35 +225,6 @@ NODE_CLASS_MAPPINGS = {
 "Mask_mask2img": Mask_mask2img,
 "Mask_splitMask": Mask_splitMask,
 
-
-
-#------------latent---------------------
-"latent_chx_noise": latent_chx_noise,
-"latent_Image2Noise": latent_Image2Noise,
-"latent_ratio": latent_ratio,
-"latent_mask":latent_mask,
-
-
-#----------prompt----------------
-"text_CSV_load": text_CSV_load,
-"text_SuperPrompter": text_SuperPrompter,
-"text_mul_replace": text_mul_replace,
-"text_mul_remove": text_mul_remove,
-"text_free_wildcards": text_free_wildcards,
-"text_stack_wildcards": text_stack_wildcards,
-
-
-
-
-
-#---------Gpt modle---------------
-"GPT_ChineseToEnglish": GPT_ChineseToEnglish,
-"GPT_EnglishToChinese": GPT_EnglishToChinese,
-
-"GPT_deepseek_api_text": GPT_deepseek_api_text,
-"GPT_Janus_img_2_text": GPT_Janus_img_2_text,
-"GPT_Janus_generate_img": GPT_Janus_generate_img,
-"GPT_MiniCPM": GPT_MiniCPM,
 
 
 
@@ -391,18 +256,6 @@ NODE_CLASS_MAPPINGS = {
 "color_pure_img": color_pure_img,
 "color_Gradient": color_Gradient,
 "color_RadialGradient": color_RadialGradient,
-
-
-
-
-#-----------------layout----------------
-"lay_ImageGrid": lay_ImageGrid,
-"lay_MaskGrid": lay_MaskGrid,
-"lay_image_match_W_or_H": lay_image_match_W_or_H,
-"lay_image_match_W_and_H": lay_image_match_W_and_H,
-"lay_edge_cut": lay_edge_cut,   
-"lay_text":lay_text,
-
 
 
 
