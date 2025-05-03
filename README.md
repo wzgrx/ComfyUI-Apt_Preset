@@ -8,13 +8,13 @@
 **1、加载器 Loader：Sum_load 全能加载器 All - in - one Loader**
 包含五种模式，全部参数的设置都可以自己保存为预设，也配备了每个模式的简版加载器 It includes five modes. All parameter settings can be saved as presets by yourself, and there is also a simplified loader for each mode.
 
-| **<font color="#ff0000">**run_Mode**</font>** | <font color="#ff0000">module Combination </font> | **<font color="#ff0000">**module Replace**</font>** |
-| --------------------------------------------- | ------------------------------------------------ | --------------------------------------------------- |
-| Basic                                     | checkpoint                                       | over_model                                      |
-| Clip                                      | clip 1+checkpoint or  clip 1 +unet               | over_model+over_clip<br>                        |
-| Flux                                      | clip 1+clip 2 + unet                             | over_model+over_clip                            |
-| SD3.5                                     | clip 1+clip 2+clip 3 + unet                      | over_model+over_clip<br>                        |
-| only_clip                                 | clip 1 or clip 1+clip 2 or clip 1+clip 2+clip 3  | over_model+over_clip<br>                        |
+| **<font color="#ff0000">**run_Mode**</font>** |** <font color="#ff0000">module Combination </font> **| 
+| --------------------------------------------- | ------------------------------------------------ |
+| Basic                                     | checkpoint                                       |
+| Clip                                      | clip 1+checkpoint or unet                        | 
+| Flux                                      | clip 1+clip 2 + unet                             | 
+| SD3.5                                     | clip 1+clip 2+clip 3 + unet                      | 
+| only_clip                                 | clip 1 or clip 1+clip 2 or clip 1+clip 2+clip 3  | 
 
 ![image](https://github.com/user-attachments/assets/83d25557-dd7b-43b4-8bbd-07421a05761a)
 
