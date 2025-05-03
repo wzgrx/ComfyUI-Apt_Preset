@@ -17,6 +17,8 @@
 | SD3.5                                     | clip 1+clip 2+clip 3 + unet                      | over_model+over_clip<br>                        |
 | only_clip                                 | clip 1 or clip 1+clip 2 or clip 1+clip 2+clip 3  | over_model+over_clip<br>                        |
 
+![image](https://github.com/user-attachments/assets/83d25557-dd7b-43b4-8bbd-07421a05761a)
+
 **2、采样器 Sampler：丰富的采样样式Rich sampling styles**
 
 | 名称nodes                   | 描述        | Description                  |
@@ -44,7 +46,6 @@
 Adopt the sum to summarize the control nodes, especially the stack centralized control
 
 | **sum_stack_image** | **图像生成控制堆**             |
-| ------------------- | ----------------------- |
 | **sum_stack_AD**    | **动画生成控制堆 AnimateDiff** |
 | **sum_stack_Wan**   | **视频生成控制堆 Wan 2.1**     |
 | **sum_editor**      | **可以编辑所有的基础参数**         |
@@ -52,6 +53,8 @@ Adopt the sum to summarize the control nodes, especially the stack centralized c
 | **sum_lora**        | **批量 lora**             |
 | **sum_controlnet**  | **批量 controlnet**       |
 | **sum_text**        | **功能齐全的文本编辑**           |
+
+![image](https://github.com/user-attachments/assets/95a4f2fb-fb36-4c90-bb3a-72ed879de618)
 
 **4、基础节点 Basic nodes：系统分类，完整规划 System classification, complete planning**
 
