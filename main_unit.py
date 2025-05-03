@@ -38,6 +38,11 @@ any_type = AnyType("*")
 anyType = AnyType("*")
 
 
+available_ckpt = folder_paths.get_filename_list("checkpoints")
+available_unets = folder_paths.get_filename_list("unet")
+available_clips = folder_paths.get_filename_list("text_encoders")
+available_loras = folder_paths.get_filename_list("loras")
+available_vaes = folder_paths.get_filename_list("vae")
 
 #region-----------context全局定义------------------------------------------------------------------------------#
 
