@@ -55,6 +55,8 @@ NODE_CLASS_MAPPINGS = {
 "load_SD35": load_SD35,
 "load_only_clip": load_only_clip,
 "load_clip": load_clip,
+"load_create": load_create,
+
 
 "Data_chx_Merge":Data_chx_Merge,
 "Data_presetData":Data_presetData,
