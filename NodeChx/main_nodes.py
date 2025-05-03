@@ -452,8 +452,8 @@ class sum_load:
             },
             
             "optional": { 
-                "over_clip": ("CLIP",),  
                 "over_model": ("MODEL",),
+                "over_clip": ("CLIP",),  
                 "lora_stack": ("LORASTACK",),
                         },
 
@@ -619,22 +619,27 @@ class sum_load:
                 vae_path = folder_paths.get_full_path("vae", vae)
                 vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
-            if over_clip is not None:
-                clip = over_clip
-                
+
+            if over_model is not None:
+                model = over_model
             else:
-                if  clip1 != "None":
-                    clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
-                    if clip2!= "None":
-                        clip = DualCLIPLoader().load_clip( clip1, clip2, clip_type, device)[0]
-                        if clip3!= "None":
-                            clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3)[0]
+                model = None
+
+            if over_clip is not None:
+                    clip = over_clip
+            elif clip1 != "None":
+                clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
+                if clip2 != "None":
+                    clip = DualCLIPLoader().load_clip(clip1, clip2, clip_type, device)[0]
+                    if clip3 != "None":
+                        clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3, clip_type, device)[0]
+
 
             (positive,) = CLIPTextEncode().encode(clip, pos)
             (negative,) = CLIPTextEncode().encode(clip, neg)
 
             context = {
-            "model": None,
+            "model": model,
             "positive": positive,
             "negative": negative,
             "latent": {"samples": latent},      
@@ -657,7 +662,7 @@ class sum_load:
             "height": height,
             "batch": batch,
             }
-            return (context, None, parameters_data, )
+            return (context, model, parameters_data, )
 
 
         if lora_stack is not None:
@@ -751,8 +756,8 @@ class load_clip:
             },
             
             "optional": { 
-                "over_clip": ("CLIP",),  
                 "over_model": ("MODEL",),
+                "over_clip": ("CLIP",),  
                 "lora_stack": ("LORASTACK",),
                         },
 
@@ -931,23 +936,23 @@ class load_only_clip:
             },
             
             "optional": { 
-
-
+                "over_model": ("MODEL",),
+                "over_clip": ("CLIP",),  
                         },
 
             "hidden": { "node_id": "UNIQUE_ID",
             },
         }
 
-    RETURN_TYPES = ("RUN_CONTEXT","CLIP", "PDATA", )
-    RETURN_NAMES = ("context","clip", "preset_save", )
+    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "PDATA", )
+    RETURN_NAMES = ("context","model", "preset_save", )
     FUNCTION = "process_settings"
     CATEGORY = "Apt_Preset/chx_load"
 
 
     def process_settings(self, node_id, 
                         width, height, batch, steps, cfg, sampler, scheduler,  guidance,  clip_type=None,device="default", 
-                        vae=None, clip1=None, 
+                        vae=None, clip1=None, over_clip=None, over_model=None,
                         clip2=None, clip3=None, pos="default", neg="default", preset=[]):
         
         # 非编码后的数据
@@ -990,19 +995,28 @@ class load_only_clip:
             vae_path = folder_paths.get_full_path("vae", vae)
             vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
-        if  clip1 != "None":
+
+        if over_model is not None:
+            model = over_model
+        else:
+            model = None
+
+        if over_clip is not None:
+            clip = over_clip
+        elif clip1 != "None":
             clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
-            if clip2!= "None":
-                clip = DualCLIPLoader().load_clip( clip1, clip2, clip_type, device)[0]
-                if clip3!= "None":
-                    clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3)[0]
+            if clip2 != "None":
+                clip = DualCLIPLoader().load_clip(clip1, clip2, clip_type, device)[0]
+                if clip3 != "None":
+                    clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3, clip_type, device)[0]
+
 
         (positive,) = CLIPTextEncode().encode(clip, pos)
         (negative,) = CLIPTextEncode().encode(clip, neg)
 
 
         context = {
-            "model": None,
+            "model": model,
             "positive": positive,
             "negative": negative,
             "latent": {"samples": latent},      
@@ -1026,7 +1040,7 @@ class load_only_clip:
             "batch": batch,
 
         }
-        return (context, clip, parameters_data, )
+        return (context, model, parameters_data, )
 
     def handle_my_message(d):
         
@@ -1448,6 +1462,105 @@ class load_SD35:
         with open(preset_path, 'r', encoding='utf-8') as f:    
             preset_data = toml.load(f)
         PromptServer.instance.send_sync("my.custom.message", {"message":preset_data, "node":d['node_id']})
+
+
+
+
+class load_create:
+    @classmethod
+    def INPUT_TYPES(cls):
+
+        return {
+            "required": {
+
+                "vae": (["None"] + available_vaes, ),
+                "width": ("INT", {"default": 512, "min": 8, "max": 16384}),
+                "height": ("INT", {"default": 512, "min": 8, "max": 16384}),
+                "batch": ("INT", {"default": 1, "min": 1, "max": 999999}),
+                "steps": ("INT", {"default": 20, "min": 1, "max": 999999}),
+                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.5, "round": 0.01}),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
+
+                "pos": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "a girl"}), 
+                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
+            },
+            
+            "optional": { 
+                "over_model": ("MODEL",),
+                "over_clip": ("CLIP",),  
+                "over_vae": ("VAE",),
+                "lora_stack": ("LORASTACK",),
+
+                        },
+
+        }
+
+    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "LORASTACK",)
+    RETURN_NAMES = ("context","model","lora_stack" )
+    FUNCTION = "process_settings"
+    CATEGORY = "Apt_Preset/chx_load"
+
+
+    def process_settings(self, 
+                        width, height, batch, steps, cfg, sampler, scheduler, 
+                        vae=None, over_vae=None, over_clip=None, over_model=None, lora_stack=None, pos="default", neg="default", ):
+
+
+        width, height = width - (width % 8), height - (height % 8)
+        latent = torch.zeros([batch, 4, height // 8, width // 8])
+        if latent.shape[1] != 16:  # Check if the latent has 16 channels
+            latent = latent.repeat(1, 16 // 4, 1, 1)  
+
+        if vae is not None:
+            vae=over_vae
+        elif isinstance(vae, str) and vae != "None":
+            vae_path = folder_paths.get_full_path("vae", vae)
+            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
+    
+        if over_model is not None:
+            model = over_model
+        else:
+            model = None
+
+        if over_clip is not None:
+            clip = over_clip
+        else:
+            raise ValueError(" Please enter a valid clip.")
+
+
+        if lora_stack is not None:
+            model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
+
+        (positive,) = CLIPTextEncode().encode(clip, pos)
+        (negative,) = CLIPTextEncode().encode(clip, neg)
+
+        context = {
+            "model": model,
+            "positive": positive,
+            "negative": negative,
+            "latent": {"samples": latent},      
+            "vae": vae,
+            "clip": clip,
+            "steps": steps,
+            "cfg": cfg,
+            "sampler": sampler,
+            "scheduler": scheduler,
+            "guidance": None,
+
+            "clip1": None, 
+            "clip2": None, 
+            "clip3": None, 
+            "unet_name": None, 
+            "ckpt_name": None,
+            "pos": pos, 
+            "neg": neg, 
+            "width": width,
+            "height": height,
+            "batch": batch,
+        }
+        return (context, model, )
+
 
 
 
@@ -2305,7 +2418,7 @@ class basic_Ksampler_custom:
                 "result": (context, model, positive, negative, latent, vae, output_image,)}
 
 
-class chx_Ksampler_adv:
+class basic_Ksampler_adv:
     @classmethod
     def INPUT_TYPES(s):
         return {"required":
