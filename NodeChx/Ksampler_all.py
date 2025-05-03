@@ -503,7 +503,7 @@ class chx_Ksampler_dual_area:
 
         clip = context.get("clip")
         
-        if image_pos != None and mask_pos != '':       
+        if image_pos != None and image_pos != '':       
             positive1, =CLIPTextEncode().encode(clip, image_pos)  
         
         if mask_pos != None and mask_pos != '':       
@@ -520,20 +520,20 @@ class chx_Ksampler_dual_area:
         else:
             model2=context.get("model")
 
-        if prompt_img!= None:
-            positive1=prompt_img
+        if prompt_img== None:
+            prompt_img =positive1
         else:
-            positive1=context.get("positive")
+            prompt_img=context.get("positive")
 
-        if prompt_mask!= None:
-            positive2=prompt_mask
+        if prompt_mask== None:
+            prompt_mask = positive2
         else:
-            positive2=context.get("positive")
+            prompt_mask=context.get("positive")
 
         latent = VAEEncode().encode(vae, image)[0]
 
-        image_sampler = KSamplerWrapper(model1, seed, steps, image_cfg, sampler, scheduler, positive1, negative, image_denoise, scheduler_func=scheduler_func_opt)
-        mask_sampler  = KSamplerWrapper(model2, seed, steps, mask_cfg, sampler, scheduler, positive2, negative, mask_denoise, scheduler_func=scheduler_func_opt)
+        image_sampler = KSamplerWrapper(model1, seed, steps, image_cfg, sampler, scheduler, prompt_img, negative, image_denoise, scheduler_func=scheduler_func_opt)
+        mask_sampler  = KSamplerWrapper(model2, seed, steps, mask_cfg, sampler, scheduler, prompt_mask, negative, mask_denoise, scheduler_func=scheduler_func_opt)
         
         
         #----------------------add smooth
