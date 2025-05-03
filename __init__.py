@@ -16,13 +16,27 @@ from .NodeBasic.C_mask import *
 
 from .NodeBasic.C_viewIO import *
 
-
+from .NodeBasic.C_AD import *
 from .NodeBasic.C_imgEffect import *
 
 
 
 NODE_CLASS_MAPPINGS = {
 
+
+"AD_sch_prompt_chx":AD_sch_prompt_chx,
+"AD_sch_prompt_preset": AD_sch_prompt_preset,
+"AD_sch_mask":AD_sch_mask,
+"AD_sch_value": AD_sch_value,
+"Amp_drive_value": Amp_drive_value,
+"Amp_drive_String": Amp_drive_String,
+"Amp_audio_Normalized": Amp_audio_Normalized,
+"Amp_drive_mask": Amp_drive_mask,
+
+"AD_MaskExpandBatch": AD_MaskExpandBatch, 
+"AD_ImageExpandBatch": AD_ImageExpandBatch,
+"AD_Dynamic_MASK": AD_Dynamic_MASK,
+"AD_batch_replace": AD_batch_replace,
 
 
 
