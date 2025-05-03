@@ -8,7 +8,7 @@
 **1、加载器 Loader：Sum_load 全能加载器 All - in - one Loader**
 包含五种模式，全部参数的设置都可以自己保存为预设，也配备了每个模式的简版加载器 It includes five modes. All parameter settings can be saved as presets by yourself, and there is also a simplified loader for each mode.
 
-| **<font color="#ff0000">**run_Mode**</font>** |** <font color="#ff0000">module Combination </font> **| 
+| <font color="#ff0000">run_Mode</font> | <font color="#ff0000">module Combination </font> | 
 | --------------------------------------------- | ------------------------------------------------ |
 | Basic                                     | checkpoint                                       |
 | Clip                                      | clip 1+checkpoint or unet                        | 
