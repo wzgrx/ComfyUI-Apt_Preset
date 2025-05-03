@@ -1,7 +1,7 @@
 
 
 # <font color="#000000"> Make the workflow simpler 让工作流变的简单</font>
-一些资源和工作流放在Some resources and workflows are placed in  https://github.com/cardenluo/ComfyUI-Apt_Collect
+一些资源和工作流放在Some resources and workflows are placed in  [ComfyUI-Apt_Collect_](https://github.com/cardenluo/ComfyUI-Apt_Collect)
 # <font color="#000000"> 一、Update record更新记录</font>
 2025.5.3   Update to V 2.0 and add a large number of basic nodes.
 
