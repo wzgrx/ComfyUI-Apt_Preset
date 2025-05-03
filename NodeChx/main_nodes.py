@@ -41,11 +41,11 @@ from comfy_extras.nodes_sd3 import TripleCLIPLoader
 from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
 from comfy_extras.nodes_controlnet import SetUnionControlNetType
 from math import ceil
-from nodes import KSampler, SetLatentNoiseMask, KSamplerAdvanced
+from nodes import CLIPSetLastLayer, CheckpointLoaderSimple, UNETLoader
 
 # 相对导入
 from ..main_unit import *
-from .main_stack import Apply_ControlNetStack, Apply_LoRAStack
+from .main_stack import  Apply_LoRAStack
 
 
 
@@ -84,6 +84,12 @@ available_unets = folder_paths.get_filename_list("unet")
 available_clips = folder_paths.get_filename_list("text_encoders")
 available_loras = folder_paths.get_filename_list("loras")
 available_vaes = folder_paths.get_filename_list("vae")
+available_controlnets = folder_paths.get_filename_list("controlnet")
+available_embeddings = folder_paths.get_filename_list("embeddings")
+
+
+
+
 CLIP_TYPE = ["sdxl", "sd3", "flux", "hunyuan_video", "stable_diffusion", "stable_audio", "mochi", "ltxv", "pixart", "cosmos", "lumina2", "wan"]
 
 
@@ -473,6 +479,8 @@ class sum_load:
                         clip2=None, clip3=None, pos="default", neg="default", preset=[]):
         
         # 非编码后的数据
+        clip = None
+
         parameters_data = []
         parameters_data.append({
             "run_Mode": run_Mode,
@@ -519,124 +527,122 @@ class sum_load:
 
         # Case 1: basic mode
         if run_Mode == "basic":
-            model_path = folder_paths.get_full_path("checkpoints", ckpt_name)
-            out = comfy.sd.load_checkpoint_guess_config(model_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
-            model = out[0]
-            vae = out[2]
-            clip = out[1].clone()
 
-            if isinstance(vae, str) and vae != "None":
-                vae_path = folder_paths.get_full_path("vae", vae)
-                vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
+            if ckpt_name!= "None":
+                model_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+                out = comfy.sd.load_checkpoint_guess_config(model_path, output_vae=True, output_clip=True, embedding_directory=available_embeddings)
+                model = out[0]
+                vae = out[2]
+                if over_clip is None:
+                    # 检查 out[1] 是否为 None
+                    if out[1] is not None:
+                        clip = out[1].clone()
+                    else:
+                        clip = None
+                        print("Warning: clip object is None after loading checkpoint.")
+                else:
+                    clip = over_clip
 
+            if over_clip is not None:        #同步clip和model
+                clip = over_clip
+            if over_model is not None:
+                model = over_model
             if clip is not None:
                 clip.clip_layer(clipnum)
 
         # Case 2: clip mode
         if run_Mode == "clip":
+            if  ckpt_name!= "None":
+                model_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+                out = comfy.sd.load_checkpoint_guess_config(model_path, output_vae=True, output_clip=True, embedding_directory=available_embeddings)
+                model = out[0]
+                vae = out[2]
+                # 检查 out[1] 是否为 None
+                if out[1] is not None:
+                    clip = out[1].clone()
+                else:
+                    clip = None
+                    print("Warning: clip object is None after loading checkpoint.")
+
+            if  unet_name!= "None":
+                unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
+                model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
+
+            if  clip is None and clip1 != "None":
+                clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
 
             if over_model is not None:
                 model = over_model
-            elif ckpt_name != "None":
-                model_path = folder_paths.get_full_path("checkpoints", ckpt_name)
-                out = comfy.sd.load_checkpoint_guess_config(model_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
-                model = out[0]
-                vae = out[2] 
-            elif unet_name!= "None":
-                unet_path = folder_paths.get_full_path("unet", unet_name)
-                model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
-
-            else:
-                raise ValueError("In clip mode, ckpt_name or unet_name must be entered. Please enter a valid ckpt_name or unet_name.")
-
-            if isinstance(vae, str) and vae != "None":
-                vae_path = folder_paths.get_full_path("vae", vae)
-                vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-
-
-
             if over_clip is not None:
                 clip = over_clip
-            else:
-                if clip1 == "None":
-                    raise ValueError("In clip mode, clip1 cannot be None. Please enter a valid clip1.")
-                clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
 
+            # 修正 else 语句块的位置，确保和 if run_Mode == "clip": 配对
+            if ckpt_name == "None" and unet_name == "None":
+                raise ValueError("ckpt_name or unet_name must be entered. Please enter a valid ckpt_name or unet_name.")
 
 
         # Case 3: FLUX mode
         if run_Mode == "FLUX":
             if over_model is not None:
                 model = over_model
-            else:
+            elif over_model is None and unet_name!= "None":
                 unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
                 model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
-
+            else:
+                raise ValueError("unet cannot be None.")
 
             if over_clip is not None:
                 clip = over_clip
-            else:
-                if clip1 == "None":
-                    raise ValueError("In FLUX mode, clip1 cannot be None. Please enter a valid clip1.")
-                if clip2 == "None":
-                    raise ValueError("In FLUX mode, clip2 cannot be None. Please enter a valid clip2.")
+            elif over_clip is None and clip1 != "None" and clip2 != "None":
                 clip = DualCLIPLoader().load_clip( clip1, clip2, clip_type, device)[0]
-
-            if isinstance(vae, str) and vae != "None":
-                vae_path = folder_paths.get_full_path("vae", vae)
-                vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-
+            else:
+                raise ValueError("clip1 and clip2  cannot be None.")
 
 
         # Case 4: SD3.5 mode
         if run_Mode == "SD3.5":
             if over_model is not None:
                 model = over_model
-            else:
+            elif over_model is None and unet_name!= "None":
                 unet_path = folder_paths.get_full_path_or_raise("unet", unet_name)
                 model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
-
+            else:
+                raise ValueError("unet cannot be None.")
+            
             if over_clip is not None:
                 clip = over_clip
-            else:
-                if clip1 == "None":
-                    raise ValueError("In SD3.5 mode, clip cannot be None. Please enter a valid clip1.")
-                if clip2 == "None":
-                    raise ValueError("In SD3.5 mode, clip cannot be None. Please enter a valid clip2.")
-                if clip3 == "None":
-                    raise ValueError("In SD3.5 mode, clip cannot be None. Please enter a valid clip3.")
+            elif over_clip is None and clip1 != "None" and clip2 != "None" and clip3!= "None":
                 clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3)[0]
-
-            if isinstance(vae, str) and vae != "None":
-                vae_path = folder_paths.get_full_path("vae", vae)
-                vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
+            else:
+                raise ValueError("clip1 and clip2 and clip3  cannot be None.")
 
 
         # Case 5: only_clip mode
         if run_Mode == "only_clip":
-
-            if isinstance(vae, str) and vae != "None":
-                vae_path = folder_paths.get_full_path("vae", vae)
-                vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-
-
             if over_model is not None:
                 model = over_model
-            else:
+            elif over_model is None:
                 model = None
-
             if over_clip is not None:
-                    clip = over_clip
-            elif clip1 != "None":
-                clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
-                if clip2 != "None":
-                    clip = DualCLIPLoader().load_clip(clip1, clip2, clip_type, device)[0]
-                    if clip3 != "None":
-                        clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3, clip_type, device)[0]
-
+                clip = over_clip
+            elif over_clip is None :
+                if clip1 != "None":
+                    clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
+                    if clip2 != "None":
+                        clip = DualCLIPLoader().load_clip(clip1, clip2, clip_type, device)[0]
+                        if clip3 != "None":
+                            clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3, clip_type, device)[0]
+            else:
+                raise ValueError("At least one clip file (clip1) must be provided in 'only_clip' mode.")
+            if clip is None:
+                raise ValueError("Clip object is None. Cannot encode text without a valid clip.")
+            
 
             (positive,) = CLIPTextEncode().encode(clip, pos)
             (negative,) = CLIPTextEncode().encode(clip, neg)
+            if isinstance(vae, str) and vae != "None":
+                vae_path = folder_paths.get_full_path("vae", vae)
+                vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
             context = {
             "model": model,
@@ -650,7 +656,6 @@ class sum_load:
             "sampler": sampler,
             "scheduler": scheduler,
             "guidance": guidance,
-
             "clip1": clip1, 
             "clip2": clip2, 
             "clip3": clip3, 
@@ -667,22 +672,20 @@ class sum_load:
 
         if lora_stack is not None:
             model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
-
-
         if lora != "None" and lora_strength != 0:
             model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
-        else:
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
-        
+
+        (positive,) = CLIPTextEncode().encode(clip, pos)
+        (negative,) = CLIPTextEncode().encode(clip, neg)
 
 
         if run_Mode == "FLUX":
             positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
 
 
+        if isinstance(vae, str) and vae != "None":
+            vae_path = folder_paths.get_full_path("vae", vae)
+            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
 
         positive = positive
@@ -756,8 +759,6 @@ class load_clip:
             },
             
             "optional": { 
-                "over_model": ("MODEL",),
-                "over_clip": ("CLIP",),  
                 "lora_stack": ("LORASTACK",),
                         },
 
@@ -772,8 +773,8 @@ class load_clip:
 
 
     def process_settings(self, node_id, lora_strength, 
-                        width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, over_clip=None,  clip_type=None,device="default", 
-                        vae=None, lora=None, unet_name=None, ckpt_name=None, clip1=None, lora_stack=None, over_model=None,
+                        width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, clip_type=None,device="default", 
+                        vae=None, lora=None, unet_name=None, ckpt_name=None, clip1=None, lora_stack=None, 
                         pos="default", neg="default", preset=[]):
         
         # 非编码后的数据
@@ -821,55 +822,41 @@ class load_clip:
             latent = latent.repeat(1, 16 // 4, 1, 1)  
 
 
-
-        if over_model is not None:
-            model = over_model
-        elif ckpt_name != "None":
+        if ckpt_name!= "None":
             model_path = folder_paths.get_full_path("checkpoints", ckpt_name)
-            out = comfy.sd.load_checkpoint_guess_config(model_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
+            out = comfy.sd.load_checkpoint_guess_config(model_path, output_vae=True, output_clip=True, embedding_directory=available_embeddings)
             model = out[0]
-            vae = out[2] 
-        elif unet_name!= "None":
-            unet_path = folder_paths.get_full_path("unet", unet_name)
+            vae = out[2]
+            clip = out[1].clone()
+
+        if  unet_name!= "None":
+            unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
             model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
-
-        elif ckpt_name != "None" and unet_name != "None":
-            raise ValueError("Please enter only a valid ckpt_name or unet_name.")
-
+            if clip1 != "None":
+                clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
+            else:
+                raise ValueError("In clip mode, clip1 cannot be None. Please enter a valid clip1.")
+            
         else:
-            raise ValueError("In clip mode, ckpt_name or unet_name must be entered. Please enter a valid ckpt_name or unet_name.")
+            raise ValueError("Please enter a valid ckpt_name or unet_name.")
+
+
 
         if isinstance(vae, str) and vae != "None":
             vae_path = folder_paths.get_full_path("vae", vae)
             vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
 
-        if over_clip is not None:
-            clip = over_clip
-        elif clip1 == "None":
-            raise ValueError("In clip mode, clip1 cannot be None. Please enter a valid clip1.")
-        else:
-            clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
-
-
         if lora_stack is not None:
             model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
-
-
         if lora != "None" and lora_strength != 0:
             model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
-        else:
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
+
+
+        (positive,) = CLIPTextEncode().encode(clip, pos)
+        (negative,) = CLIPTextEncode().encode(clip, neg)
         
 
-
-
-        positive = positive
-        negative = negative
-        
         context = {
             "model": model,
             "positive": positive,
@@ -920,9 +907,7 @@ class load_only_clip:
                 "clip2": (["None"] + available_clips, ),  # SD3.5 和 Flux
                 "guidance": ("FLOAT", {"default": 3.5, "min": 0.0, "max": 100.0, "step": 0.1}),
                 "clip3": (["None"] + available_clips,),  # SD3.5
-
                 "vae": (["None"] + available_vaes, ),
-
                 "width": ("INT", {"default": 512, "min": 8, "max": 16384}),
                 "height": ("INT", {"default": 512, "min": 8, "max": 16384}),
                 "batch": ("INT", {"default": 1, "min": 1, "max": 999999}),
@@ -937,7 +922,6 @@ class load_only_clip:
             
             "optional": { 
                 "over_model": ("MODEL",),
-                "over_clip": ("CLIP",),  
                         },
 
             "hidden": { "node_id": "UNIQUE_ID",
@@ -952,7 +936,7 @@ class load_only_clip:
 
     def process_settings(self, node_id, 
                         width, height, batch, steps, cfg, sampler, scheduler,  guidance,  clip_type=None,device="default", 
-                        vae=None, clip1=None, over_clip=None, over_model=None,
+                        vae=None, clip1=None, over_model=None,
                         clip2=None, clip3=None, pos="default", neg="default", preset=[]):
         
         # 非编码后的数据
@@ -998,12 +982,10 @@ class load_only_clip:
 
         if over_model is not None:
             model = over_model
-        else:
+        elif over_model is None:
             model = None
 
-        if over_clip is not None:
-            clip = over_clip
-        elif clip1 != "None":
+        if clip1 != "None":
             clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
             if clip2 != "None":
                 clip = DualCLIPLoader().load_clip(clip1, clip2, clip_type, device)[0]
@@ -1062,7 +1044,6 @@ class load_basic:
                 "preset": (preset_list, ),
                 "ckpt_name": (["None"] + available_ckpt,),  
                 "clipnum": ("INT", {"default": 0, "min": -24, "max": 1}),
-
                 "vae": (["None"] + available_vaes, ),
                 "lora": (["None"] + available_loras, ),
                 "lora_strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
@@ -1080,8 +1061,7 @@ class load_basic:
             
             "optional": { 
                         },
-            
-            
+
             "hidden": { 
                 "node_id": "UNIQUE_ID",
             },
@@ -1137,25 +1117,19 @@ class load_basic:
         model = out[0]
         vae = out[2]
         clip = out[1].clone()
+        if clip is not None:
+            clip.clip_layer(clipnum)
 
         if isinstance(vae, str) and vae != "None":
             vae_path = folder_paths.get_full_path("vae", vae)
             vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
-        if clip is not None:
-            clip.clip_layer(clipnum)
-
-
         if lora != "None" and lora_strength != 0:
             model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
-        else:
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
-        
-        
-            # Construct context
+
+        (positive,) = CLIPTextEncode().encode(clip, pos)
+        (negative,) = CLIPTextEncode().encode(clip, neg)
+
         context = {
             "model": model,
             "positive": positive,
@@ -1167,7 +1141,17 @@ class load_basic:
             "cfg": cfg,
             "sampler": sampler,
             "scheduler": scheduler,
-            "guidance": None,
+            "guidance": None, 
+            "clip1": None,  
+            "clip2": None,  
+            "clip3": None,  
+            "unet_name": None, 
+            "ckpt_name": None,
+            "pos": pos, 
+            "neg": neg, 
+            "width": width,
+            "height": height,
+            "batch": batch,
         }
         return (context, model, parameters_data, )
 
@@ -1276,31 +1260,26 @@ class load_FLUX:
         if latent.shape[1] != 16:  # Check if the latent has 16 channels
             latent = latent.repeat(1, 16 // 4, 1, 1)  
 
-        vae_path = folder_paths.get_full_path("vae", vae)
-        vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
+        if isinstance(vae, str) and vae!= "None":
+            vae_path = folder_paths.get_full_path("vae", vae)
+            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
+        if unet_name!= "None":
+            unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
+            model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
 
-
-        unet_path = folder_paths.get_full_path_or_raise("diffusion_models", unet_name)
-        model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
         if clip1 != None and clip2 != None:
             clip =DualCLIPLoader().load_clip( clip1, clip2, clip_type, device)[0]
 
-
         if lora != "None" and lora_strength != 0:
             model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
-        else:
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
+
+        (positive,) = CLIPTextEncode().encode(clip, pos)
+        (negative,) = CLIPTextEncode().encode(clip, neg)
         
-
         positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-        negative = negative
 
 
-            # Construct context
         context = {
             "model": model,
             "positive": positive,
@@ -1313,6 +1292,17 @@ class load_FLUX:
             "sampler": sampler,
             "scheduler": scheduler,
             "guidance": guidance,
+
+            "clip1": clip1, 
+            "clip2": clip2, 
+            "clip3": None, 
+            "unet_name": unet_name, 
+            "ckpt_name": None, 
+            "pos": pos, 
+            "neg": neg, 
+            "width": width,
+            "height": height,
+            "batch": batch,
         }
         return (context, model, parameters_data, )
 
@@ -1418,27 +1408,24 @@ class load_SD35:
         if latent.shape[1] != 16:  # Check if the latent has 16 channels
             latent = latent.repeat(1, 16 // 4, 1, 1)  
 
+        if vae!= "None":
+            vae_path = folder_paths.get_full_path("vae", vae)
+            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
 
-        vae_path = folder_paths.get_full_path("vae", vae)
-        vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-
-
-        unet_path = folder_paths.get_full_path_or_raise("unet", unet_name)
-        model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
+        if unet_name!= "None":
+            unet_path = folder_paths.get_full_path_or_raise("unet", unet_name)
+            model = comfy.sd.load_diffusion_model(unet_path, model_options=model_options)
 
         if clip1 != None and clip2 != None and clip3 != None:
             clip=TripleCLIPLoader().load_clip(clip1, clip2, clip3,)[0]
 
         if lora != "None" and lora_strength != 0:
             model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
-        else:
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
+
+        (positive,) = CLIPTextEncode().encode(clip, pos)
+        (negative,) = CLIPTextEncode().encode(clip, neg)
         
-        
-            # Construct context
+
         context = {
             "model": model,
             "positive": positive,
@@ -1446,12 +1433,21 @@ class load_SD35:
             "latent": {"samples": latent},      
             "vae": vae,
             "clip": clip,
-
             "steps": steps,
             "cfg": cfg,
             "sampler": sampler,
             "scheduler": scheduler,
             "guidance": None,
+            "clip1": clip1, 
+            "clip2": clip2, 
+            "clip3": clip3, 
+            "unet_name": unet_name, 
+            "ckpt_name": None,
+            "pos": pos, 
+            "neg": neg, 
+            "width": width,
+            "height": height,
+            "batch": batch,
         }
         return (context, model, parameters_data, )
 
@@ -1481,7 +1477,6 @@ class load_create:
                 "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.5, "round": 0.01}),
                 "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-
                 "pos": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "a girl"}), 
                 "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
             },
@@ -1491,13 +1486,11 @@ class load_create:
                 "over_clip": ("CLIP",),  
                 "over_vae": ("VAE",),
                 "lora_stack": ("LORASTACK",),
-
                         },
-
         }
 
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "LORASTACK",)
-    RETURN_NAMES = ("context","model","lora_stack" )
+    RETURN_TYPES = ("RUN_CONTEXT","MODEL", )
+    RETURN_NAMES = ("context","model", )
     FUNCTION = "process_settings"
     CATEGORY = "Apt_Preset/chx_load"
 
@@ -1512,12 +1505,13 @@ class load_create:
         if latent.shape[1] != 16:  # Check if the latent has 16 channels
             latent = latent.repeat(1, 16 // 4, 1, 1)  
 
-        if vae is not None:
-            vae=over_vae
-        elif isinstance(vae, str) and vae != "None":
+        if over_vae is not None:
+            vae = over_vae
+        elif over_vae is None and vae != "None":
             vae_path = folder_paths.get_full_path("vae", vae)
             vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-    
+
+
         if over_model is not None:
             model = over_model
         else:
@@ -1547,11 +1541,10 @@ class load_create:
             "sampler": sampler,
             "scheduler": scheduler,
             "guidance": None,
-
-            "clip1": None, 
-            "clip2": None, 
-            "clip3": None, 
-            "unet_name": None, 
+            "clip1": None,
+            "clip2": None,
+            "clip3": None,
+            "unet_name": None,
             "ckpt_name": None,
             "pos": pos, 
             "neg": neg, 
@@ -1631,8 +1624,6 @@ class Data_preset_save:
             f.write(tomltext)
 
         return ()
-
-
 
 
 
@@ -2403,7 +2394,7 @@ class basic_Ksampler_custom:
         
         if image_output == "None":
             context = new_context(context, images=None, latent=latent, model=model, positive=positive, negative=negative,  )
-            return(context, model, positive, negative, latent, vae, NONE) 
+            return(context, model, positive, negative, latent, vae, None, ) 
             
         output_image = VAEDecode().decode(vae, latent)[0]  
         latent = VAEEncode().encode(vae, output_image)[0]
@@ -3105,6 +3096,8 @@ class chx_vae_encode_tile:
 
 #region-----------风格组--------------------------------------------------------------------------------------#--
 
+
+
 class chx_YC_LG_Redux:
     @classmethod
     def INPUT_TYPES(s):
@@ -3388,209 +3381,6 @@ class chx_YC_LG_Redux:
         
         return (context,positive,)
 
-
-class chx_Style_Redux:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "context": ("RUN_CONTEXT",),
-            "style_model": (folder_paths.get_filename_list("style_models"), {"default": "flux1-redux-dev.safetensors"}),
-            "clip_vision": (folder_paths.get_filename_list("clip_vision"), {"default": "sigclip_vision_patch14_384.safetensors"}),
-            "image": ("IMAGE",),
-            "style_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制整体艺术风格的权重"
-            }),
-            "color_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制颜色特征的权重"
-            }),
-            "content_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制内容语义的权重"
-            }),
-            "structure_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制结构布局的权重"
-            }),
-            "texture_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制纹理细节的权重"
-            }),
-            "similarity_threshold": ("FLOAT", {
-                "default": 0.7,
-                "min": 0.0,
-                "max": 1.0,
-                "step": 0.01,
-                "tooltip": "特征相似度阈值，超过此值的区域将被替换"
-            }),
-            "enhancement_base": ("FLOAT", {
-                "default": 1.5,
-                "min": 1.0,
-                "max": 3.0,
-                "step": 0.1,
-                "tooltip": "文本特征替换的基础增强系数"
-            })
-        },
-        
-        "optional": { 
-            "guidance": ("FLOAT", {"default": 30, "min": 0.0, "max": 100.0, "step": 0.1}),
-        }}
-        
-    
-
-
-    RETURN_TYPES = ("RUN_CONTEXT", "CONDITIONING",)
-    RETURN_NAMES = ("context", "positive",)
-    
-    FUNCTION = "apply_style"
-    CATEGORY = "Apt_Preset/IPA"
-
-
-
-    def __init__(self):
-        
-        import comfy.ops
-        ops = comfy.ops.manual_cast
-
-        self.text_projector = ops.Linear(4096, 4096)  # 保持维度一致
-        # 为不同类型特征设置增强系数
-        self.enhancement_factors = {
-            'style': 1.2,    # 风格特征增强系数
-            'color': 1.0,    # 颜色特征增强系数
-            'content': 1.1,  # 内容特征增强系数
-            'structure': 1.3, # 结构特征增强系数
-            'texture': 1.0   # 纹理特征增强系数
-        }
-
-    def compute_similarity(self, text_feat, image_feat):
-        """计算多种相似度的组合"""
-        # 1. 余弦相似度
-        cos_sim = torch.cosine_similarity(text_feat, image_feat, dim=-1)
-        
-        # 2. L2距离相似度（归一化后的欧氏距离）
-        l2_dist = torch.norm(text_feat - image_feat, p=2, dim=-1)
-        l2_sim = 1 / (1 + l2_dist)  # 转换为相似度
-        
-        # 3. 点积相似度（考虑特征的强度）
-        dot_sim = torch.sum(text_feat * image_feat, dim=-1)
-        dot_sim = torch.tanh(dot_sim)  # 归一化到[-1,1]
-        
-        # 4. 注意力相似度
-        attn_weights = torch.softmax(torch.matmul(text_feat, image_feat.transpose(-2, -1)) / math.sqrt(text_feat.size(-1)), dim=-1)
-        attn_sim = torch.mean(attn_weights, dim=-1)
-        
-        # 组合所有相似度（可以调整权重）
-        combined_sim = (
-            0.4 * cos_sim +
-            0.2 * l2_sim +
-            0.2 * dot_sim +
-            0.2 * attn_sim
-        )
-        
-        return combined_sim.mean()
-
-    def apply_style(self, style_weight=1.0, color_weight=1.0, content_weight=1.0,guidance=30,
-                structure_weight=1.0, texture_weight=1.0, image=None, style_model=None, clip_vision=None,
-                similarity_threshold=0.7, enhancement_base=1.5,context=None,):
-        
-        conditioning = context.get("positive", None)  
-
-        style_model_path = folder_paths.get_full_path_or_raise("style_models", style_model)
-        style_model = comfy.sd.load_style_model(style_model_path)
-
-        clip_path = folder_paths.get_full_path_or_raise("clip_vision", clip_vision)
-        clip_vision = comfy.clip_vision.load(clip_path)
-        clip_vision_output = clip_vision.encode_image(image, crop="center") 
-    
-        
-        # 获取图像特征并展平
-        image_cond = style_model.get_cond(clip_vision_output).flatten(start_dim=0, end_dim=1)
-        
-        # 获取文本特征并调整维度
-        text_features = conditioning[0][0]  # [batch_size, seq_len, 4096]
-        text_features = text_features.mean(dim=1)  # [batch_size, 4096]
-        
-        # 投影文本特征（保持4096维度）
-        text_features = self.text_projector(text_features)  # [batch_size, 4096]
-        
-        # 确保batch维度匹配
-        if text_features.shape[0] != image_cond.shape[0]:
-            text_features = text_features.expand(image_cond.shape[0], -1)
-        
-        # 分离图像的不同类型特征
-        image_features = {
-            'style': image_cond[..., :splits],
-            'color': image_cond[..., splits:splits*2],
-            'content': image_cond[..., splits*2:splits*3],
-            'structure': image_cond[..., splits*3:splits*4],
-            'texture': image_cond[..., splits*4:]
-        }
-        
-        # 计算每个区域与文本特征的相似度
-        similarities = {}
-        for key, region_features in image_features.items():
-            # 将文本特征调整为对应区域的维度
-            region_text_features = text_features[..., :region_features.shape[-1]]
-            # 使用多种相似度度量的组合
-            similarities[key] = self.compute_similarity(region_text_features, region_features)
-        
-        # 根据相似度和阈值决定替换，并应用增强
-        final_features = {}
-        weights = {
-            'style': style_weight,
-            'color': color_weight,
-            'content': content_weight,
-            'structure': structure_weight,
-            'texture': texture_weight
-        }
-        
-        for key in image_features:
-            if similarities[key] > similarity_threshold:
-                # 相似度高的区域，用增强后的文本特征替换
-                region_size = image_features[key].shape[-1]
-                # 计算动态增强系数
-                dynamic_factor = enhancement_base * self.enhancement_factors[key]
-                # 应用特征替换和增强
-                final_features[key] = text_features[..., :region_size] * weights[key] * dynamic_factor
-            else:
-                # 保持原图像特征
-                final_features[key] = image_features[key] * weights[key]
-        
-        # 合并所有特征
-        combined_cond = torch.cat([
-            final_features['style'],
-            final_features['color'],
-            final_features['content'],
-            final_features['structure'],
-            final_features['texture']
-        ], dim=-1).unsqueeze(dim=0)
-        
-        # 构建新的条件
-        c = []
-        for t in conditioning:
-            n = [torch.cat((t[0], combined_cond), dim=1), t[1].copy()]
-            c.append(n)
-            
-        positive = node_helpers.conditioning_set_values(c, {"guidance": guidance})
-        
-        context = new_context(context, positive=positive,)
-        return (context,positive,)  
 
 
 class chx_StyleModelApply:
