@@ -89,7 +89,6 @@ NODE_CLASS_MAPPINGS = {
 "chx_IPA_region_combine": chx_IPA_region_combine,
 "chx_IPA_apply_combine": chx_IPA_apply_combine,
 "chx_YC_LG_Redux": chx_YC_LG_Redux,
-"chx_Style_Redux": chx_Style_Redux,
 "chx_StyleModelApply":chx_StyleModelApply,
 
 
