@@ -46,13 +46,14 @@
 Adopt the sum to summarize the control nodes, especially the stack centralized control
 
 | **sum_stack_image** | **图像生成控制堆**             |
+|---------------------|-------------------------------|
 | **sum_stack_AD**    | **动画生成控制堆 AnimateDiff** |
 | **sum_stack_Wan**   | **视频生成控制堆 Wan 2.1**     |
-| **sum_editor**      | **可以编辑所有的基础参数**         |
-| **sum_latent**      | **各种 latent 接入方式**      |
-| **sum_lora**        | **批量 lora**             |
-| **sum_controlnet**  | **批量 controlnet**       |
-| **sum_text**        | **功能齐全的文本编辑**           |
+| **sum_editor**      | **可以编辑所有的基础参数**     |
+| **sum_latent**      | **各种 latent 接入方式**       |
+| **sum_lora**        | **批量 lora**                 |
+| **sum_controlnet**  | **批量 controlnet**           |
+| **sum_text**        | **功能齐全的文本编辑**         |
 
 ![image](https://github.com/user-attachments/assets/95a4f2fb-fb36-4c90-bb3a-72ed879de618)
 
