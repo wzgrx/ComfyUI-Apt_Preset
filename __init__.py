@@ -232,9 +232,9 @@ NODE_CLASS_MAPPINGS = {
 "list_cycler_Value":list_cycler_Value,
 "list_input_text": list_input_text,
 "list_input_Value": list_input_Value,
-"list_ListGetByIndex": ListGetByIndex,
-"list_ListSlice": ListSlice,
-"list_MergeList": MergeList, #wed   
+"list_ListGetByIndex": list_GetByIndex,
+"list_ListSlice": list_Slice,
+"list_MergeList": list_Merge, #wed   
 
 "batch_cycler_Prompt":batch_cycler_Prompt,
 "batch_cycler_Value":batch_cycler_Value,
@@ -267,7 +267,7 @@ NODE_CLASS_MAPPINGS = {
 "creat_any_List": creat_any_List,#wed
 
 
-"type_AnyCast": AnyCast, #wed
+"type_AnyCast": type_AnyCast, #wed
 "type_Anyswitch": type_Anyswitch,
 "type_BasiPIPE": type_BasiPIPE,
 "type_Image_List2Batch":type_Image_List2Batch,
