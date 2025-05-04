@@ -10,33 +10,24 @@ from .NodeChx.IPAdapterPlus import chx_IPA_basic,chx_IPA_faceID,chx_IPA_XL_adv,c
 from .NodeChx.IPAdapterSD3 import IPA_dapterSD3LOAD,Stack_IPA_SD3,Apply_IPA_SD3
 from .NodeChx.video_node import *
 from .NodeChx.Ksampler_all import *
+
+
 from .NodeBasic.c_packdata import *
 
+from .NodeBasic.C_model import *
 from .NodeBasic.C_mask import *
-
+from .NodeBasic.C_latent import *
 from .NodeBasic.C_viewIO import *
-
 from .NodeBasic.C_AD import *
+
 from .NodeBasic.C_imgEffect import *
+
+from .NodeBasic.C_GPT import *
 
 
 
 NODE_CLASS_MAPPINGS = {
 
-
-"AD_sch_prompt_chx":AD_sch_prompt_chx,
-"AD_sch_prompt_preset": AD_sch_prompt_preset,
-"AD_sch_mask":AD_sch_mask,
-"AD_sch_value": AD_sch_value,
-"Amp_drive_value": Amp_drive_value,
-"Amp_drive_String": Amp_drive_String,
-"Amp_audio_Normalized": Amp_audio_Normalized,
-"Amp_drive_mask": Amp_drive_mask,
-
-"AD_MaskExpandBatch": AD_MaskExpandBatch, 
-"AD_ImageExpandBatch": AD_ImageExpandBatch,
-"AD_Dynamic_MASK": AD_Dynamic_MASK,
-"AD_batch_replace": AD_batch_replace,
 
 
 
@@ -58,8 +49,8 @@ NODE_CLASS_MAPPINGS = {
 "load_SD35": load_SD35,
 "load_only_clip": load_only_clip,
 "load_clip": load_clip,
-"load_create": load_create,
-
+"load_create_chx": load_create_chx,
+"load_create_basic_chx": load_create_basic_chx,
 
 "Data_chx_Merge":Data_chx_Merge,
 "Data_presetData":Data_presetData,
@@ -93,12 +84,11 @@ NODE_CLASS_MAPPINGS = {
 "chx_IPA_apply_combine": chx_IPA_apply_combine,
 "chx_YC_LG_Redux": chx_YC_LG_Redux,
 "chx_StyleModelApply":chx_StyleModelApply,
-
+"chx_Style_Redux":chx_Style_Redux,
 
 
 #-sample-------------------------------------------#
 "pre_sample_data":  pre_sample_data,  
-"pre_make_context": pre_make_context,
 "pre_inpaint_xl": pre_inpaint_xl,
 
 
@@ -151,7 +141,6 @@ NODE_CLASS_MAPPINGS = {
 "Stack_latent": Stack_latent,
 "Stack_Redux":Stack_Redux,
 "stack_AD_diff": stack_AD_diff,
-"Stack_adv_CN_easy": Stack_adv_CN_easy,
 "Stack_adv_CN": Stack_adv_CN,
 "Stack_IPA": Stack_IPA,
 "Stack_text": Stack_text,
@@ -178,6 +167,18 @@ NODE_CLASS_MAPPINGS = {
 "AD_sch_latent": AD_sch_latent,
 "AD_sch_adv_CN":AD_sch_adv_CN,
 
+"AD_sch_prompt_chx":AD_sch_prompt_chx,
+"AD_sch_prompt_preset": AD_sch_prompt_preset,
+"AD_sch_mask":AD_sch_mask,
+"AD_sch_value": AD_sch_value,
+"Amp_drive_value": Amp_drive_value,
+"Amp_drive_String": Amp_drive_String,
+"Amp_audio_Normalized": Amp_audio_Normalized,
+"Amp_drive_mask": Amp_drive_mask,
+
+"AD_MaskExpandBatch": AD_MaskExpandBatch, 
+"AD_ImageExpandBatch": AD_ImageExpandBatch,
+"AD_batch_replace": AD_batch_replace,
 
 
 
@@ -222,6 +223,24 @@ NODE_CLASS_MAPPINGS = {
 
 
 
+
+
+#-----------math---type-------------------
+
+
+
+
+#---------------model--------
+"model_adjust_color": Model_adjust_color,
+"model_diff_inpaint": model_diff_inpaint,
+"model_Regional": model_Regional,
+
+
+#----------------image------------------------
+
+
+
+
 #-----------------mask----------------------
 "Mask_AD_generate": Mask_AD_generate,
 "Mask_inpaint_Grey": Mask_inpaint_Grey,
@@ -239,6 +258,29 @@ NODE_CLASS_MAPPINGS = {
 "Mask_mask2img": Mask_mask2img,
 "Mask_splitMask": Mask_splitMask,
 
+
+
+#------------latent---------------------
+"latent_chx_noise": latent_chx_noise,
+"latent_Image2Noise": latent_Image2Noise,
+"latent_ratio": latent_ratio,
+"latent_mask":latent_mask,
+
+
+#----------prompt----------------
+
+
+
+
+
+#---------Gpt modle---------------
+"GPT_ChineseToEnglish": GPT_ChineseToEnglish,
+"GPT_EnglishToChinese": GPT_EnglishToChinese,
+
+"GPT_deepseek_api_text": GPT_deepseek_api_text,
+"GPT_Janus_img_2_text": GPT_Janus_img_2_text,
+"GPT_Janus_generate_img": GPT_Janus_generate_img,
+"GPT_MiniCPM": GPT_MiniCPM,
 
 
 
@@ -271,6 +313,10 @@ NODE_CLASS_MAPPINGS = {
 "color_Gradient": color_Gradient,
 "color_RadialGradient": color_RadialGradient,
 
+
+
+
+#-----------------layout----------------
 
 
 
