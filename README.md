@@ -58,6 +58,8 @@ Adopt the sum to summarize the control nodes, especially the stack centralized c
 
 **4、基础节点 Basic nodes：系统分类，完整规划 System classification, complete planning**
 
+一些节点还在调试中，会不断更新Some of these nodes are still under debugging and will be updated continuously.
+
 | **<font color="#ff0000">mask</font>** | **<font color="#ff0000">math</font>** | **<font color="#ff0000">image</font>** | **<font color="#ff0000">imgEffect</font>** |
 | --------------------------------- | --------------------------------- | ---------------------------------- | -------------------------------------- |
 | Mask_AD_generate                  | list_num_range                    | pad_uv_fill                        | img_Loadeffect                         |
