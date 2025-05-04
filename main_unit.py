@@ -43,6 +43,9 @@ available_unets = folder_paths.get_filename_list("unet")
 available_clips = folder_paths.get_filename_list("text_encoders")
 available_loras = folder_paths.get_filename_list("loras")
 available_vaes = folder_paths.get_filename_list("vae")
+available_style_models = folder_paths.get_filename_list("style_models")
+available_clip_visions = folder_paths.get_filename_list("clip_vision")
+available_controlnet=folder_paths.get_filename_list("controlnet")
 
 #region-----------context全局定义------------------------------------------------------------------------------#
 
@@ -67,9 +70,9 @@ _all_contextput_output_data = {
     "scheduler": ("scheduler", comfy.samplers.KSampler.SCHEDULERS, "scheduler"),
 
 
-    "clip1": ("clip1", folder_paths.get_filename_list("clip"), "clip1"),
-    "clip2": ("clip2", folder_paths.get_filename_list("clip"), "clip2"),
-    "clip3": ("clip3", folder_paths.get_filename_list("clip"), "clip3"),
+    "clip1": ("clip1", available_clips, "clip1"),
+    "clip2": ("clip2", available_clips, "clip2"),
+    "clip3": ("clip3", available_clips, "clip3"),
     "unet_name": ("unet_name", folder_paths.get_filename_list("unet"), "unet_name"),
     "ckpt_name": ("ckpt_name", folder_paths.get_filename_list("checkpoints") ,"ckpt_name"),
     "pos": ("pos", "STRING", "pos"),
@@ -585,6 +588,30 @@ def style_list():   # 读取风格csv文件
     for i in data_list:
         card_list += [i[0]]
     return (card_list, data_list)
+
+
+
+
+def add_style_to_subject(style, positive, negative):
+    if style != "None":
+        style_info = style_list()
+        style_index = style_info[0].index(style)
+        style_text = style_info[1][style_index][1]
+
+        if "{prompt}" in style_text:
+            positive = style_text.replace("{prompt}", positive)
+        else:
+            positive += f", {style_text}"
+
+        if len(style_info[1][style_index]) > 2:
+            negative += f", {style_info[1][style_index][2]}"
+
+    return positive, negative
+
+
+
+
+
 
 
 
