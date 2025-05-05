@@ -296,7 +296,6 @@ NODE_CLASS_MAPPINGS = {
 "img_Stretch": img_Stretch,
 "img_WaveWarp": img_WaveWarp,
 "img_Liquify": img_Liquify,
-"img_Seam_adjust_size": img_Seam_adjust_size,
 "img_texture_Offset": img_texture_Offset,
 "img_White_balance":img_White_balance,  #白平衡重定向
 "img_HDR": img_HDR,
