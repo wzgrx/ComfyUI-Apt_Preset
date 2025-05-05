@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/00457d93-ead4-4083-902b-2ae32dfbb8f0)
+![32323](https://github.com/user-attachments/assets/b0ebb4d8-39f3-4258-9361-3256c8e9874d)
 
 一些资源和工作流放在Some resources and workflows are placed in  [ComfyUI-Apt_Collect_](https://github.com/cardenluo/ComfyUI-Apt_Collect)
 # <font color="#000000"> 一、Update record更新记录</font>
