@@ -36,7 +36,6 @@
 | Chx_Ksampler_dual_area    | 双区采样      | Dual Zone Sampling           |
 | Chx_Ksampler_inpaint      | 重绘采样器     | Redraw Sampler               |
 | Chx_Ksampler_VisualStyle  | 风格一致性采样   | Style Consistency Sampling   |
-| Chx_ksampler_Deforum      | 简单的首尾帧    | Simple First and Last Frames |
 | Chx_ksampler_Deforum_math | 数学公式驱动    | Driven by Formulas           |
 | Chx_ksampler_Deforum_sch  | 调度数据驱动    | Driven by Scheduling Data    |
 
