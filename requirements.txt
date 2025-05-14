@@ -26,4 +26,5 @@ opencv-python
 matplotlib
 pydub
 scipy
+flet
 # git+https://github.com/deepseek-ai/Janus.git
