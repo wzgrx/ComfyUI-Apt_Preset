@@ -3049,9 +3049,7 @@ class chx_Ksampler_Relight:
         if img_targe is None:
             img_targe = context.get("images", None)
 
-        target_size = img_targe.shape[2:]  
-        if img_light is not None and img_light.shape[2:] != target_size:
-            img_light = F.interpolate(img_light, size=target_size, mode='bilinear', align_corners=False)
+        img_light = get_image_resize(img_light,img_targe)   #尺寸一致性
 
         latent2 = encode(vae, img_targe)[0]
         latent1 = encode(vae, img_light)[0]
