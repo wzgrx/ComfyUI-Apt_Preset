@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 from scipy.fft import fft
 from dataclasses import dataclass
 from comfy.utils import ProgressBar
-
+from comfy.utils import common_upscale
 
 
 
@@ -1002,6 +1002,34 @@ def image_2dtransform(             # 2D图像变换
         img = img.crop((left, upper, right, bottom))
 
         return pil2tensor(img)
+
+
+
+
+def get_image_resize(image, get_image_size=None):  #尺寸参考
+    B, H, W, C = image.shape
+    upscale_method = "lanczos"
+    crop = "center"
+
+    if get_image_size is not None:
+        _, height, width, _ = get_image_size.shape
+    else:
+        # 默认情况下保持原始尺寸
+        width = W
+        height = H
+        # 确保尺寸是8的倍数
+        divisible_by = 8
+        width = width - (width % divisible_by)
+        height = height - (height % divisible_by)
+
+    image = image.movedim(-1, 1)
+    image = common_upscale(image, width, height, upscale_method, crop)
+    image = image.movedim(1, -1)
+
+    return image
+
+
+
 
 
 #endregion------------------图像处理----------------------------------------------------#
