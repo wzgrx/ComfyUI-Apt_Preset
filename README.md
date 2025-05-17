@@ -4,6 +4,8 @@
 # <font color="#000000"> 一、Update record更新记录</font>
 2025.5.3   Update to V 2.0 and add a large number of basic nodes.
 
+2025.5.17  Now the system supports switching to Chinese.支持系统切换中文
+
 # <font color="#000000">二、Usage Guide使用指南</font> 
 **1、加载器 Loader：Sum_load 全能加载器 All - in - one Loader**
 包含五种模式，全部参数的设置都可以自己保存为预设，也配备了每个模式的简版加载器 It includes five modes. All parameter settings can be saved as presets by yourself, and there is also a simplified loader for each mode.
