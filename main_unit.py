@@ -1005,30 +1005,23 @@ def image_2dtransform(             # 2D图像变换
 
 
 
-
-def get_image_resize(image, get_image_size=None):  #尺寸参考
+def get_image_resize(image, target_image=None):  # 尺寸参考
     B, H, W, C = image.shape
     upscale_method = "lanczos"
     crop = "center"
-
-    if get_image_size is not None:
-        _, height, width, _ = get_image_size.shape
-    else:
-        # 默认情况下保持原始尺寸
-        width = W
-        height = H
-        # 确保尺寸是8的倍数
-        divisible_by = 8
-        width = width - (width % divisible_by)
-        height = height - (height % divisible_by)
+    if target_image is None:
+        width = W - (W % 8)
+        height = H - (H % 8)
+        image = image.movedim(-1, 1)
+        image = common_upscale(image, width, height, upscale_method, crop)
+        image = image.movedim(1, -1)
+        return image
+    _, height, width, _ = target_image.shape
 
     image = image.movedim(-1, 1)
     image = common_upscale(image, width, height, upscale_method, crop)
     image = image.movedim(1, -1)
-
     return image
-
-
 
 
 
