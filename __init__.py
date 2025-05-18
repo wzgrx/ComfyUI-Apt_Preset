@@ -109,7 +109,6 @@ NODE_CLASS_MAPPINGS = {
 "basic_Ksampler_adv": basic_Ksampler_adv,
 "basic_Ksampler_batch": basic_Ksampler_batch,
 
-"chx_Ksampler_Relight": chx_Ksampler_Relight,
 "chx_Ksampler_texture": chx_Ksampler_texture,
 "chx_Ksampler_mix": chx_Ksampler_mix,
 "chx_Ksampler_refine": chx_Ksampler_refine,
