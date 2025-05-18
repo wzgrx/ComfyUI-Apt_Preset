@@ -26,5 +26,6 @@ matplotlib
 pydub
 scipy
 flet
+sortedcontainers
 #color_matcher
 # git+https://github.com/deepseek-ai/Janus.git
