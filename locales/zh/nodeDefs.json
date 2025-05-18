@@ -238,6 +238,7 @@
       }
     }
   },
+
   "AD_sch_mask": {
     "display_name": "AD_sch_mask",
     "inputs": {
@@ -266,6 +267,40 @@
       }
     }
   },
+
+
+  "pre_ic_light_sd15": {
+    "display_name": "pre_ic_light_sd15",
+    "inputs": {
+      "fore_img": {
+        "name": "前景图"
+      },
+      "light_img": {
+        "name": "打光图"
+      },
+      "bg_img": {
+        "name": "背景图"
+      },
+      "bg_unet": {
+        "name": "背景unet"
+      },
+      "fo_unet": {
+        "name": "前景unet"
+      },
+      "multiplier": {
+        "name": "乘数"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "context"
+      },
+      "1": {
+        "name": "打光图"
+      }
+    }
+  },
+
   "AD_sch_prompt_basic": {
     "display_name": "AD_sch_prompt_basic",
     "inputs": {
@@ -8930,43 +8965,29 @@
       }
     }
   },
-  "chx_Ksampler_Relight": {
-    "display_name": "chx_Ksampler_Relight",
+  "pre_latent_light": {
+    "display_name": "pre_latent_light",
     "inputs": {
       "context": {
         "name": "context"
       },
-      "seed": {
-        "name": "种子"
-      },
-      "denoise": {
-        "name": "降噪"
-      },
-      "weigh": {
-        "name": "权重"
-      },
-      "image_output": {
-        "name": "图像输出"
-      },
       "img_targe": {
-        "name": "目标图像"
+        "name": "目标图"
       },
       "img_light": {
-        "name": "打光图像"
+        "name": "打光图"
       },
-      "prompt": {
-        "name": "提示词"
-      },
-      "extra_pnginfo": {
-        "name": "附加PNG信息"
+      "weigh": {
+        "name": "打光权重"
       }
+
     },
     "outputs": {
-      "run_context": {
+      "0": {
         "name": "context"
       },
-      "image": {
-        "name": "图像"
+      "1": {
+        "name": "合成图"
       }
     }
   },
