@@ -99,7 +99,8 @@ NODE_CLASS_MAPPINGS = {
 #-sample-------------------------------------------#
 "pre_sample_data":  pre_sample_data,  
 "pre_inpaint_xl": pre_inpaint_xl,
-
+"pre_ic_light_sd15":  pre_ic_light_sd15,
+"pre_latent_light": pre_latent_light,
 
 "basic_Ksampler_simple": basic_Ksampler_simple,  
 "basic_Ksampler_mid": basic_Ksampler_mid,    
