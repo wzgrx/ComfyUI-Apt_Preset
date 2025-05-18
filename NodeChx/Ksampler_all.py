@@ -45,6 +45,12 @@ from typing import Any, Dict, Optional, Tuple, Union, cast
 from comfy.samplers import KSAMPLER
 from comfy.model_management import cast_to_device
 
+import types
+import torch.nn.functional as F
+from comfy.utils import load_torch_file
+from comfy import lora
+import functools
+import comfy.model_management
 
 from ..main_unit import *
 
@@ -3002,27 +3008,344 @@ class pre_sample_data:
 
 
 
+#region-----------------------------pre-ic light------------------------
+
+UNET_MAP_ATTENTIONS = {"proj_in.weight", "proj_in.bias", "proj_out.weight", "proj_out.bias", "norm.weight", "norm.bias"}
+TRANSFORMER_BLOCKS = {"norm1.weight", "norm1.bias", "norm2.weight", "norm2.bias", "norm3.weight", "norm3.bias", "attn1.to_q.weight", "attn1.to_k.weight", "attn1.to_v.weight", "attn1.to_out.0.weight", "attn1.to_out.0.bias", "attn2.to_q.weight", "attn2.to_k.weight", "attn2.to_v.weight", "attn2.to_out.0.weight", "attn2.to_out.0.bias", "ff.net.0.proj.weight", "ff.net.0.proj.bias", "ff.net.2.weight", "ff.net.2.bias"}
+UNET_MAP_RESNET = {"in_layers.2.weight": "conv1.weight", "in_layers.2.bias": "conv1.bias", "emb_layers.1.weight": "time_emb_proj.weight", "emb_layers.1.bias": "time_emb_proj.bias", "out_layers.3.weight": "conv2.weight", "out_layers.3.bias": "conv2.bias", "skip_connection.weight": "conv_shortcut.weight", "skip_connection.bias": "conv_shortcut.bias", "in_layers.0.weight": "norm1.weight", "in_layers.0.bias": "norm1.bias", "out_layers.0.weight": "norm2.weight", "out_layers.0.bias": "norm2.bias"}
+UNET_MAP_BASIC = {("label_emb.0.0.weight", "class_embedding.linear_1.weight"), ("label_emb.0.0.bias", "class_embedding.linear_1.bias"), ("label_emb.0.2.weight", "class_embedding.linear_2.weight"), ("label_emb.0.2.bias", "class_embedding.linear_2.bias"), ("label_emb.0.0.weight", "add_embedding.linear_1.weight"), ("label_emb.0.0.bias", "add_embedding.linear_1.bias"), ("label_emb.0.2.weight", "add_embedding.linear_2.weight"), ("label_emb.0.2.bias", "add_embedding.linear_2.bias"), ("input_blocks.0.0.weight", "conv_in.weight"), ("input_blocks.0.0.bias", "conv_in.bias"), ("out.0.weight", "conv_norm_out.weight"), ("out.0.bias", "conv_norm_out.bias"), ("out.2.weight", "conv_out.weight"), ("out.2.bias", "conv_out.bias"), ("time_embed.0.weight", "time_embedding.linear_1.weight"), ("time_embed.0.bias", "time_embedding.linear_1.bias"), ("time_embed.2.weight", "time_embedding.linear_2.weight"), ("time_embed.2.bias", "time_embedding.linear_2.bias")}
+TEMPORAL_TRANSFORMER_BLOCKS = {"norm_in.weight", "norm_in.bias", "ff_in.net.0.proj.weight", "ff_in.net.0.proj.bias", "ff_in.net.2.weight", "ff_in.net.2.bias"}
+TEMPORAL_TRANSFORMER_BLOCKS.update(TRANSFORMER_BLOCKS)
+TEMPORAL_UNET_MAP_ATTENTIONS = {"time_mixer.mix_factor"}
+TEMPORAL_UNET_MAP_ATTENTIONS.update(UNET_MAP_ATTENTIONS)
+TEMPORAL_TRANSFORMER_MAP = {"time_pos_embed.0.weight": "time_pos_embed.linear_1.weight", "time_pos_embed.0.bias": "time_pos_embed.linear_1.bias", "time_pos_embed.2.weight": "time_pos_embed.linear_2.weight", "time_pos_embed.2.bias": "time_pos_embed.linear_2.bias"}
+TEMPORAL_RESNET = {"time_mixer.mix_factor"}
+
+unet_config = {'use_checkpoint': False, 'image_size': 32, 'out_channels': 4, 'use_spatial_transformer': True, 'legacy': False, 'adm_in_channels': None, 'in_channels': 8, 'model_channels': 320, 'num_res_blocks': [2, 2, 2, 2], 'transformer_depth': [1, 1, 1, 1, 1, 1, 0, 0], 'channel_mult': [1, 2, 4, 4], 'transformer_depth_middle': 1, 'use_linear_in_transformer': False, 'context_dim': 768, 'num_heads': 8, 'transformer_depth_output': [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0], 'use_temporal_attention': False, 'use_temporal_resblock': False}
+
+def convert_iclight_unet(state_dict):
+    num_res_blocks = unet_config["num_res_blocks"]
+    channel_mult = unet_config["channel_mult"]
+    transformer_depth = unet_config["transformer_depth"][:]
+    transformer_depth_output = unet_config["transformer_depth_output"][:]
+    num_blocks = len(channel_mult)
+    transformers_mid = unet_config.get("transformer_depth_middle", None)
+    diffusers_unet_map = {}
+    for x in range(num_blocks):
+        n = 1 + (num_res_blocks[x] + 1) * x
+        for i in range(num_res_blocks[x]):
+            for b in TEMPORAL_RESNET:
+                diffusers_unet_map[f"down_blocks.{x}.resnets.{i}.{b}"] = f"input_blocks.{n}.0.{b}"
+            for b in UNET_MAP_RESNET:
+                diffusers_unet_map[f"down_blocks.{x}.resnets.{i}.spatial_res_block.{UNET_MAP_RESNET[b]}"] = f"input_blocks.{n}.0.{b}"
+                diffusers_unet_map[f"down_blocks.{x}.resnets.{i}.temporal_res_block.{UNET_MAP_RESNET[b]}"] = f"input_blocks.{n}.0.time_stack.{b}"
+                diffusers_unet_map[f"down_blocks.{x}.resnets.{i}.{UNET_MAP_RESNET[b]}"] = f"input_blocks.{n}.0.{b}"
+            num_transformers = transformer_depth.pop(0)
+            if num_transformers > 0:
+                for b in TEMPORAL_UNET_MAP_ATTENTIONS:
+                    diffusers_unet_map[f"down_blocks.{x}.attentions.{i}.{b}"] = f"input_blocks.{n}.1.{b}"
+                for b in TEMPORAL_TRANSFORMER_MAP:
+                    diffusers_unet_map[f"down_blocks.{x}.attentions.{i}.{TEMPORAL_TRANSFORMER_MAP[b]}"] = f"input_blocks.{n}.1.{b}"
+                for t in range(num_transformers):
+                    for b in TRANSFORMER_BLOCKS:
+                        diffusers_unet_map[f"down_blocks.{x}.attentions.{i}.transformer_blocks.{t}.{b}"] = f"input_blocks.{n}.1.transformer_blocks.{t}.{b}"
+                    for b in TEMPORAL_TRANSFORMER_BLOCKS:
+                        diffusers_unet_map[f"down_blocks.{x}.attentions.{i}.temporal_transformer_blocks.{t}.{b}"] = f"input_blocks.{n}.1.time_stack.{t}.{b}"
+            n += 1
+        for k in ["weight", "bias"]:
+            diffusers_unet_map[f"down_blocks.{x}.downsamplers.0.conv.{k}"] = f"input_blocks.{n}.0.op.{k}"
+
+    i = 0
+    for b in TEMPORAL_UNET_MAP_ATTENTIONS:
+        diffusers_unet_map[f"mid_block.attentions.{i}.{b}"] = f"middle_block.1.{b}"
+    for b in TEMPORAL_TRANSFORMER_MAP:
+        diffusers_unet_map[f"mid_block.attentions.{i}.{TEMPORAL_TRANSFORMER_MAP[b]}"] = f"middle_block.1.{b}"
+    for t in range(transformers_mid):
+        for b in TRANSFORMER_BLOCKS:
+            diffusers_unet_map[f"mid_block.attentions.{i}.transformer_blocks.{t}.{b}"] = f"middle_block.1.transformer_blocks.{t}.{b}"
+        for b in TEMPORAL_TRANSFORMER_BLOCKS:
+            diffusers_unet_map[f"mid_block.attentions.{i}.temporal_transformer_blocks.{t}.{b}"] = f"middle_block.1.time_stack.{t}.{b}"
+
+    for i, n in enumerate([0, 2]):
+        for b in TEMPORAL_RESNET:
+            diffusers_unet_map[f"mid_block.resnets.{i}.{b}"] = f"middle_block.{n}.{b}"
+        for b in UNET_MAP_RESNET:
+            diffusers_unet_map[f"mid_block.resnets.{i}.spatial_res_block.{UNET_MAP_RESNET[b]}"] = f"middle_block.{n}.{b}"
+            diffusers_unet_map[f"mid_block.resnets.{i}.temporal_res_block.{UNET_MAP_RESNET[b]}"] = f"middle_block.{n}.time_stack.{b}"
+            diffusers_unet_map[f"mid_block.resnets.{i}.{UNET_MAP_RESNET[b]}"] = f"middle_block.{n}.{b}"
+
+    num_res_blocks = list(reversed(num_res_blocks))
+    for x in range(num_blocks):
+        n = (num_res_blocks[x] + 1) * x
+        l = num_res_blocks[x] + 1
+        for i in range(l):
+            for b in TEMPORAL_RESNET:
+                diffusers_unet_map[f"up_blocks.{x}.resnets.{i}.{b}"] = f"output_blocks.{n}.0.{b}"
+            c = 0
+            for b in UNET_MAP_RESNET:
+                diffusers_unet_map[f"up_blocks.{x}.resnets.{i}.{UNET_MAP_RESNET[b]}"] = f"output_blocks.{n}.0.{b}"
+                diffusers_unet_map[f"up_blocks.{x}.resnets.{i}.spatial_res_block.{UNET_MAP_RESNET[b]}"] = f"output_blocks.{n}.0.{b}"
+                diffusers_unet_map[f"up_blocks.{x}.resnets.{i}.temporal_res_block.{UNET_MAP_RESNET[b]}"] = f"output_blocks.{n}.0.time_stack.{b}"
+            for b in TEMPORAL_RESNET:
+                diffusers_unet_map[f"up_blocks.{x}.resnets.{i}.{b}"] = f"output_blocks.{n}.{b}"
+            c += 1
+            num_transformers = transformer_depth_output.pop()
+            if num_transformers > 0:
+                c += 1
+                for b in UNET_MAP_ATTENTIONS:
+                    diffusers_unet_map[f"up_blocks.{x}.attentions.{i}.{b}"] = f"output_blocks.{n}.1.{b}"
+                for b in TEMPORAL_TRANSFORMER_MAP:
+                    diffusers_unet_map[f"up_blocks.{x}.attentions.{i}.{TEMPORAL_TRANSFORMER_MAP[b]}"] = f"output_blocks.{n}.1.{b}"
+                for b in TEMPORAL_UNET_MAP_ATTENTIONS:
+                    diffusers_unet_map[f"up_blocks.{x}.attentions.{i}.{b}"] = f"output_blocks.{n}.1.{b}"
+                for t in range(num_transformers):
+                    for b in TRANSFORMER_BLOCKS:
+                        diffusers_unet_map[f"up_blocks.{x}.attentions.{i}.transformer_blocks.{t}.{b}"] = f"output_blocks.{n}.1.transformer_blocks.{t}.{b}"
+                    for b in TEMPORAL_TRANSFORMER_BLOCKS:
+                        diffusers_unet_map[f"up_blocks.{x}.attentions.{i}.temporal_transformer_blocks.{t}.{b}"] = f"output_blocks.{n}.1.time_stack.{t}.{b}"
+            if i == l - 1:
+                for k in ["weight", "bias"]:
+                    diffusers_unet_map[f"up_blocks.{x}.upsamplers.0.conv.{k}"] = f"output_blocks.{n}.{c}.conv.{k}"
+            n += 1
+
+    for k in UNET_MAP_BASIC:
+        diffusers_unet_map[k[1]] = k[0]
+
+    new_sd = {}
+    for k in diffusers_unet_map:
+        if k in state_dict:
+            new_sd[diffusers_unet_map[k]] = state_dict.pop(k)
+
+    leftover_keys = state_dict.keys()
+    if len(leftover_keys) > 0:
+        spatial_leftover_keys = []
+        temporal_leftover_keys = []
+        other_leftover_keys = []
+        for key in leftover_keys:
+            if "spatial" in key:
+                spatial_leftover_keys.append(key)
+            elif "temporal" in key:
+                temporal_leftover_keys.append(key)
+            else:
+                other_leftover_keys.append(key)
+        print("spatial_leftover_keys:")
+        for key in spatial_leftover_keys:
+            print(key)
+        print("temporal_leftover_keys:")
+        for key in temporal_leftover_keys:
+            print(key)
+        print("other_leftover_keys:")
+        for key in other_leftover_keys:
+            print(key)
+
+    return {"diffusion_model." + k: v for k, v in new_sd.items()}
+
+def calculate_weight_adjust_channel(func):
+    @functools.wraps(func)
+    def calculate_weight(patches, weight: torch.Tensor, key: str, intermediate_dtype=torch.float32) -> torch.Tensor:
+        weight = func(patches, weight, key, intermediate_dtype)
+        for p in patches:
+            alpha = p[0]
+            v = p[1]
+            if isinstance(v, list): continue
+            if len(v) == 1: patch_type = "diff"
+            elif len(v) == 2: patch_type, v = v[0], v[1]
+            if patch_type == "diff":
+                w1 = v[0]
+                if all((alpha != 0.0, w1.shape != weight.shape, w1.ndim == weight.ndim == 4)):
+                    new_shape = [max(n, m) for n, m in zip(weight.shape, w1.shape)]
+                    new_diff = alpha * comfy.model_management.cast_to_device(w1, weight.device, weight.dtype)
+                    new_weight = torch.zeros(size=new_shape).to(weight)
+                    new_weight[: weight.shape[0], : weight.shape[1], : weight.shape[2], : weight.shape[3]] = weight
+                    new_weight[: new_diff.shape[0], : new_diff.shape[1], : new_diff.shape[2], : new_diff.shape[3]] += new_diff
+                    weight = new_weight.contiguous().clone()
+        return weight
+    return calculate_weight
 
 
 
-class chx_Ksampler_Relight:
+
+
+class LoadAndApplyICLightUnet:
+    @classmethod
+    def INPUT_TYPES(s): return {"required": {"model": ("MODEL",), "model_path": (folder_paths.get_filename_list("unet"), )}}
+    RETURN_TYPES = ("MODEL",); FUNCTION = "load"; CATEGORY = "IC-Light"
+
+    def load(self, model, model_path):
+        type_str = str(type(model.model.model_config).__name__)
+        if "SD15" not in type_str:
+            raise Exception(f"Attempted to load {type_str} model, IC-Light is only compatible with SD 1.5 models.")
+        model_full_path = folder_paths.get_full_path("unet", model_path)
+        if not os.path.exists(model_full_path): raise Exception("Invalid model path")
+        model_clone = model.clone(); iclight_state_dict = load_torch_file(model_full_path)
+        try:
+            if 'conv_in.weight' in iclight_state_dict:
+                iclight_state_dict = convert_iclight_unet(iclight_state_dict)
+                in_channels = iclight_state_dict["diffusion_model.input_blocks.0.0.weight"].shape[1]
+                for key in iclight_state_dict:
+                    model_clone.add_patches({key: (iclight_state_dict[key],)}, 1.0, 1.0)
+            else:
+                for key in iclight_state_dict:
+                    model_clone.add_patches({"diffusion_model." + key: (iclight_state_dict[key],)}, 1.0, 1.0)
+                in_channels = iclight_state_dict["input_blocks.0.0.weight"].shape[1]
+        except: raise Exception("Could not patch model")
+
+        try:
+            if hasattr(lora, 'calculate_weight'):
+                lora.calculate_weight = calculate_weight_adjust_channel(lora.calculate_weight)
+            else:
+                raise Exception("IC-Light: The 'calculate_weight' function does not exist in 'lora'")
+        except Exception as e:
+            raise Exception(f"IC-Light: Could not patch calculate_weight - {str(e)}")
+
+        def bound_extra_conds(self, **kwargs): return ICLight.extra_conds(self, **kwargs)
+        new_extra_conds = types.MethodType(bound_extra_conds, model_clone.model)
+        model_clone.add_object_patch("extra_conds", new_extra_conds)
+        model_clone.model.model_config.unet_config["in_channels"] = in_channels
+        return (model_clone, )
+
+
+
+class ICLight:
+    def extra_conds(self, **kwargs):
+        out = {}; image = kwargs.get("concat_latent_image", None); noise = kwargs.get("noise", None); device = kwargs["device"]
+        model_in_channels = self.model_config.unet_config['in_channels']; input_channels = image.shape[1] + 4
+        if model_in_channels != input_channels:
+            raise Exception(f"Input channels {input_channels} does not match model in_channels {model_in_channels}, 'opt_background' latent input should be used with the IC-Light 'fbc' model, and only with it")
+        if image is None: image = torch.zeros_like(noise)
+        if image.shape[1:] != noise.shape[1:]:
+            image = comfy.utils.common_upscale(image.to(device), noise.shape[-1], noise.shape[-2], "bilinear", "center")
+        image = comfy.utils.resize_to_batch_size(image, noise.shape[0])
+        process_image_in = lambda image: image; out['c_concat'] = comfy.conds.CONDNoiseShape(process_image_in(image))
+        cross_attn = kwargs.get("cross_attn", None)
+        if cross_attn is not None: out['c_crossattn'] = comfy.conds.CONDCrossAttn(cross_attn)
+        adm = self.encode_adm(**kwargs)
+        if adm is not None: out['y'] = comfy.conds.CONDRegular(adm)
+        return out
+
+
+
+class ICLightConditioning:
+    @classmethod
+    def INPUT_TYPES(s): return {"required": {"positive": ("CONDITIONING", ), "negative": ("CONDITIONING", ), "vae": ("VAE", ), "foreground": ("LATENT", ), "multiplier": ("FLOAT", {"default": 0.18215, "min": 0.0, "max": 1.0, "step": 0.001})}, "optional": {"opt_background": ("LATENT", )}}
+    RETURN_TYPES = ("CONDITIONING","CONDITIONING","LATENT"); RETURN_NAMES = ("positive", "negative", "empty_latent"); FUNCTION = "encode"; CATEGORY = "IC-Light"
+
+    def encode(self, positive, negative, vae, foreground, multiplier, opt_background=None):
+        samples_1 = foreground["samples"]
+        if opt_background is not None:
+            samples_2 = opt_background["samples"]
+            repeats_1 = samples_2.size(0) // samples_1.size(0); repeats_2 = samples_1.size(0) // samples_2.size(0)
+            if samples_1.shape[1:] != samples_2.shape[1:]:
+                samples_2 = comfy.utils.common_upscale(samples_2, samples_1.shape[-1], samples_1.shape[-2], "bilinear", "disabled")
+            if repeats_1 > 1: samples_1 = samples_1.repeat(repeats_1, 1, 1, 1)
+            if repeats_2 > 1: samples_2 = samples_2.repeat(repeats_2, 1, 1, 1)
+            concat_latent = torch.cat((samples_1, samples_2), dim=1)
+        else:
+            concat_latent = samples_1
+        out_latent = torch.zeros_like(samples_1)
+        out = []
+        for conditioning in [positive, negative]:
+            c = []
+            for t in conditioning:
+                d = t[1].copy()
+                d["concat_latent_image"] = concat_latent * multiplier
+                c.append([t[0], d])
+            out.append(c)
+        return (out[0], out[1], {"samples": out_latent})
+
+
+#endregion--------------------------------------def------------------------------------------------
+
+
+
+class pre_ic_light_sd15:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "context": ("RUN_CONTEXT",),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "denoise": ("FLOAT", {"default": 0.7, "min": 0.5, "max": 1.0, "step": 0.01}),
-                "weigh": ("FLOAT", {"default": 0.35, "min": 0.0, "max": 0.5, "step": 0.01}),
-                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
+                "bg_unet": (folder_paths.get_filename_list("unet"), {"default": "iclight_sd15_fbc_unet_ldm.safetensors"} ),
+                "fo_unet": (folder_paths.get_filename_list("unet"), {"default": "iclight_sd15_fc_unet_ldm.safetensors"} ),
+                "multiplier": ("FLOAT", {"default": 0.18, "min": 0.0, "max": 1.0, "step": 0.01})
+            },
+            
+            "optional": {
+                "fore_img":("IMAGE",),
+                "bg_img":("IMAGE",),
+                "light_img":("IMAGE",),
+                
+            },
+            
+        }
+
+
+    RETURN_TYPES = ("RUN_CONTEXT","IMAGE" )
+    RETURN_NAMES = ("context", "light_img" )
+    FUNCTION = "run"
+    CATEGORY = "Apt_Preset/ksampler"
+
+    def run(self, context, bg_unet, fo_unet, multiplier, fore_img=None, light_img=None, bg_img=None ):
+
+
+        vae = context.get("vae",None)
+        positive = context.get("positive",None)
+        negative = context.get("negative",None)
+        model = context.get("model",None)
+        latent = context.get("latent",None)
+        images = context.get("images",None)
+
+        if light_img is None:
+            outimg = decode(vae, latent)[0]
+            return (context,outimg)
+
+        if fore_img is None:    
+            fore_img = images
+
+        foreground = encode(vae, fore_img)[0]
+
+        opt_background = None
+        if bg_img is not None:
+            bg_img = get_image_resize(bg_img,fore_img)   #尺寸一致性
+            opt_background = encode(vae, bg_img)[0]
+
+        if bg_img is not None:
+            unet = bg_unet
+        else:
+            unet = fo_unet
+
+        model = LoadAndApplyICLightUnet().load(model, unet)[0]
+        positive, negative, empty_latent = ICLightConditioning().encode(
+            positive=positive,
+            negative=negative,
+            vae=vae,
+            foreground=foreground,
+            multiplier=multiplier,
+            opt_background=opt_background
+        )
+
+        light_img = get_image_resize(light_img,fore_img)   #尺寸一致性
+
+        context = new_context(context, positive=positive, negative=negative, model=model, images=light_img,)
+
+        return(context, light_img )
+
+
+
+
+class pre_latent_light:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+                "weigh": ("FLOAT", {"default": 0.3, "min": 0.1, "max": 0.7, "step": 0.01}),
 
             },
             "optional": {
                 "img_targe": ("IMAGE",),
                 "img_light": ("IMAGE",),
-
             },
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+
         }
 
     RETURN_TYPES = ("RUN_CONTEXT",  "IMAGE", )
@@ -3031,20 +3354,15 @@ class chx_Ksampler_Relight:
     FUNCTION = "run"
     CATEGORY = "Apt_Preset/ksampler"
 
-    def run(self,context, seed, denoise, weigh, img_targe=None, img_light=None,  prompt=None, image_output=None, extra_pnginfo=None,):
+    def run(self,context, weigh, img_targe=None, img_light=None, ):
 
+        latent = context.get("latent", None)
+        vae = context.get("vae", None)
 
-        vae = context.get("vae",None)
-        steps = context.get("steps",None)
-        cfg = context.get("cfg",None)
-        sampler = context.get("sampler",None)
-        scheduler = context.get("scheduler",None)
+        if img_light is None:
+            outimg = decode(vae, latent)[0]
+            return (context,outimg)
 
-        positive = context.get("positive",None)
-        negative = context.get("negative",None)
-        model = context.get("model",None)
-        guidance = context.get("guidance",3.5)
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
 
         if img_targe is None:
             img_targe = context.get("images", None)
@@ -3053,31 +3371,22 @@ class chx_Ksampler_Relight:
 
         latent2 = encode(vae, img_targe)[0]
         latent1 = encode(vae, img_light)[0]
-
         latent = latent_inter_polate(latent1, latent2, weigh)
 
-        if img_light is None and  img_targe is not None:
-            latent =context.get("latent", None)
-
-        latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
-                positive, 
-                negative, 
-                latent, 
-                denoise=denoise
-                )[0]
-
-        if image_output == "None":
-            context = new_context(context, latent=latent, images=None,  )
-            return(context, None)
-
-
         output_image = decode(vae, latent)[0]
-        context = new_context(context, latent=latent, images=output_image,  )
+        context = new_context(context, latent=latent, images=output_image, )
         
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {},
-                "result": (context, output_image,)}
-            
-        return {"ui": {"images": results},
-                "result": (context, output_image,)}
+        return  (context, output_image,)
+
+
+
+
+#endregion-----------------------pre_sample--------------------------------
+
+
+
+
+
+
+
+
