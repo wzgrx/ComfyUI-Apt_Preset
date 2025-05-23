@@ -25,6 +25,7 @@ import cv2
 import nodes
 # 本地库
 
+
 import comfy
 import folder_paths
 import node_helpers
@@ -42,6 +43,11 @@ from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
 from comfy_extras.nodes_controlnet import SetUnionControlNetType
 from math import ceil
 from nodes import CLIPSetLastLayer, CheckpointLoaderSimple, UNETLoader
+
+from comfy_extras.nodes_hooks import PairConditioningSetProperties
+
+
+
 
 # 相对导入
 from ..main_unit import *
@@ -2065,102 +2071,6 @@ class sum_text:
 
 
 
-
-class text_manual:
-    @classmethod
-    def INPUT_TYPES(cls):
-
-
-        return {
-            "required": {
-                "preset": (preset_list, ),
-
-                "title": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "XXX"}), 
-                "note": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "XX"}),
-
-            },
-            
-            "optional": { 
-                        },
-
-            "hidden": { 
-                "node_id": "UNIQUE_ID",
-            },
-        }
-
-    RETURN_TYPES = ( "PDATA", )
-    RETURN_NAMES = ( "preset_save", )
-    FUNCTION = "process_settings"
-    CATEGORY = "Apt_Preset/prompt"
-
-
-    def process_settings(self, node_id, title="default", note="default", preset=[]):
-        
-
-
-        positive = title
-        negative =  note
-
-
-
-        # 非编码后的数据
-        parameters_data = []
-        parameters_data.append({
-            "run_Mode": None,
-            "ckpt_name": None,
-            "clipnum": None,
-            "unet_name": None,
-            "unet_Weight_Dtype": None,
-            "clip_type": None,
-            "clip1": None,
-            "clip2": None,
-            "guidance": None,
-            "clip3": None,
-            "vae": None, 
-            "lora": None,
-            "lora_strength": None,
-            "width": None,
-            "height": None,
-            "batch": None,
-            "steps": None,
-            "cfg": None,
-            "sampler": None,
-            "scheduler": None,
-            "positive": positive,
-            "negative": negative,
-            
-        })
-        
-
-        return ( parameters_data, )
-
-
-    def handle_my_message(d):
-        preset_data = ""
-        preset_path = os.path.join(presets_directory_path, d['message'])
-        encodings = ['utf-8', 'gbk', 'gb2312', 'latin-1']
-        for encoding in encodings:
-            try:
-                with open(preset_path, 'r', encoding=encoding) as f:
-                    content = f.read()
-                    # 尝试将内容转换为 UTF-8 编码
-                    content = content.encode(encoding).decode('utf-8', errors='ignore')
-                    preset_data = toml.loads(content)
-                    break
-            except Exception as e:
-                print(f"Failed to read file with encoding {encoding}: {e}")
-                continue
-        if preset_data:
-            # 确保发送的数据是 UTF-8 编码
-            PromptServer.instance.send_sync("my.custom.message", {"message": preset_data, "node": d['node_id']})
-
-
-
-
-
-
-
-
 #endregion---------加载器-----------------------------------------------------------------------------------#
 
 
@@ -2402,8 +2312,6 @@ class basic_Ksampler_simple:
         guidance = context.get("guidance",3.5)
         positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
 
-
-
         if image is not None:
             latent = VAEEncode().encode(vae, image)[0]
 
@@ -2459,8 +2367,8 @@ class basic_Ksampler_custom:
             
                 }
     OUTPUT_NODE = True
-    RETURN_TYPES = ("RUN_CONTEXT", "MODEL","CONDITIONING","CONDITIONING","LATENT", "VAE","IMAGE", )
-    RETURN_NAMES = ("context", "model","positive","negative","latent", "vae", "image", )
+    RETURN_TYPES = ("RUN_CONTEXT","IMAGE", "MODEL","CONDITIONING","CONDITIONING","LATENT", "VAE", )
+    RETURN_NAMES = ("context","image", "model","positive","negative","latent", "vae",  )
     FUNCTION = "sample"
     CATEGORY = "Apt_Preset/ksampler"
 
@@ -2498,29 +2406,29 @@ class basic_Ksampler_custom:
             
         if  latent is None:
             latent = context.get("latent")
-        
+
+
         if image is not None:
             latent = VAEEncode().encode(vae, image)[0]
         
         out= SamplerCustomAdvanced().sample( noise, guider, sampler, sigmas, latent)
         latent= out[0]
         
-
         if image_output == "None":
             context = new_context(context, images=None, latent=latent, model=model, positive=positive, negative=negative,  )
             return(context, model, positive, negative, latent, vae, None, ) 
             
         output_image = VAEDecode().decode(vae, latent)[0]  
-        latent = VAEEncode().encode(vae, output_image)[0]
-        context = new_context(context, images=output_image, latent=latent, model=model, positive=positive, negative=negative,  )   #不能直接更新latent，改成二次编码，占用显存过大
+        #latent = VAEEncode().encode(vae, output_image)[0]
+        context = new_context(context, images=output_image, latent=latent, model=model, positive=positive, negative=negative,  )   
         
         results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
         if image_output in ("Hide", "Hide/Save"):
             return {"ui": {},
-                "result": (context, model, positive, negative, latent, vae, output_image,)}
+                "result": (context,output_image, model, positive, negative, latent, vae, )}
             
         return {"ui": {"images": results},
-                "result": (context, model, positive, negative, latent, vae, output_image,)}
+                "result": (context,output_image, model, positive, negative, latent, vae,)}
 
 
 class basic_Ksampler_adv:
@@ -2953,47 +2861,6 @@ class chx_controlnet_union:
 
         context = new_context(context, positive=positive, negative=negative)
         return (context, positive, negative, )
-
-
-
-class chx_condi_hook:
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "set_cond_area": (["default", "mask bounds"],),
-            },
-            "optional": {
-                "mask": ("MASK", ),
-                "hooks": ("HOOKS",),
-                "timesteps": ("TIMESTEPS_RANGE",),
-            }
-        }
-
-    EXPERIMENTAL = True
-    RETURN_TYPES = ("RUN_CONTEXT", "CONDITIONING",)
-    RETURN_NAMES = ( "context","positive",)
-    CATEGORY = "Apt_Preset/chx_tool"
-    FUNCTION = "set_properties"
-
-
-    def set_properties(self, context,
-                    strength: float, set_cond_area: str,
-                    mask: torch.Tensor=None, hooks: comfy.hooks.HookGroup=None, timesteps: tuple=None):
-        
-        cond_NEW = context.get("positive")
-
-        (final_cond,) = comfy.hooks.set_conds_props(conds=[cond_NEW],
-                                                strength=strength, set_cond_area=set_cond_area,
-                                                mask=mask, hooks=hooks, timesteps_range=timesteps)
-        
-        context=new_context(context,positive=final_cond,)
-        
-        return (context , final_cond,)
-
 
 
 class mask_Mulcondition:
