@@ -6,19 +6,37 @@
 
 2025.5.17  Now the system supports switching to Chinese.支持系统切换中文
 
+2025.5.24 增加新的节点 Sum_load_adv比 Sum_load 更好用，免去选择模式，采用自适应 Adding a new node, Sum_load_adv is more user - friendly than Sum_load. It eliminates the need to select a mode and adopts self - adaptation.
+
 # <font color="#000000">二、Usage Guide使用指南</font> 
-**1、加载器 Loader：Sum_load 全能加载器 All - in - one Loader**
-包含五种模式，全部参数的设置都可以自己保存为预设，也配备了每个模式的简版加载器 It includes five modes. All parameter settings can be saved as presets by yourself, and there is also a simplified loader for each mode.
+**1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载 
+Load the models required for combining various processes**
 
-| <font color="#ff0000">run_Mode</font> | <font color="#ff0000">module Combination </font> | 
-| --------------------------------------------- | ------------------------------------------------ |
-| Basic                                     | checkpoint                                       |
-| Clip                                      | clip 1+checkpoint or unet                        | 
-| Flux                                      | clip 1+clip 2 + unet                             | 
-| SD3.5                                     | clip 1+clip 2+clip 3 + unet                      | 
-| only_clip                                 | clip 1 or clip 1+clip 2 or clip 1+clip 2+clip 3  | 
+选择模型： checkpoint or Unet 或者 over model
+按顺序添加 clip：clip1, clip2, clip3, clip4  ，会根据 clip 的数量自动适应模式，是 flux还是 sd 3.5 等
+全部参数的设置都可以自己保存为预设
+Select model: checkpoint or Unet or over model. Add clips in sequence: clip 1, clip 2, clip 3, clip 4. The mode will be automatically adapted according to the number of clips, such as flux or sd 3.5, etc. All parameter settings can be saved as presets by yourself.
 
-![image](https://github.com/user-attachments/assets/83d25557-dd7b-43b4-8bbd-07421a05761a)
+| <font color="#ff0000">run_Mode</font> | <font color="#ff0000">composition </font> | <font color="#ff0000">Pattern represents </font> |
+| ------------------------------------- | ----------------------------------------- | ------------------------------------------------ |
+| ckpt                                  | checkpoint or Unet                        | XL, sd 1.5                                       |
+| clip 1                                | clip 1+checkpoint or unet                 | Wan 2.1、LTX                                      |
+| clip 2                                | clip 1+clip 2 + unet                      | Flux                                             |
+| clip 3                                | clip 1+clip 2+clip 3 + unet               | SD 3.5                                           |
+| clip 4                                | clip 1+clip 2+clip 3 +clip 4+ unet        | Hidream                                          |
+| over model                            | replace checkpoint or Unet                | nunchaku-flux                                    |
+| over clip                             | replace all clip                          |                                                  |
+
+![[Pasted image 20250524195935.png]]
+
+或者你可以使用 `load create_chx` 创建一个自定义的加载器，就像下面 Nunchaku一样，也会让工作流变的非常简单 
+Or you can use `load create_chx` to create a custom loader. Just like Nunchaku below, it will also make the workflow very simple.
+
+![[Pasted image 20250524202223.png]]
+
+或者使用具体类型加载器，像load_FLUX,load_basic,load_SD35, 
+![[Pasted image 20250524202700.png]]
+
 
 **2、采样器 Sampler：丰富的采样样式Rich sampling styles**
 
@@ -41,49 +59,56 @@
 | Chx_ksampler_Deforum_math | 数学公式驱动    | Driven by Formulas           |
 | Chx_ksampler_Deforum_sch  | 调度数据驱动    | Driven by Scheduling Data    |
 
+集成好的采样器能快速实现常用功能，一般的工作流要实现生成图，修复、放大全流程，需要大量的节点配合，像下面会变的非常简单 
+The integrated sampler can quickly implement common functions. To achieve the full process of generating images, repairing, and enlarging in a general workflow, a large number of nodes are required. For example, it will become very simple as follows.
+![[Pasted image 20250524203713.png]]
+
+
+
 **3、控制器 controller：总控设计 Overall control design**
 采用sum 汇总控制节点，特别是 stack 集中化控制 
 Adopt the sum to summarize the control nodes, especially the stack centralized control
 
 | **sum_stack_image** | **图像生成控制堆**             |
-|---------------------|-------------------------------|
+| ------------------- | ----------------------- |
 | **sum_stack_AD**    | **动画生成控制堆 AnimateDiff** |
 | **sum_stack_Wan**   | **视频生成控制堆 Wan 2.1**     |
-| **sum_editor**      | **可以编辑所有的基础参数**     |
-| **sum_latent**      | **各种 latent 接入方式**       |
-| **sum_lora**        | **批量 lora**                 |
-| **sum_controlnet**  | **批量 controlnet**           |
-| **sum_text**        | **功能齐全的文本编辑**         |
+| **sum_editor**      | **可以编辑所有的基础参数**         |
+| **sum_latent**      | **各种 latent 接入方式**      |
+| **sum_lora**        | **批量 lora**             |
+| **sum_controlnet**  | **批量 controlnet**       |
+| **sum_text**        | **功能齐全的文本编辑**           |
 
-![image](https://github.com/user-attachments/assets/95a4f2fb-fb36-4c90-bb3a-72ed879de618)
+
+![[Pasted image 20250524204714.png]]
 
 **4、基础节点 Basic nodes：系统分类，完整规划 System classification, complete planning**
 
 一些节点还在调试中，会不断更新Some of these nodes are still under debugging and will be updated continuously.
 
 | **<font color="#ff0000">mask</font>** | **<font color="#ff0000">math</font>** | **<font color="#ff0000">image</font>** | **<font color="#ff0000">imgEffect</font>** |
-| --------------------------------- | --------------------------------- | ---------------------------------- | -------------------------------------- |
-| Mask_AD_generate                  | list_num_range                    | pad_uv_fill                        | img_Loadeffect                         |
-| Mask_inpaint_Grey                 | list_cycler_Value                 | pad_color_fill                     | img_Upscaletile                        |
-| Mask_math                         | list_input_text                   | Image_LightShape                   | img_Remove_bg                          |
-| Mask_Detect_label                 | list_input_Value                  | Image_Normal_light                 | img_CircleWarp                         |
-| Mask_mulcolor_img                 | ListGetByIndex                    | Image_keep_OneColorr               | img_Stretch                            |
-| Mask_mulcolor_mask                | ListSlice                         | Image_transform                    | img_WaveWarp                           |
-| Mask_Outline                      | MergeList                         | Image_cutResize                    | img_Liquify                            |
-| Mask_Smooth                       | batch_cycler_Prompt               | Image_Resize                       | img_Seam_adjust_size                   |
-| Mask_Offset                       | batch_cycler_Value                | Image_scale_adjust                 | img_texture_Offset                     |
-| Mask_cut_mask                     | batch_cycler_text                 | image_sumTransform                 | img_White_balance                      |
-| Mask_image2mask                   | batch_cycler_split_text           | Image_overlay                      | img_HDR                                |
-| Mask_mask2mask                    | batch_cycler_image                | Image_overlay_mask                 | color_adjust                           |
-| Mask_mask2img                     | batch_cycler_mask                 | Image_overlay_composite            | color_Match                            |
-| Mask_splitMask                    | Remap_basic_data                  | Image_overlay_transform            | color_match_adv                        |
-|                                   | Remap_mask                        | Image_overlay_sum                  | color_input                            |
-|                                   | math_BinaryOperation              | Image_Extract_Channel              | color_color2hex                        |
-|                                   | math_BinaryCondition              | Image_Apply_Channel                | color_hex2color                        |
-|                                   | math_UnaryOperation               | Image_RemoveAlpha                  | color_image_Replace                    |
-|                                   | math_UnaryCondition               | image_selct_batch                  | color_pure_img                         |
-|                                   | math_Exec                         | Image_scale_match                  | color_Gradient                         |
-|                                   |                                   |                                    | color_RadialGradient                   |
+| ------------------------------------- | ------------------------------------- | -------------------------------------- | ------------------------------------------ |
+| Mask_AD_generate                      | list_num_range                        | pad_uv_fill                            | img_Loadeffect                             |
+| Mask_inpaint_Grey                     | list_cycler_Value                     | pad_color_fill                         | img_Upscaletile                            |
+| Mask_math                             | list_input_text                       | Image_LightShape                       | img_Remove_bg                              |
+| Mask_Detect_label                     | list_input_Value                      | Image_Normal_light                     | img_CircleWarp                             |
+| Mask_mulcolor_img                     | ListGetByIndex                        | Image_keep_OneColorr                   | img_Stretch                                |
+| Mask_mulcolor_mask                    | ListSlice                             | Image_transform                        | img_WaveWarp                               |
+| Mask_Outline                          | MergeList                             | Image_cutResize                        | img_Liquify                                |
+| Mask_Smooth                           | batch_cycler_Prompt                   | Image_Resize                           | img_Seam_adjust_size                       |
+| Mask_Offset                           | batch_cycler_Value                    | Image_scale_adjust                     | img_texture_Offset                         |
+| Mask_cut_mask                         | batch_cycler_text                     | image_sumTransform                     | img_White_balance                          |
+| Mask_image2mask                       | batch_cycler_split_text               | Image_overlay                          | img_HDR                                    |
+| Mask_mask2mask                        | batch_cycler_image                    | Image_overlay_mask                     | color_adjust                               |
+| Mask_mask2img                         | batch_cycler_mask                     | Image_overlay_composite                | color_Match                                |
+| Mask_splitMask                        | Remap_basic_data                      | Image_overlay_transform                | color_match_adv                            |
+|                                       | Remap_mask                            | Image_overlay_sum                      | color_input                                |
+|                                       | math_BinaryOperation                  | Image_Extract_Channel                  | color_color2hex                            |
+|                                       | math_BinaryCondition                  | Image_Apply_Channel                    | color_hex2color                            |
+|                                       | math_UnaryOperation                   | Image_RemoveAlpha                      | color_image_Replace                        |
+|                                       | math_UnaryCondition                   | image_selct_batch                      | color_pure_img                             |
+|                                       | math_Exec                             | Image_scale_match                      | color_Gradient                             |
+|                                       |                                       |                                        | color_RadialGradient                       |
 
 | <font color="#ff0000">View_IO</font> | <font color="#ff0000">prompt</font> | <font color="#ff0000">type</font> | <font color="#ff0000">layout</font> |
 | ------------------------------------ | ----------------------------------- | --------------------------------- | ----------------------------------- |
@@ -126,7 +151,7 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 
 [ComfyUI-Advanced-ControlNet](https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet) 
 
- 
+
 
 # <font color="#000000">四、Reference Node Packages参考节点包</font>
 The code of this open-source project has referred to the following code during the development process. We express our sincere gratitude for their contributions in the relevant fields.
@@ -137,8 +162,8 @@ The code of this open-source project has referred to the following code during t
 | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy)                 | [ComfyUI\_mittimiLoadPreset2](https://github.com/mittimi/ComfyUI_mittimiLoadPreset2)           | [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)           |
 | [ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus) | [ComfyUI-AnimateDiff-Evolved](https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved)      | [ComfyUI-Easy-Use](https://github.com/yolain/ComfyUI-Easy-Use)                   |
 | [ComfyUI_essentials](https://github.com/cubiq/ComfyUI_essentials)         | [Comfyui__Flux_Style_Adjust](https://github.com/yichengup/Comfyui_Flux_Style_Adjust)           | [ComfyUI_LayerStyle_](https://github.com/chflame163/ComfyUI_LayerStyle)          |
-| [_ComfyUI_-KJNodes](https://github.com/kijai/ComfyUI-KJNodes)             | [ComfyUI_-Easy_Deforum_](https://github.com/Chan-0312/ComfyUI-EasyDeforum)                     | [ComfyUI-AudioScheduler](https://github.com/a1lazydog/ComfyUI-AudioScheduler)    |
-|                                                                           | [ComfyUI-Inspyrenet-Rembg](https://github.com/john-mnz/ComfyUI-Inspyrenet-Rembg)                                                                                           |                                                                                  |
+| [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes)               | [ComfyUI_-Easy_Deforum_](https://github.com/Chan-0312/ComfyUI-EasyDeforum)                     | [ComfyUI-AudioScheduler](https://github.com/a1lazydog/ComfyUI-AudioScheduler)    |
+| [ComfyUI-IC-Light](https://github.com/kijai/ComfyUI-IC-Light)             | [ComfyUI-Inspyrenet-Rembg](https://github.com/john-mnz/ComfyUI-Inspyrenet-Rembg)               |                                                                                  |
 
 
 ## Disclaimer免责声明
