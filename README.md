@@ -27,15 +27,16 @@ Select model: checkpoint or Unet or over model. Add clips in sequence: clip 1, c
 | over model                            | replace checkpoint or Unet                | nunchaku-flux                                    |
 | over clip                             | replace all clip                          |                                                  |
 
-![[Pasted image 20250524195935.png]]
+![image](https://github.com/user-attachments/assets/c937203d-6ada-4b58-a882-512290e30dcd)
+
 
 或者你可以使用 `load create_chx` 创建一个自定义的加载器，就像下面 Nunchaku一样，也会让工作流变的非常简单 
 Or you can use `load create_chx` to create a custom loader. Just like Nunchaku below, it will also make the workflow very simple.
 
-![[Pasted image 20250524202223.png]]
+![image](https://github.com/user-attachments/assets/40f0df16-31cd-4645-9a7f-1c730452385d)
+
 
 或者使用具体类型加载器，像load_FLUX,load_basic,load_SD35, 
-![[Pasted image 20250524202700.png]]
 
 
 **2、采样器 Sampler：丰富的采样样式Rich sampling styles**
@@ -61,7 +62,8 @@ Or you can use `load create_chx` to create a custom loader. Just like Nunchaku b
 
 集成好的采样器能快速实现常用功能，一般的工作流要实现生成图，修复、放大全流程，需要大量的节点配合，像下面会变的非常简单 
 The integrated sampler can quickly implement common functions. To achieve the full process of generating images, repairing, and enlarging in a general workflow, a large number of nodes are required. For example, it will become very simple as follows.
-![[Pasted image 20250524203713.png]]
+![image](https://github.com/user-attachments/assets/0c62a1f7-e92f-41bc-a6fb-447b3cc7ea48)
+
 
 
 
@@ -80,7 +82,8 @@ Adopt the sum to summarize the control nodes, especially the stack centralized c
 | **sum_text**        | **功能齐全的文本编辑**           |
 
 
-![[Pasted image 20250524204714.png]]
+![image](https://github.com/user-attachments/assets/a477dd17-80c1-4759-9a10-d69c855c1c52)
+
 
 **4、基础节点 Basic nodes：系统分类，完整规划 System classification, complete planning**
 
