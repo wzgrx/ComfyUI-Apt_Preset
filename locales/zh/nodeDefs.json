@@ -2154,6 +2154,8 @@
       }
     }
   },
+
+
   "Mask_inpaint_light": {
     "display_name": "Mask_inpaint_light",
     "inputs": {
@@ -10977,4 +10979,5 @@
       }
     }
   }
+}
 }
