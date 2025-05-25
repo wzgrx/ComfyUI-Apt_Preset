@@ -8011,9 +8011,6 @@
       }
     }
   },
-
-
-
   "sum_load_adv": {
     "display_name": "sum_load_adv",
     "inputs": {
@@ -8111,7 +8108,6 @@
       }
     }
   },
-
   "load_clip": {
     "display_name": "load_clip",
     "inputs": {
@@ -9033,7 +9029,6 @@
       }
     }
   },
-
   "basic_Ksampler_simple": {
     "display_name": "basic_Ksampler_simple",
     "inputs": {
@@ -9083,7 +9078,6 @@
       "weigh": {
         "name": "打光权重"
       }
-
     },
     "outputs": {
       "0": {
@@ -9095,8 +9089,8 @@
       "2": {
         "name": "latent"
     }
+    }
   },
-  
 
 
   "basic_Ksampler_custom": {
@@ -10885,14 +10879,13 @@
       }
     }
   },
-
     "pre_Flex2": {
     "display_name": "pre_Flex2",
     "inputs": {
       "context": {
         "name": "上下文"
       },
-      "control_ image": {
+      "control_image": {
         "name": "控制参考"
       },
       "inpaint_image": {
@@ -10917,9 +10910,6 @@
       }
     }
   },
-
-
-
 
   "WebCanvasNode": {
     "display_name": "WebCanvasNode",
@@ -10980,4 +10970,5 @@
     }
   }
 }
-}
+
+
