@@ -8,6 +8,9 @@
 
 2025.5.24 增加新的节点 Sum_load_adv比 Sum_load 更好用，免去选择模式，采用自适应 Adding a new node, Sum_load_adv is more user - friendly than Sum_load. It eliminates the need to select a mode and adopts self - adaptation.
 
+2025.5.31 Sum_load_adv 的Unet支持GGUF模型加载 ；The Unet supports the loading of GGUF models
+
+
 # <font color="#000000">二、Usage Guide使用指南</font> 
 **1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载 
 Load the models required for combining various processes**
@@ -154,7 +157,8 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 
 [ComfyUI-Advanced-ControlNet](https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet) 
 
-
+要加载GGUF模型，请先安装To load the GGUF model, please install it first.
+[ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) 
 
 # <font color="#000000">四、Reference Node Packages参考节点包</font>
 The code of this open-source project has referred to the following code during the development process. We express our sincere gratitude for their contributions in the relevant fields.
@@ -166,7 +170,7 @@ The code of this open-source project has referred to the following code during t
 | [ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus) | [ComfyUI-AnimateDiff-Evolved](https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved)      | [ComfyUI-Easy-Use](https://github.com/yolain/ComfyUI-Easy-Use)                   |
 | [ComfyUI_essentials](https://github.com/cubiq/ComfyUI_essentials)         | [Comfyui__Flux_Style_Adjust](https://github.com/yichengup/Comfyui_Flux_Style_Adjust)           | [ComfyUI_LayerStyle_](https://github.com/chflame163/ComfyUI_LayerStyle)          |
 | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes)               | [ComfyUI_-Easy_Deforum_](https://github.com/Chan-0312/ComfyUI-EasyDeforum)                     | [ComfyUI-AudioScheduler](https://github.com/a1lazydog/ComfyUI-AudioScheduler)    |
-| [ComfyUI-IC-Light](https://github.com/kijai/ComfyUI-IC-Light)             | [ComfyUI-Inspyrenet-Rembg](https://github.com/john-mnz/ComfyUI-Inspyrenet-Rembg)               |                                                                                  |
+| [ComfyUI-IC-Light](https://github.com/kijai/ComfyUI-IC-Light)             | [ComfyUI-Inspyrenet-Rembg](https://github.com/john-mnz/ComfyUI-Inspyrenet-Rembg)               | [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF)                                                                                |
 
 
 ## Disclaimer免责声明
