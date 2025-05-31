@@ -22,7 +22,10 @@ app.registerExtension({
         
 //#region 
 
-        if (node.comfyClass == "sum_load") {
+
+
+
+        if (node.comfyClass == "sum_load_adv") {
             
             Object.defineProperty(node.widgets[0], "value", {
                 
@@ -40,33 +43,31 @@ app.registerExtension({
             function messageHandler(event) {
                 
                 if (node.id == event.detail.node) {
-                    node.widgets[1].value = (event.detail.message['run_Mode'])?event.detail.message['run_Mode']:"basic";
-                    node.widgets[2].value = (event.detail.message['ckpt_name'])?event.detail.message['ckpt_name']:"AA\\majicMIX realistic _v1.safetensors";
-                    node.widgets[3].value = (event.detail.message['clipnum'])?event.detail.message['clipnum']:"-2";
-                    node.widgets[4].value = (event.detail.message['unet_name'])?event.detail.message['unet_name']:"None";
-                    node.widgets[5].value = (event.detail.message['unet_Weight_Dtype'])?event.detail.message['unet_Weight_Dtype']:"None";
-                    node.widgets[6].value = (event.detail.message['clip_type'])?event.detail.message['clip_type']:"None";
-                    node.widgets[7].value = (event.detail.message['clip1'])?event.detail.message['clip1']:"None";
-                    node.widgets[8].value = (event.detail.message['clip2'])?event.detail.message['clip2']:"None";
-                    node.widgets[9].value = (event.detail.message['guidance'])?event.detail.message['guidance']:"3.5";
-                    node.widgets[10].value = (event.detail.message['clip3'])?event.detail.message['clip3']:"None";
-                    node.widgets[11].value = (event.detail.message['vae'])?event.detail.message['vae']:"A-840000-ema-pruned-real.pt";
-                    node.widgets[12].value = (event.detail.message['lora'])?event.detail.message['lora']:"None";
-                    node.widgets[13].value = (event.detail.message['lora_strength'])?event.detail.message['lora_strength']:"1.0";
-                    node.widgets[14].value = (event.detail.message['width'])?event.detail.message['width']:"512";
-                    node.widgets[15].value = (event.detail.message['height'])?event.detail.message['height']:"512";
-                    node.widgets[16].value = (event.detail.message['batch'])?event.detail.message['batch']:"1";
-                    node.widgets[17].value = (event.detail.message['steps'])?event.detail.message['steps']:"20";
-                    node.widgets[18].value = (event.detail.message['cfg'])?event.detail.message['cfg']:"8";
-                    node.widgets[19].value = (event.detail.message['sampler'])?event.detail.message['sampler']:"euler a";
-                    node.widgets[20].value = (event.detail.message['scheduler'])?event.detail.message['scheduler']:"normal";
-                    node.widgets[21].value = (event.detail.message['positive'])?event.detail.message['positive']:"beautiful detailed glow,a girl";
-                    node.widgets[22].value = (event.detail.message['negative'])?event.detail.message['negative']:"worst quality, low quality";
+                    node.widgets[1].value = (event.detail.message['ckpt_name']) ? event.detail.message['ckpt_name'] : "AA\\majicMIX realistic _v1.safetensors";
+                    node.widgets[2].value = (event.detail.message['unet_name']) ? event.detail.message['unet_name'] : "None";
+                    node.widgets[3].value = (event.detail.message['unet_Weight_Dtype']) ? event.detail.message['unet_Weight_Dtype'] : "None";
+                    node.widgets[4].value = (event.detail.message['clip_type']) ? event.detail.message['clip_type'] : "None";
+                    node.widgets[5].value = (event.detail.message['clip1']) ? event.detail.message['clip1'] : "None";
+                    node.widgets[6].value = (event.detail.message['clip2']) ? event.detail.message['clip2'] : "None";
+                    node.widgets[7].value = (event.detail.message['guidance']) ? event.detail.message['guidance'] : "3.5";
+                    node.widgets[8].value = (event.detail.message['clip3']) ? event.detail.message['clip3'] : "None";
+                    node.widgets[9].value = (event.detail.message['clip4']) ? event.detail.message['clip4'] : "None";
+                    node.widgets[10].value = (event.detail.message['vae']) ? event.detail.message['vae'] : "A-840000-ema-pruned-real.pt";
+                    node.widgets[11].value = (event.detail.message['lora']) ? event.detail.message['lora'] : "None";
+                    node.widgets[12].value = (event.detail.message['lora_strength']) ? event.detail.message['lora_strength'] : "1.0";
+                    node.widgets[13].value = (event.detail.message['width']) ? event.detail.message['width'] : "512";
+                    node.widgets[14].value = (event.detail.message['height']) ? event.detail.message['height'] : "512";
+                    node.widgets[15].value = (event.detail.message['steps']) ? event.detail.message['steps'] : "20";
+                    node.widgets[16].value = (event.detail.message['cfg']) ? event.detail.message['cfg'] : "8";
+                    node.widgets[17].value = (event.detail.message['sampler']) ? event.detail.message['sampler'] : "euler a";
+                    node.widgets[18].value = (event.detail.message['scheduler']) ? event.detail.message['scheduler'] : "normal";
+                    node.widgets[19].value = (event.detail.message['positive']) ? event.detail.message['positive'] : "beautiful detailed glow,a girl";
+                    node.widgets[20].value = (event.detail.message['negative']) ? event.detail.message['negative'] : "worst quality, low quality";
                 }
             }
             api.addEventListener("my.custom.message", messageHandler);
         }
-        
+
         if (node.comfyClass == "load_basic") {
             
             Object.defineProperty(node.widgets[0], "value", {
@@ -145,7 +146,6 @@ app.registerExtension({
             api.addEventListener("my.custom.message", messageHandler);
         }
 
-
         if (node.comfyClass == "load_SD35") {
             
             Object.defineProperty(node.widgets[0], "value", {
@@ -186,7 +186,6 @@ app.registerExtension({
             }
             api.addEventListener("my.custom.message", messageHandler);
         }
-
 
         if (node.comfyClass == "sum_controlnet") {
             
@@ -248,52 +247,6 @@ app.registerExtension({
             }
             api.addEventListener("my.custom.message", messageHandler);
         }
-
-
-        if (node.comfyClass == "sum_load_adv") {
-            
-            Object.defineProperty(node.widgets[0], "value", {
-                
-                set: (value) => {
-                    node._value = value;
-                    console.log("set");
-                    
-                    if (allow_set_flag) send_message(node.id, value);
-                },
-                get: () => {
-                    return node._value;
-    		    }
-    	    });
-            
-            function messageHandler(event) {
-                
-                if (node.id == event.detail.node) {
-                    node.widgets[1].value = (event.detail.message['ckpt_name']) ? event.detail.message['ckpt_name'] : "AA\\majicMIX realistic _v1.safetensors";
-                    node.widgets[2].value = (event.detail.message['unet_name']) ? event.detail.message['unet_name'] : "None";
-                    node.widgets[3].value = (event.detail.message['unet_Weight_Dtype']) ? event.detail.message['unet_Weight_Dtype'] : "None";
-                    node.widgets[4].value = (event.detail.message['clip_type']) ? event.detail.message['clip_type'] : "None";
-                    node.widgets[5].value = (event.detail.message['clip1']) ? event.detail.message['clip1'] : "None";
-                    node.widgets[6].value = (event.detail.message['clip2']) ? event.detail.message['clip2'] : "None";
-                    node.widgets[7].value = (event.detail.message['guidance']) ? event.detail.message['guidance'] : "3.5";
-                    node.widgets[8].value = (event.detail.message['clip3']) ? event.detail.message['clip3'] : "None";
-                    node.widgets[9].value = (event.detail.message['clip4']) ? event.detail.message['clip4'] : "None";
-                    node.widgets[10].value = (event.detail.message['vae']) ? event.detail.message['vae'] : "A-840000-ema-pruned-real.pt";
-                    node.widgets[11].value = (event.detail.message['lora']) ? event.detail.message['lora'] : "None";
-                    node.widgets[12].value = (event.detail.message['lora_strength']) ? event.detail.message['lora_strength'] : "1.0";
-                    node.widgets[13].value = (event.detail.message['width']) ? event.detail.message['width'] : "512";
-                    node.widgets[14].value = (event.detail.message['height']) ? event.detail.message['height'] : "512";
-                    node.widgets[15].value = (event.detail.message['steps']) ? event.detail.message['steps'] : "20";
-                    node.widgets[16].value = (event.detail.message['cfg']) ? event.detail.message['cfg'] : "8";
-                    node.widgets[17].value = (event.detail.message['sampler']) ? event.detail.message['sampler'] : "euler a";
-                    node.widgets[18].value = (event.detail.message['scheduler']) ? event.detail.message['scheduler'] : "normal";
-                    node.widgets[19].value = (event.detail.message['positive']) ? event.detail.message['positive'] : "beautiful detailed glow,a girl";
-                    node.widgets[20].value = (event.detail.message['negative']) ? event.detail.message['negative'] : "worst quality, low quality";
-                }
-            }
-            api.addEventListener("my.custom.message", messageHandler);
-        }
-        
-
 
         
 //#endregion
