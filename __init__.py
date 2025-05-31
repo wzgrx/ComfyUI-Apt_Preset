@@ -47,7 +47,6 @@ NODE_CLASS_MAPPINGS = {
 #-load------------------------------------------#
 
 "sum_load_adv": sum_load_adv,
-"sum_load": sum_load,
 "sum_editor": sum_editor,
 "sum_latent": sum_latent,
 "sum_lora": sum_lora,
@@ -77,7 +76,6 @@ NODE_CLASS_MAPPINGS = {
 
 #-sample-------------------------------------------#
 "pre_sample_data":  pre_sample_data,  
-"pre_inpaint_xl": pre_inpaint_xl,
 "pre_ic_light_sd15":  pre_ic_light_sd15,
 "pre_latent_light": pre_latent_light,
 "pre_Flex2": pre_Flex2,
