@@ -167,6 +167,7 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 [ComfyUI-Advanced-ControlNet](https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet) 
 
 要加载GGUF模型，请先安装To load the GGUF model, please install it first.
+
 [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) 
 
 # <font color="#000000">四、Reference Node Packages参考节点包</font>
