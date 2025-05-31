@@ -12,8 +12,8 @@
 
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
-**1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载 
-Load the models required for combining various processes**
+**1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载，Unet还支持GGUF模型
+Load the models required for combining various processes，Unet also supports GGUF models**
 
 选择模型： checkpoint or Unet 或者 over model
 按顺序添加 clip：clip1, clip2, clip3, clip4  ，会根据 clip 的数量自动适应模式，是 flux还是 sd 3.5 等
