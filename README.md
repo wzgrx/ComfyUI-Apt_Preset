@@ -15,10 +15,12 @@
 **1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载，Unet还支持GGUF模型
 Load the models required for combining various processes，Unet also supports GGUF models**
 
-选择模型： checkpoint or Unet 或者 over model
-按顺序添加 clip：clip1, clip2, clip3, clip4  ，会根据 clip 的数量自动适应模式，是 flux还是 sd 3.5 等
-全部参数的设置都可以自己保存为预设
-Select model: checkpoint or Unet or over model. Add clips in sequence: clip 1, clip 2, clip 3, clip 4. The mode will be automatically adapted according to the number of clips, such as flux or sd 3.5, etc. All parameter settings can be saved as presets by yourself.
+1)选择模型： checkpoint or Unet 或者 over model
+2)按顺序添加 clip：clip1, clip2, clip3, clip4  ，会根据 clip 的数量自动适应模式，是 flux还是 sd 3.5 等
+3)全部参数的设置都可以自己保存为预设
+1)Select model: checkpoint or Unet or over model. 
+2)Add clips in sequence: clip 1, clip 2, clip 3, clip 4. The mode will be automatically adapted according to the number of clips, such as flux or sd 3.5, etc. 
+3)All parameter settings can be saved as presets by yourself.
 
 | <font color="#ff0000">run_Mode</font> | <font color="#ff0000">composition </font> | <font color="#ff0000">Pattern represents </font> |
 | ------------------------------------- | ----------------------------------------- | ------------------------------------------------ |
