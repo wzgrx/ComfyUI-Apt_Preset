@@ -12,9 +12,9 @@
 
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
-**1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载，Unet还支持GGUF模型
+**1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载，Unet还支持GGUF模型**
 
-Load the models required for combining various processes，Unet also supports GGUF models**
+**Load the models required for combining various processes，Unet also supports GGUF models**
 
 1)选择模型： checkpoint or Unet 或者 over model
 
