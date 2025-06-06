@@ -33,4 +33,3 @@ opencv-python
 git+https://github.com/deepseek-ai/Janus.git
 
 
-
