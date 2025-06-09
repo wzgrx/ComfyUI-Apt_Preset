@@ -1,0 +1,21 @@
+run_Mode = "basic"
+ckpt_name = "SDXL\\XL_fantasy.safetensors"
+clipnum = "-2"
+vae = "sdxl_vae.safetensors"
+PromptMid = "a girl ,garden ,flowers"
+PromptLora = ""
+width = 1024
+height = 1024
+batch = 1
+steps = 20
+cfg = 8
+sampler = "euler"
+scheduler = "normal"
+
+lora ="None"
+lora_strength = 1.0
+unet_name="None"
+clip1="None"
+clip2="None"
+clip3="None"
+unet_Weight_Dtype="None"
