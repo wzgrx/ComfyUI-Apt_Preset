@@ -10,6 +10,9 @@
 
 2025.5.31 Sum_load_adv 的Unet支持GGUF模型加载 ；The Unet supports the loading of GGUF models
 
+2025.6.9 修复comfyui更新到最新版本V0.3.40，preset不起作用的前端问题，增加一些新的遮罩节点
+
+Fix the front - end issue where presets don't work when ComfyUI is updated to the latest version V0.3.40, and add some new mask nodes.
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
 **1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载，Unet还支持GGUF模型**
