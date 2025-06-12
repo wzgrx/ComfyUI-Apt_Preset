@@ -42,6 +42,7 @@ Fix the front - end issue where presets don't work when ComfyUI is updated to th
 | clip 2                                | clip 1+clip 2 + unet                      | Flux                                             |
 | clip 3                                | clip 1+clip 2+clip 3 + unet               | SD 3.5                                           |
 | clip 4                                | clip 1+clip 2+clip 3 +clip 4+ unet        | Hidream                                          |
+| clip(only)                            | clip 1+&clip 2+&clip 3 +&clip 4           | output clip without model                        |
 | over model                            | replace checkpoint or Unet                | nunchaku-flux                                    |
 | over clip                             | replace all clip                          |                                                  |
 
