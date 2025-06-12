@@ -14,6 +14,9 @@
 
 Fix the front - end issue where presets don't work when ComfyUI is updated to the latest version V0.3.40, and add some new mask nodes.
 
+2025.6.12 增加text_sum节点预设功能 Add the preset function for the text_sum node
+
+
 # <font color="#000000">二、Usage Guide使用指南</font> 
 **1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载，Unet还支持GGUF模型**
 
