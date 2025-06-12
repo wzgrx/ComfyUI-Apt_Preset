@@ -29,6 +29,7 @@ sortedcontainers
 gguf>=0.13.0
 sentencepiece
 protobuf
+diffusers
 opencv-python
 git+https://github.com/deepseek-ai/Janus.git
 
