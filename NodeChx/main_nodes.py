@@ -525,23 +525,7 @@ class sum_load_adv:
     RETURN_NAMES = ("context","model", "preset_save", )
     FUNCTION = "process_settings"
     CATEGORY = "Apt_Preset/chx_load"
-    DESCRIPTION = """This node allows:
--| run_Mode   | composition                        | Pattern represents</font> |
--| ---------- | ---------------------------------- | ------------------------- |
--| ckpt       | checkpoint or Unet                 | XL, sd 1.5                |
--| clip 1     | clip 1+checkpoint or unet          | Wan 2.1、LTX              |
--| clip 2     | clip 1+clip 2 + unet               | Flux                      |
--| clip 3     | clip 1+clip 2+clip 3 + unet        | SD 3.5                    |
--| clip 4     | clip 1+clip 2+clip 3 +clip 4+ unet | Hidream                   |
--| over model | replace checkpoint or Unet         | nunchaku-flux             |
--| over clip  | replace all clip                   |                           |
 
--step1:Select model: checkpoint or Unet or over model. Unet can be gguf model. 
-
--step2:Add clips in sequence: clip 1, clip 2, clip 3, clip 4. or over clip. 
-
--Important : clip1, 2, 3, 4 need to be filled in sequence.
-"""
 
 
     def process_settings(self, node_id, lora_strength, 
@@ -599,10 +583,10 @@ class sum_load_adv:
                 model = result[0]
             else:
                 model=UNETLoader().load_unet(unet_name, unet_Weight_Dtype)[0]
-        elif ckpt_name== "None" and unet_name== "None":
-            raise ValueError("ckpt_name or unet_name must be entered. Please enter a valid ckpt_name or unet_name.")
         elif ckpt_name!= "None" and unet_name!= "None":
             raise ValueError("ckpt_name and unet_name cannot be entered at the same time. Please enter only one of them.")
+        else:
+            model = None 
 #clip-----------------------
         if over_clip is not None:
             clip = over_clip
@@ -632,8 +616,6 @@ class sum_load_adv:
 
 #update vae----------------------
         if isinstance(vae, str) and vae != "None":
-            #vae_path = folder_paths.get_full_path("vae", vae)
-            #vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
             vae =VAELoader().load_vae(vae)[0]
         else:
             vae = vae2
@@ -1364,7 +1346,7 @@ class sum_editor:
                 
                 "pos": ("STRING", {"default": "", "multiline": True}),
                 "neg": ("STRING", {"default": "", "multiline": False}),
-                "guidance": ("FLOAT", {"default": 4.5, "min": 0.0, "max": 100.0, "step": 0.01}),
+                "guidance": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step": 0.01}),
                 "style": (["None"] + style_list()[0], {"default": "None"}),
                 "ratio_selected": (['None'] + s.ratio_sizes, {"default": "None"}),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 300, }),
@@ -1375,11 +1357,6 @@ class sum_editor:
     RETURN_NAMES = ("context", "model","positive", "negative", "latent", "vae","clip", "image", )
     FUNCTION = "text"
     CATEGORY = "Apt_Preset/chx_load"
-    DESCRIPTION = """Note:
--It is recommended to use it, as it will greatly improve the loading speed. 
--steps/cfg = 0, the same as "None".
--If the content of pos or neg is entered, prosive or negative will be updated.
-"""
 
 
 
@@ -1472,17 +1449,6 @@ class sum_latent:
     FUNCTION = "process"
     CATEGORY = "Apt_Preset/chx_load"
 
-    DESCRIPTION = """
-- Note:
-- This is an input method for multiple latents. 
-- case1: ratio_selected, input latent of fixed size
-- case2: latent, input overwrite
-- case3: pixels, input image converted to latent overwrite
-- case4: No input , the latent in the context will be used.
-- The mask is only effective for pixels.
-"""
-
-
     def generate(self, ratio_selected, batch_size=1):
         width = self.ratio_dict[ratio_selected]["width"]
         height = self.ratio_dict[ratio_selected]["height"]
@@ -1496,7 +1462,10 @@ class sum_latent:
         positive = context.get("positive")
         negative = context.get("negative")
         model = context.get("model")
-        
+
+        if latent is None and pixels is None:
+            latent=context.get("latent",None)
+            return (context, latent, None)
 
         if ratio_selected != "None":
             latent = self.generate(ratio_selected, batch_size)[0]    
@@ -1934,15 +1903,7 @@ class basic_Ksampler_simple:
     OUTPUT_NODE = True
     FUNCTION = "run"
     CATEGORY = "Apt_Preset/chx_ksample"
-    DESCRIPTION = """
--Note:
 
--context: will update latent and output image. 
-
--Sampling priority: input image > latent from context. 
-
--image_output == "None", only the latent will be output. 
-"""
 
     def run(self,context, seed, denoise, image=None,  prompt=None, image_output=None, extra_pnginfo=None,):
         vae = context.get("vae",None)
