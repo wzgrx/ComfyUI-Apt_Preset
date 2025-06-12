@@ -6,7 +6,6 @@ https://github.com/NakamuraShippo/ComfyUI-NS-PromptList.git
 
 """
 
-
 from ..main_unit import *
 from nodes import CLIPTextEncode
 
