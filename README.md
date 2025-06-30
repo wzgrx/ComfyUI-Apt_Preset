@@ -2,19 +2,16 @@
 
 一些资源和工作流放在Some resources and workflows are placed in  [ComfyUI-Apt_Collect_](https://github.com/cardenluo/ComfyUI-Apt_Collect)
 # <font color="#000000"> 一、Update record更新记录</font>
-2025.5.3   Update to V 2.0 and add a large number of basic nodes.
 
 2025.5.17  Now the system supports switching to Chinese.支持系统切换中文
 
-2025.5.24 增加新的节点 Sum_load_adv比 Sum_load 更好用，免去选择模式，采用自适应 Adding a new node, Sum_load_adv is more user - friendly than Sum_load. It eliminates the need to select a mode and adopts self - adaptation.
-
 2025.5.31 Sum_load_adv 的Unet支持GGUF模型加载 ；The Unet supports the loading of GGUF models
 
-2025.6.9 修复comfyui更新到最新版本V0.3.40，preset不起作用的前端问题，增加一些新的遮罩节点
-
-Fix the front - end issue where presets don't work when ComfyUI is updated to the latest version V0.3.40, and add some new mask nodes.
-
-2025.6.12 增加text_sum节点预设功能 Add the preset function for the text_sum node
+2025.6.30 更新内容比较多 
+          ①增加excel互动节点，在comfyui中实现多维表格功能 
+          ②增加pre_kontext节点，让工作流和flux一样简洁
+          ③text_sum节点，增加预设内容，kontext和wan常用提示词
+          ④移除一些不常用的节点，要找回原来的节点，只能回到旧版本了
 
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
