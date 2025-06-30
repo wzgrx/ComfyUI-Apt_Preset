@@ -12,6 +12,11 @@
           ②增加pre_kontext节点，让工作流和flux一样简洁
           ③text_sum节点，增加预设内容，kontext和wan常用提示词
           ④移除一些重复功能的节点，要找回原来的节点，只能回到旧版本了
+          On June 30, 2025, there are quite a few updates. 
+          ① An Excel interaction node is added to implement the multi - dimensional table function in ComfyUI. 
+          ② A pre_kontext node is added to make the workflow as concise as Flux. 
+          ③ For the text_sum node, preset content is added, including kontext and commonly used prompt words of Wan. 
+          ④ Some nodes with duplicate functions are removed. To retrieve the original nodes, you can only go back to the old version. 
 
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
