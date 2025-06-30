@@ -11,7 +11,7 @@
           ①增加excel互动节点，在comfyui中实现多维表格功能 
           ②增加pre_kontext节点，让工作流和flux一样简洁
           ③text_sum节点，增加预设内容，kontext和wan常用提示词
-          ④移除一些不重复功能节点，要找回原来的节点，只能回到旧版本了
+          ④移除一些重复功能的节点，要找回原来的节点，只能回到旧版本了
 
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
