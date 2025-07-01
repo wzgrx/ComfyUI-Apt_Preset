@@ -1,0 +1,58 @@
+可控性原理:
+  prompt: |
+    图像潜在特征 + 噪声潜在特征 = 特征拼接层
+    触发参考图元素：元素特征，实现可控变换
+    未触发图内元素：替换元素、生成新元素、或无效
+
+
+人物一致性:
+  prompt: "Change [objectA] to [objectB], while maintaining [the details of 人物]"
+
+物品一致性:
+  prompt: "[object] is placed in [场景、环境、视角]"
+
+风格一致性:
+  prompt: "using this (风格描述) style generate [新内容]"
+
+风格参考例子:
+  prompt: "Using this (elegant) style, create a portrait of a swan, maintaining the same refined quality and soft color tones."
+
+风格转换:  
+  prompt: "Transform to [Bauhaus] style"  
+
+
+改图-背景:
+  prompt: "Change the background to [a beach]"
+
+改图-文字:
+  prompt: "Change the text \"A\" to \"B\""
+
+
+改图-移除物体:
+  prompt: "Remove [objectA] from [objectB]"
+
+改图-添加物体:
+  prompt: "add [objectA] to [objectB], while maintaining the same details of [objectB]"
+
+改图-扩图:
+  prompt: "scale the image by 2 times to show the full body of the character"
+
+
+修复-着色:
+  prompt: "Colorize and enhance this photo to modern quality"
+
+修复-照片:
+  prompt: "Repair photo, remove stains and cracks, improve resolution, eliminate JPEG bad pixels, and colorize it." 
+
+修复-打光:
+  prompt: "Transform the scene into [sunset, with soft lighting]"
+
+修复-马赛克:
+  prompt: "Remove the mosaic within the red frame and restore the image in that area"
+
+
+双图互动:
+  prompt: "[A] [action] with [B]"
+
+多图互动:   
+  prompt: "[A] [action] with [B], [action] with [C], in [scene]"
