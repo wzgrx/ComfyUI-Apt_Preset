@@ -18,6 +18,10 @@
           ③ For the text_sum node, preset content is added, including kontext and commonly used prompt words of Wan. 
           ④ Some nodes with duplicate functions are removed. To retrieve the original nodes, you can only go back to the old version. 
 
+精细化控制Kontext
+![image](https://github.com/user-attachments/assets/152014f4-5d0e-421c-abb8-b7e5a0ff4742)
+
+
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
 **1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载，Unet还支持GGUF模型**
