@@ -11,6 +11,7 @@ import json
 import math
 from telnetlib import OUTMRK
 import re
+from turtle import width
 
 # 第三方库
 import numpy as np
@@ -1493,7 +1494,22 @@ class sum_editor:
         return ({"samples": latent}, )
 
     def text(self, context=None, model=None, clip=None, positive=None, negative=None, pos="", neg="", image=None, vae=None, latent=None, steps=None, cfg=None, sampler=None, scheduler=None, style=None, batch_size=1, ratio_selected=None, guidance=0 ):
-        
+
+        width = context.get("width")
+        height = context.get("height")       
+        if ratio_selected and ratio_selected != "None" and ratio_selected in self.ratio_dict:
+            try:
+                width = self.ratio_dict[ratio_selected]["width"]
+                height = self.ratio_dict[ratio_selected]["height"]
+            except KeyError as e:
+                print(f"[ERROR] Invalid ratio selected: {e}")
+                width = context.get("width", 512)
+                height = context.get("height", 512)
+        else:
+            if width is None or height is None:
+                width = 512
+                height = 512       
+
         if model is None:
             model = context.get("model")
         if clip is None:
@@ -1527,7 +1543,7 @@ class sum_editor:
         if ratio_selected != "None":
             latent = self.generate(ratio_selected, batch_size)[0]    
         
-        positive, negative = add_style_to_subject(style, pos, neg)  # 风格
+        pos, neg = add_style_to_subject(style, pos, neg)  # 风格
 
         if pos is not None and pos!= "":
             positive, = CLIPTextEncode().encode(clip, pos)
@@ -1539,9 +1555,8 @@ class sum_editor:
         else:
             negative = context.get("negative")
         
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
 
-        context = new_context(context, model=model , latent=latent , clip=clip, vae=vae, positive=positive, negative=negative, images=image,steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler,guidance=guidance, )
+        context = new_context(context, model=model , latent=latent , clip=clip, vae=vae, positive=positive, negative=negative, images=image,steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler,guidance=guidance, pos=pos, neg=neg, width=width, height=height, batch=batch_size )
         
         return (context, model, positive, negative, latent, vae, clip,  image, )
 
