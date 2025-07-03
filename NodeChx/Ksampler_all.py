@@ -1687,7 +1687,7 @@ class chx_Ksampler_inpaint:
                 
                 latent = VAEEncode().encode(vae, final_image)[0]
                 
-                context = new_context(context, latent = latent, image = final_image)
+                context = new_context(context, latent = latent, images = final_image)
                 return (context, final_image, decoded_image,dyzz)     
 
             else:
@@ -1744,7 +1744,7 @@ class chx_Ksampler_inpaint:
                 
                 latent = VAEEncode().encode(vae, zztx)[0]
                 
-                context = new_context(context, latent = latent, image = zztx)
+                context = new_context(context, latent = latent, images = zztx)
                 return (context, zztx, decoded_image, dyzz)     
 
 
@@ -3666,6 +3666,12 @@ class pre_Kontext:
         return (context,)
 
 
+#region---------基础节点context------------------------------------------------------------------------------#
+
+
+#endregion----------    
+
+
 class chx_Ksampler_Kontext:
     @classmethod
     def INPUT_TYPES(cls):
@@ -3837,8 +3843,6 @@ class chx_Ksampler_Kontext:
             return {"ui": {}, "result": (context, output_image)}
         else:
             return {"ui": {"images": results}, "result": (context, output_image)}
-
-
 
 
 
