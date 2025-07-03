@@ -20,7 +20,12 @@
           
 2025.7.3  增加Kontext采样器，连续编辑
 
-精细化控制Kontext
+连续编辑Continuous editing     ksampler_Kontext
+![image](https://github.com/user-attachments/assets/e84c2e03-32af-4608-bb5b-5ed683628c69)
+
+
+
+精细化控制Fine-grained control    pre_Kontext
 ![image](https://github.com/user-attachments/assets/152014f4-5d0e-421c-abb8-b7e5a0ff4742)
 
 
