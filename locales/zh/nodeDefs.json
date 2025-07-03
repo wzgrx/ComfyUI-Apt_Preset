@@ -9241,6 +9241,44 @@
       }
     }
   },
+
+
+  "chx_Ksampler_Kontext": {
+    "display_name": "chx_Ksampler_Kontext",
+    "inputs": {
+      "context": {
+        "name": "context"
+      },
+      "seed": {
+        "name": "种子"
+      },
+      "prompt_weight": {
+        "name": "提示词权重"
+      },
+      "image_output": {
+        "name": "图像输出"
+      },
+      "image": {
+        "name": "图像"
+      },
+      "positive": {
+        "name": "提示词"
+      },
+      "mask": {
+        "name": "遮罩"
+      }
+    },
+    "outputs": {
+      "run_context": {
+        "name": "context"
+      },
+      "image": {
+        "name": "图像"
+      }
+    }
+  },
+
+
   "pre_latent_light": {
     "display_name": "pre_latent_light",
     "inputs": {
