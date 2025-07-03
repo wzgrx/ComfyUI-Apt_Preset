@@ -17,7 +17,9 @@
           ② A pre_kontext node is added to make the workflow as concise as Flux. 
           ③ For the text_sum node, preset content is added, including kontext and commonly used prompt words of Wan. 
           ④ Some nodes with duplicate functions are removed. To retrieve the original nodes, you can only go back to the old version. 
+          
 2025.7.3  增加Kontext采样器，连续编辑
+
 精细化控制Kontext
 ![image](https://github.com/user-attachments/assets/152014f4-5d0e-421c-abb8-b7e5a0ff4742)
 
