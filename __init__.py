@@ -71,6 +71,7 @@ NODE_CLASS_MAPPINGS= {
 "chx_Ksampler_inpaint": chx_Ksampler_inpaint,
 "chx_Ksampler_texture": chx_Ksampler_texture,
 "chx_Ksampler_mix": chx_Ksampler_mix,
+"chx_Ksampler_Kontext": chx_Ksampler_Kontext,
 
 "chx_Ksampler_dual_paint": chx_Ksampler_dual_paint,
 "chx_Ksampler_dual_area": chx_Ksampler_dual_area,
