@@ -32,7 +32,7 @@ import folder_paths
 import node_helpers
 import latent_preview
 import nodes
-from nodes import CLIPTextEncode, common_ksampler, VAEDecode, VAEEncode, ImageScale, KSampler, SetLatentNoiseMask, KSamplerAdvanced
+from nodes import CLIPTextEncode, common_ksampler, VAEDecode, VAEEncode, ImageScale, KSampler, SetLatentNoiseMask, KSamplerAdvanced,InpaintModelConditioning
 from einops import rearrange
 import kornia.filters
 from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
@@ -55,6 +55,7 @@ import comfy.model_management
 import comfy.utils
 from functools import partial
 from comfy.model_base import Flux
+
 from ..main_unit import *
 
 
@@ -1481,16 +1482,15 @@ class chx_Ksampler_inpaint:
             "mask_extend": ("INT", {"default": 5, "min": 0, "max": 64, "step": 1}),
             "feather":("INT", {"default": 5, "min": 0, "max": 100, "step": 1}),
             
-            "crop_mask_as_inpaint_area": ("BOOLEAN", {"default": True,  "tooltip": "Below options are only valid when it is true."}),
+            "crop_mask_as_inpaint_area": ("BOOLEAN", {"default": False,  "tooltip": "Below options are only valid when it is true."}),
             "crop_area_scale": ("INT", {"default": 512, "min": 0, "max": 2048, "step": 1}),
             "crop_area_extend": ("INT", {"default": 10, "min": 0, "max": 500, "step": 1}),
+            "image": ("IMAGE",),
+            "mask": ("MASK",),
 
         },
                 
             "optional": {
-            "model":("MODEL",),
-            "image": ("IMAGE",),
-            "mask": ("MASK",),
             "pos":("STRING",{"multiline": True, "default": ""}),
             }
             
@@ -1638,11 +1638,12 @@ class chx_Ksampler_inpaint:
         return zztx,dyzz,dyyt
 
 
-    def sample(self, context, seed, image=None, model=None,  mask=None,pos=None, mask_extend=6, repaint_mode="latent_blank", denoise=1.0, crop_mask_as_inpaint_area=False, crop_area_extend=0, crop_area_scale=0, feather=1, ):
+    def sample(self, context, seed, image=None, mask=None,pos=None, mask_extend=6, repaint_mode="latent_blank", denoise=1.0, crop_mask_as_inpaint_area=False, crop_area_extend=0, crop_area_scale=0, feather=1, ):
         
+        guidance = context.get("guidance",3.5)
 
-        if model is None :
-            model = context.get("model", None)
+        model = context.get("model", None)
+        model = DifferentialDiffusion().apply(model)[0]      
         vae = context.get ("vae", None)
         
         clip = context.get("clip", None)
@@ -1651,6 +1652,8 @@ class chx_Ksampler_inpaint:
             positive, = CLIPTextEncode().encode(clip, pos)
         else:
             positive = context.get("positive", None)
+        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
+        
 
         negative = context.get("negative", None)
         steps = context.get("steps", None)
@@ -1662,6 +1665,7 @@ class chx_Ksampler_inpaint:
             latent = VAEEncode().encode(vae, image)[0]
         else:
             latent = context.get("latent", None)
+        positive, negative, latent=InpaintModelConditioning().encode(positive, negative, image, vae, mask, noise_mask=True)   #out[0], out[1], out_latent
 
 
         if mask is None or torch.all(mask == 0):
@@ -1757,6 +1761,8 @@ class chx_Ksampler_inpaint:
 
 
 #region-----------------------basic node-------------------------------
+
+
 
 
 #region-------------def--------------------------------------------------------------------#
@@ -3712,6 +3718,7 @@ class chx_Ksampler_Kontext:
         cfg = context.get("cfg")
         sampler = context.get("sampler")
         scheduler = context.get("scheduler")
+        guidance = context.get("guidance",3.5)
 
         # 获取图像
         if image is None:
@@ -3755,6 +3762,9 @@ class chx_Ksampler_Kontext:
         else:
             positive = context.get("positive", None)
 
+
+
+ 
         # 注入 reference_latents
         if positive is not None and prompt_weight > 0:
             influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
@@ -3764,6 +3774,8 @@ class chx_Ksampler_Kontext:
                 {"reference_latents": [scaled_latent]},
                 append=True
             )
+            positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
+
 
         # 处理 mask
         if mask is not None:
