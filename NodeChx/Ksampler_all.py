@@ -1491,6 +1491,7 @@ class chx_Ksampler_inpaint:
             "model":("MODEL",),
             "image": ("IMAGE",),
             "mask": ("MASK",),
+            "pos":("STRING",{"multiline": True, "default": ""}),
             }
             
             
@@ -1637,13 +1638,20 @@ class chx_Ksampler_inpaint:
         return zztx,dyzz,dyyt
 
 
-    def sample(self, context, seed, image=None, model=None,  mask=None, mask_extend=6, repaint_mode="latent_blank", denoise=1.0, crop_mask_as_inpaint_area=False, crop_area_extend=0, crop_area_scale=0, feather=1, ):
+    def sample(self, context, seed, image=None, model=None,  mask=None,pos=None, mask_extend=6, repaint_mode="latent_blank", denoise=1.0, crop_mask_as_inpaint_area=False, crop_area_extend=0, crop_area_scale=0, feather=1, ):
         
 
         if model is None :
             model = context.get("model", None)
         vae = context.get ("vae", None)
-        positive = context.get("positive", None)
+        
+        clip = context.get("clip", None)
+        positive = None
+        if pos and pos.strip():
+            positive, = CLIPTextEncode().encode(clip, pos)
+        else:
+            positive = context.get("positive", None)
+
         negative = context.get("negative", None)
         steps = context.get("steps", None)
         cfg = context.get("cfg", None)
