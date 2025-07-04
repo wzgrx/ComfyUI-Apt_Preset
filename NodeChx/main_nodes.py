@@ -1475,8 +1475,9 @@ class sum_editor:
                 "neg": ("STRING", {"default": "", "multiline": False}),
                 "guidance": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step": 0.01}),
                 "style": (["None"] + style_list()[0], {"default": "None"}),
-                "ratio_selected": (['None'] + s.ratio_sizes, {"default": "None"}),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 300, }),
+                "ratio_selected": (['None'] + s.ratio_sizes, {"default": "None"}),
+
             }
         }
 
@@ -1555,6 +1556,8 @@ class sum_editor:
         else:
             negative = context.get("negative")
         
+        guidance = context.get("guidance",3.5)
+        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
 
         context = new_context(context, model=model , latent=latent , clip=clip, vae=vae, positive=positive, negative=negative, images=image,steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler,guidance=guidance, pos=pos, neg=neg, width=width, height=height, batch=batch_size )
         
