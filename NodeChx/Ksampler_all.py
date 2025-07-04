@@ -3663,13 +3663,8 @@ class pre_Kontext:
 
         context = new_context(context, positive=conditioning, latent=latent)
 
-        return (context,)
+        return context
 
-
-#region---------基础节点context------------------------------------------------------------------------------#
-
-
-#endregion----------    
 
 
 class chx_Ksampler_Kontext:
@@ -3680,13 +3675,12 @@ class chx_Ksampler_Kontext:
                 "context": ("RUN_CONTEXT",),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                 "prompt_weight": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
-                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),       
+                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
             },
             "optional": {
                 "image": ("IMAGE", ),
                 "mask": ("MASK", ),
                 "pos": ("STRING", {"multiline": True, "default": ""}),
-         
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -3711,14 +3705,13 @@ class chx_Ksampler_Kontext:
         sampler = context.get("sampler")
         scheduler = context.get("scheduler")
 
-        # 获取图像 - 关键修改：优先使用输入的image，无论pos是否有值
-        processing_image = image
-        if processing_image is None:
-            processing_image = context.get("images", None)
-        assert processing_image is not None, "Image must be provided or exist in the context."
+        # 获取图像
+        if image is None:
+            image = context.get("images", None)
+        assert image is not None, "Image must be provided or exist in the context."
 
-        width = processing_image.shape[2]
-        height = processing_image.shape[1]
+        width = image.shape[2]
+        height = image.shape[1]
         aspect_ratio = width / height
         _, target_width, target_height = min(
             (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
@@ -3726,7 +3719,7 @@ class chx_Ksampler_Kontext:
 
         # 缩放图像
         scaled_image = comfy.utils.common_upscale(
-            processing_image.movedim(-1, 1),
+            image.movedim(-1, 1),
             target_width,
             target_height,
             "lanczos",
@@ -3831,7 +3824,7 @@ class chx_Ksampler_Kontext:
         output_image = VAEDecode().decode(vae, samples_dict)[0]
 
         # 更新 context
-        context = new_context(context, latent=samples_dict, positive=positive, images=output_image)
+        context = new_context(context, latent=samples_dict, images=output_image)
 
         # 图像保存逻辑
         results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
@@ -3843,6 +3836,3 @@ class chx_Ksampler_Kontext:
             return {"ui": {}, "result": (context, output_image)}
         else:
             return {"ui": {"images": results}, "result": (context, output_image)}
-
-
-
