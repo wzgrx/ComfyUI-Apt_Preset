@@ -48,14 +48,14 @@ NODE_CLASS_MAPPINGS= {
 "load_GGUF": UnetLoaderGGUF2,
 
 #"Data_basic_easy": Data_basic_easy,
-"Data_basic": Data_basic,
+"Data_Highway":Data_Highway,
 "Data_bus_chx":Data_bus_chx,
+"Data_basic": Data_basic,
 "Data_select": Data_select,
 "Data_chx_Merge":Data_chx_Merge,
 "Data_sampleData": Data_sampleData,
 "Data_presetData":Data_presetData,
 "Data_preset_save": Data_preset_save,
-"Data_Highway":Data_Highway,
 
 
 #-sample-------------------------------------------#
@@ -78,7 +78,7 @@ NODE_CLASS_MAPPINGS= {
 "chx_Ksampler_VisualStyle": chx_Ksampler_VisualStyle,  
 "chx_ksampler_Deforum_math": chx_ksampler_Deforum_math,
 "chx_ksampler_Deforum_sch":chx_ksampler_Deforum_sch,
-"chx_vae_encode_tile": chx_vae_encode_tile,
+
 
 "sampler_InpaintCrop": InpaintCrop,  #wed
 "sampler_InpaintStitch": InpaintStitch,  #wed
@@ -98,13 +98,14 @@ NODE_CLASS_MAPPINGS= {
 "sum_stack_Wan": sum_stack_Wan,
 "sum_stack_AD": sum_stack_AD,
 
+"pre_Kontext": pre_Kontext, 
 "pre_controlnet": pre_controlnet,
 "pre_controlnet_union": pre_controlnet_union,
 "pre_mask_Mulcondi": pre_mask_Mulcondi,
 "pre_ic_light_sd15":  pre_ic_light_sd15,
 "pre_latent_light": pre_latent_light,
 "pre_Flex2": pre_Flex2,
-"pre_Kontext": pre_Kontext, 
+
 
 
 #-IPA-------------------------------------------#
@@ -164,11 +165,11 @@ NODE_CLASS_MAPPINGS= {
 #--------AD------------------------------------------
 
 #"AD_sch_prompt_preset": AD_sch_prompt_preset,
+#"AD_sch_adv_CN":AD_sch_adv_CN,
 "AD_sch_IPA": AD_sch_IPA,
 "AD_sch_prompt_adv": AD_sch_prompt_adv,
 "AD_sch_prompt_stack": AD_sch_prompt_stack,
 "AD_sch_latent": AD_sch_latent,
-"AD_sch_adv_CN":AD_sch_adv_CN,
 
 "AD_sch_image_merge":AD_sch_image_merge,
 "AD_DrawSchedule": AD_DrawSchedule,
@@ -206,6 +207,8 @@ NODE_CLASS_MAPPINGS= {
 "IO_adjust_image": IO_adjust_image,
 "IO_clear_cache": IO_clear_cache,
 "IO_save_image": IO_save_image,  
+"IO_video_encode": IO_video_encode,
+
 
 "view_Data": view_Data,  #wed
 "view_bridge_image": view_bridge_image,  #wed
@@ -307,10 +310,10 @@ NODE_CLASS_MAPPINGS= {
 "create_AD_mask": create_AD_mask,
 "create_mulcolor_img": create_mulcolor_img,   
 "create_mulcolor_mask": create_mulcolor_mask,  
-"Create_Mask_sole": Create_Mask_sole,
-"Create_Mask_lay_X": Create_Mask_lay_X,
-"Create_Mask_lay_Y": Create_Mask_lay_Y,
-"Create_Mask_Rectangles": Create_Mask_Rectangles,
+"create_Mask_sole": create_Mask_sole,
+"create_Mask_lay_X": create_Mask_lay_X,
+"create_Mask_lay_Y": create_Mask_lay_Y,
+"create_Mask_Rectangles": create_Mask_Rectangles,
 
 "img_effect_Load": img_effect_Load,
 "img_effect_CircleWarp": img_effect_CircleWarp,
