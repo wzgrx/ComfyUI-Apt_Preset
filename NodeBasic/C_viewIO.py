@@ -465,7 +465,7 @@ class IPA_clip_vision:
     RETURN_TYPES = ("CLIP_VISION_OUTPUT",)
     FUNCTION = "combined_process"
 
-    CATEGORY = "Apt_Preset/View_IO"
+    CATEGORY = "Apt_Preset/chx_IPA"
 
     def combined_process(self, clip_name, image):
         # 加载 CLIP Vision 模型
