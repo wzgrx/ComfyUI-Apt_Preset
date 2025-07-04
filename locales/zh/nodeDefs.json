@@ -1,6 +1,6 @@
 {
   "AD_ImageExpandBatch": {
-    "display_name": "AD_ImageExpandBatch",
+    "display_name": "AD_图片批次扩展",
     "inputs": {
       "image": {
         "name": "图像"
@@ -19,7 +19,7 @@
     }
   },
   "AD_MaskExpandBatch": {
-    "display_name": "AD_MaskExpandBatch",
+    "display_name": "AD_遮罩批次扩展",
     "inputs": {
       "mask": {
         "name": "遮罩"
@@ -84,7 +84,7 @@
     }
   },
   "AD_batch_replace": {
-    "display_name": "AD_batch_replace",
+    "display_name": "AD_图像批次替换",
     "inputs": {
       "start_index": {
         "name": "起始索引"
@@ -118,7 +118,7 @@
     }
   },
   "Amp_drive_value": {
-    "display_name": "Amp_drive_value",
+    "display_name": "音频_驱动值",
     "inputs": {
       "normalized_amp": {
         "name": "归一化振幅"
@@ -149,7 +149,7 @@
     }
   },
   "Amp_drive_String": {
-    "display_name": "Amp_drive_String",
+    "display_name": "音频_驱动文本",
     "inputs": {
       "text": {
         "name": "文本"
@@ -174,7 +174,7 @@
     }
   },
   "Amp_audio_Normalized": {
-    "display_name": "Amp_audio_Normalized",
+    "display_name": "音频_归一化",
     "inputs": {
       "audio": {
         "name": "音频"
@@ -202,7 +202,7 @@
     }
   },
   "Amp_drive_mask": {
-    "display_name": "Amp_drive_mask",
+    "display_name": "音频_驱动遮罩",
     "inputs": {
       "normalized_amp": {
         "name": "归一化振幅"
@@ -240,7 +240,7 @@
   },
 
   "AD_sch_mask": {
-    "display_name": "AD_sch_mask",
+    "display_name": "AD_遮罩调度",
     "inputs": {
       "points_string": {
         "name": "字符串坐标"
@@ -301,7 +301,7 @@
   },
 
   "AD_sch_prompt_basic": {
-    "display_name": "AD_sch_prompt_basic",
+    "display_name": "AD_提示词调度(基础)",
     "inputs": {
       "clip": {
         "name": "CLIP"
@@ -335,7 +335,7 @@
     }
   },
   "AD_sch_prompt_chx": {
-    "display_name": "AD_sch_prompt_chx",
+    "display_name": "AD_提示词调度chx",
     "inputs": {
       "context": {
         "name": "context"
@@ -369,7 +369,7 @@
     }
   },
   "AD_sch_value": {
-    "display_name": "AD_sch_value",
+    "display_name": "AD_值调度",
     "inputs": {
       "values": {
         "name": "数值组"
@@ -400,7 +400,7 @@
     }
   },
   "AD_sch_image_merge": {
-    "display_name": "AD_sch_image_merge",
+    "display_name": "AD_调度曲线合并预览",
     "inputs": {
       "data1": {
         "name": "数据1"
@@ -434,7 +434,7 @@
     }
   },
   "AD_pingpong_vedio": {
-    "display_name": "AD_pingpong_vedio",
+    "display_name": "AD_视频循环",
     "inputs": {
       "images": {
         "name": "图像"
@@ -453,7 +453,7 @@
     }
   },
   "GPT_deepseek_api_text": {
-    "display_name": "GPT_deepseek_api_text",
+    "display_name": "GPT_deepseek生成文",
     "inputs": {
       "prompt": {
         "name": "提示词"
@@ -490,7 +490,7 @@
     }
   },
   "GPT_Janus_img_2_text": {
-    "display_name": "GPT_Janus_img_2_text",
+    "display_name": "GPT_Janus图生文",
     "inputs": {
       "image": {
         "name": "图像"
@@ -521,7 +521,7 @@
     }
   },
   "GPT_Janus_generate_img": {
-    "display_name": "GPT_Janus_generate_img",
+    "display_name": "GPT_Janus文生图",
     "inputs": {
       "prompt": {
         "name": "提示词"
@@ -605,7 +605,7 @@
     }
   },
   "GPT_ChineseToEnglish": {
-    "display_name": "GPT_ChineseToEnglish",
+    "display_name": "GPT_中文转英文",
     "inputs": {
       "use_gpu": {
         "name": "使用GPU"
@@ -624,7 +624,7 @@
     }
   },
   "GPT_EnglishToChinese": {
-    "display_name": "GPT_EnglishToChinese",
+    "display_name": "GPT_英文转中文",
     "inputs": {
       "use_gpu": {
         "name": "使用GPU"
@@ -643,7 +643,7 @@
     }
   },
   "Image_batch_select": {
-    "display_name": "Image_batch_select",
+    "display_name": "图像_批次选择",
     "inputs": {
       "images": {
         "name": "图像"
@@ -662,7 +662,7 @@
     }
   },
   "Image_batch_composite": {
-    "display_name": "Image_batch_composite",
+    "display_name": "图像_批次合成",
     "inputs": {
       "bg_image": {
         "name": "背景图像"
@@ -693,7 +693,7 @@
     }
   },
   "Image_pad_outfill": {
-    "display_name": "Image_pad_outfill",
+    "display_name": "图像_画布外扩",
     "inputs": {
       "image": {
         "name": "图像"
@@ -745,7 +745,7 @@
     }
   },
   "Image_pad_overlay": {
-    "display_name": "Image_pad_overlay",
+    "display_name": "图像_画布覆盖",
     "inputs": {
       "image": {
         "name": "图像"
@@ -782,7 +782,7 @@
     }
   },
   "Image_Resize_sum": {
-    "display_name": "Image_Resize_sum",
+    "display_name": "图像_调整大小(总)",
     "inputs": {
       "pixels": {
         "name": "像素"
@@ -822,7 +822,7 @@
     }
   },
   "Image_Resize2": {
-    "display_name": "Image_Resize2",
+    "display_name": "图像_调整大小",
     "inputs": {
       "image": {
         "name": "图像"
@@ -856,7 +856,7 @@
     }
   },
   "Image_transform_batch": {
-    "display_name": "Image_transform_batch",
+    "display_name": "图像_批次变换",
     "inputs": {
       "image": {
         "name": "图像"
@@ -893,7 +893,7 @@
     }
   },
   "Image_transform_sum": {
-    "display_name": "Image_transform_sum",
+    "display_name": "图像_变换(总)",
     "inputs": {
       "output_format": {
         "name": "输出格式"
@@ -1077,7 +1077,7 @@
     }
   },
   "Image_Upscaletile": {
-    "display_name": "Image_Upscaletile",
+    "display_name": "图像_放大",
     "inputs": {
       "model_name": {
         "name": "模型名称"
@@ -1099,7 +1099,7 @@
     }
   },
   "color_adjust_light": {
-    "display_name": "color_adjust_light",
+    "display_name": "颜色_材质打光",
     "inputs": {
       "target_img": {
         "name": "目标图像"
@@ -1151,7 +1151,7 @@
     }
   },
   "color_adjust_WB_balance": {
-    "display_name": "color_adjust_WB_balance",
+    "display_name": "颜色_白平衡",
     "inputs": {
       "images": {
         "name": "图像"
@@ -1182,7 +1182,7 @@
     }
   },
   "color_adjust_HDR": {
-    "display_name": "color_adjust_HDR",
+    "display_name": "颜色_调整HDR",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1222,7 +1222,7 @@
     }
   },
   "color_adjust_HSL": {
-    "display_name": "color_adjust_HSL",
+    "display_name": "颜色_调整HSL",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1259,7 +1259,7 @@
     }
   },
   "color_tool": {
-    "display_name": "color_tool",
+    "display_name": "颜色_工具",
     "inputs": {
       "color": {
         "name": "颜色"
@@ -1296,7 +1296,7 @@
     }
   },
   "color_OneColor_replace": {
-    "display_name": "color_OneColor_replace",
+    "display_name": "颜色_单色替换",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1327,7 +1327,7 @@
     }
   },
   "color_OneColor_keep": {
-    "display_name": "color_OneColor_keep",
+    "display_name": "颜色_单色保留",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1355,7 +1355,7 @@
     }
   },
   "color_match_adv": {
-    "display_name": "color_match_adv",
+    "display_name": "颜色_高级匹配",
     "inputs": {
       "target_image": {
         "name": "目标图像"
@@ -1392,7 +1392,7 @@
     }
   },
   "Image_Channel_RemoveAlpha": {
-    "display_name": "Image_Channel_RemoveAlpha",
+    "display_name": "图像_移除Alpha",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1405,7 +1405,7 @@
     }
   },
   "Image_Channel_Extract": {
-    "display_name": "Image_Channel_Extract",
+    "display_name": "图像_通道提取",
     "inputs": {
       "images": {
         "name": "图像"
@@ -1421,7 +1421,7 @@
     }
   },
   "Image_Channel_Apply": {
-    "display_name": "Image_Channel_Apply",
+    "display_name": "图像_通道合并",
     "inputs": {
       "images": {
         "name": "图像"
@@ -1440,7 +1440,7 @@
     }
   },
   "img_effect_Load": {
-    "display_name": "img_effect_Load",
+    "display_name": "图效_加载",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1468,7 +1468,7 @@
     }
   },
   "img_effect_CircleWarp": {
-    "display_name": "img_effect_CircleWarp",
+    "display_name": "图效_圆形变形",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1496,7 +1496,7 @@
     }
   },
   "img_effect_Stretch": {
-    "display_name": "img_effect_Stretch",
+    "display_name": "图效_拉伸",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1530,7 +1530,7 @@
     }
   },
   "img_effect_WaveWarp": {
-    "display_name": "img_effect_WaveWarp",
+    "display_name": "图效_波浪变形",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1558,7 +1558,7 @@
     }
   },
   "img_effect_Liquify": {
-    "display_name": "img_effect_Liquify",
+    "display_name": "图效_液化",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1592,7 +1592,7 @@
     }
   },
   "create_overShape": {
-    "display_name": "create_overShape",
+    "display_name": "创建_覆盖形状",
     "inputs": {
       "wide": {
         "name": "宽度"
@@ -1638,7 +1638,7 @@
     }
   },
   "create_RadialGradient": {
-    "display_name": "create_RadialGradient",
+    "display_name": "创建_径向渐变",
     "inputs": {
       "width": {
         "name": "宽度"
@@ -1669,7 +1669,7 @@
     }
   },
   "create_lineGradient": {
-    "display_name": "create_lineGradient",
+    "display_name": "创建_线性渐变",
     "inputs": {
       "width": {
         "name": "宽度"
@@ -1700,7 +1700,7 @@
     }
   },
   "create_AD_mask": {
-    "display_name": "create_AD_mask",
+    "display_name": "创建_AD遮罩",
     "inputs": {
       "width": {
         "name": "宽度"
@@ -1740,7 +1740,7 @@
     }
   },
   "create_mulcolor_img": {
-    "display_name": "create_mulcolor_img",
+    "display_name": "创建_多色图像",
     "inputs": {
       "width": {
         "name": "宽度"
@@ -1756,7 +1756,7 @@
     }
   },
   "create_mulcolor_mask": {
-    "display_name": "create_mulcolor_mask",
+    "display_name": "创建_多色遮罩",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1778,7 +1778,7 @@
     }
   },
   "lay_ImageGrid": {
-    "display_name": "lay_ImageGrid",
+    "display_name": "排版_图像网格",
     "inputs": {
       "images": {
         "name": "图像"
@@ -1797,7 +1797,7 @@
     }
   },
   "lay_MaskGrid": {
-    "display_name": "lay_MaskGrid",
+    "display_name": "排版_遮罩网格",
     "inputs": {
       "masks": {
         "name": "遮罩组"
@@ -1816,7 +1816,7 @@
     }
   },
   "lay_text_sum": {
-    "display_name": "lay_text_sum",
+    "display_name": "排版_文本(总)",
     "inputs": {
       "text": {
         "name": "文本"
@@ -1868,7 +1868,7 @@
     }
   },
   "lay_image_match_W_or_H": {
-    "display_name": "lay_image_match_W_or_H",
+    "display_name": "排版_匹配_宽或高",
     "inputs": {
       "image1": {
         "name": "图像_1"
@@ -1890,7 +1890,7 @@
     }
   },
   "lay_image_match_W_and_H": {
-    "display_name": "lay_image_match_W_and_H",
+    "display_name": "排版_匹配_宽和高",
     "inputs": {
       "count": {
         "name": "数量"
@@ -1924,7 +1924,7 @@
     }
   },
   "lay_edge_cut": {
-    "display_name": "lay_edge_cut",
+    "display_name": "排版_边缘裁剪",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1958,7 +1958,7 @@
     }
   },
   "lay_fill_inpaint": {
-    "display_name": "lay_fill_inpaint",
+    "display_name": "排版_左右图",
     "inputs": {
       "img1": {
         "name": "图像_1"
@@ -1983,7 +1983,7 @@
     }
   },
   "latent_chx_noise": {
-    "display_name": "latent_chx_noise",
+    "display_name": "latent_通道噪波",
     "inputs": {
       "images": {
         "name": "图像"
@@ -2008,7 +2008,7 @@
     }
   },
   "latent_Image2Noise": {
-    "display_name": "latent_Image2Noise",
+    "display_name": "latent_图像噪波",
     "inputs": {
       "image": {
         "name": "图像"
@@ -2051,7 +2051,7 @@
     }
   },
   "latent_mask": {
-    "display_name": "latent_mask",
+    "display_name": "latent_遮罩",
     "inputs": {
       "width": {
         "name": "宽度"
@@ -2073,7 +2073,7 @@
     }
   },
   "latent_ratio": {
-    "display_name": "latent_ratio",
+    "display_name": "latent_分辨率",
     "inputs": {
       "ratio_selected": {
         "name": "选择比例"
@@ -2089,7 +2089,7 @@
     }
   },
   "Mask_Detect_label": {
-    "display_name": "Mask_Detect_label",
+    "display_name": "遮罩_检测标签",
     "inputs": {
       "image": {
         "name": "图像"
@@ -2117,7 +2117,7 @@
     }
   },
   "Mask_Remove_bg": {
-    "display_name": "Mask_Remove_bg",
+    "display_name": "遮罩_移除背景",
     "inputs": {
       "image": {
         "name": "图像"
@@ -2155,7 +2155,7 @@
   },
 
   "Mask_inpaint_light": {
-    "display_name": "Mask_inpaint_light",
+    "display_name": "遮罩_重绘亮度",
     "inputs": {
       "image": {
         "name": "图像"
@@ -2183,7 +2183,7 @@
     }
   },
   "Mask_math": {
-    "display_name": "Mask_math",
+    "display_name": "遮罩_运算",
     "inputs": {
       "mask1": {
         "name": "遮罩_1"
@@ -2211,7 +2211,7 @@
     }
   },
   "Mask_image2mask": {
-    "display_name": "Mask_image2mask",
+    "display_name": "遮罩_图像转遮罩",
     "inputs": {
       "image": {
         "name": "图像"
@@ -2254,7 +2254,7 @@
     }
   },
   "Mask_mask2mask": {
-    "display_name": "Mask_mask2mask",
+    "display_name": "遮罩_遮罩转遮罩",
     "inputs": {
       "mask": {
         "name": "遮罩"
@@ -2291,7 +2291,7 @@
     }
   },
   "Mask_transform": {
-    "display_name": "Mask_transform",
+    "display_name": "遮罩_变换",
     "inputs": {
       "mask": {
         "name": "遮罩"
@@ -2325,7 +2325,7 @@
     }
   },
   "Mask_splitMask": {
-    "display_name": "Mask_splitMask",
+    "display_name": "遮罩_分割遮罩",
     "inputs": {
       "mask": {
         "name": "遮罩"
@@ -2343,84 +2343,9 @@
       }
     }
   },
-  "math_UnaryOperation": {
-    "display_name": "math_UnaryOperation",
-    "inputs": {
-      "op": {
-        "name": "操作"
-      },
-      "a": {
-        "name": "输入A"
-      }
-    },
-    "outputs": {
-      "float": {
-        "name": "浮点数"
-      },
-      "int": {
-        "name": "整数"
-      }
-    }
-  },
-  "math_UnaryCondition": {
-    "display_name": "math_UnaryCondition",
-    "inputs": {
-      "op": {
-        "name": "操作"
-      },
-      "a": {
-        "name": "输入A"
-      }
-    },
-    "outputs": {
-      "bool": {
-        "name": "布尔"
-      }
-    }
-  },
-  "math_BinaryOperation": {
-    "display_name": "math_BinaryOperation",
-    "inputs": {
-      "op": {
-        "name": "操作"
-      },
-      "a": {
-        "name": "a"
-      },
-      "b": {
-        "name": "b"
-      }
-    },
-    "outputs": {
-      "float": {
-        "name": "浮点数"
-      },
-      "int": {
-        "name": "整数"
-      }
-    }
-  },
-  "math_BinaryCondition": {
-    "display_name": "math_BinaryCondition",
-    "inputs": {
-      "op": {
-        "name": "操作"
-      },
-      "a": {
-        "name": "a"
-      },
-      "b": {
-        "name": "b"
-      }
-    },
-    "outputs": {
-      "bool": {
-        "name": "布尔"
-      }
-    }
-  },
+
   "math_Remap_data": {
-    "display_name": "math_Remap_data",
+    "display_name": "math_重映射",
     "inputs": {
       "value": {
         "name": "值"
@@ -2529,49 +2454,10 @@
       }
     }
   },
-  "list_input_text": {
-    "display_name": "list_input_text",
-    "inputs": {
-      "text": {
-        "name": "文本"
-      },
-      "delimiter": {
-        "name": "分隔符"
-      },
-      "repeats": {
-        "name": "重复次数"
-      }
-    },
-    "outputs": {
-      "any_type": {
-        "name": "任意类型"
-      }
-    }
-  },
-  "list_input_Value": {
-    "display_name": "list_input_Value",
-    "inputs": {
-      "values": {
-        "name": "数值组"
-      },
-      "delimiter": {
-        "name": "分隔符"
-      },
-      "repeats": {
-        "name": "重复次数"
-      }
-    },
-    "outputs": {
-      "float": {
-        "name": "浮点数"
-      },
-      "int": {
-        "name": "整数"
-      }
-    }
-  },
+
+
   "list_cycler_Value": {
-    "display_name": "list_cycler_Value",
+    "display_name": "列表_循环值",
     "inputs": {
       "schedule": {
         "name": "调度表"
@@ -2593,7 +2479,7 @@
     }
   },
   "list_num_range": {
-    "display_name": "list_num_range",
+    "display_name": "列表_数量范围",
     "inputs": {
       "start": {
         "name": "起始"
@@ -2618,7 +2504,7 @@
     }
   },
   "batch_cycler_split_text": {
-    "display_name": "batch_cycler_split_text",
+    "display_name": "批次_循环分割文本",
     "inputs": {
       "text": {
         "name": "文本"
@@ -2640,7 +2526,7 @@
     }
   },
   "batch_cycler_text": {
-    "display_name": "batch_cycler_text",
+    "display_name": "批次_循环文本",
     "inputs": {
       "keyframe_list": {
         "name": "关键帧列表"
@@ -2665,7 +2551,7 @@
     }
   },
   "batch_cycler_Value": {
-    "display_name": "batch_cycler_Value",
+    "display_name": "批次_循环值",
     "inputs": {
       "schedule": {
         "name": "调度表"
@@ -2687,7 +2573,7 @@
     }
   },
   "batch_cycler_Prompt": {
-    "display_name": "batch_cycler_Prompt",
+    "display_name": "批次_循环条件",
     "inputs": {
       "clip": {
         "name": "CLIP"
@@ -2709,7 +2595,7 @@
     }
   },
   "batch_cycler_image": {
-    "display_name": "batch_cycler_image",
+    "display_name": "批次_循环图像",
     "inputs": {
       "images": {
         "name": "图像"
@@ -2728,7 +2614,7 @@
     }
   },
   "batch_cycler_mask": {
-    "display_name": "batch_cycler_mask",
+    "display_name": "批次_循环遮罩",
     "inputs": {
       "masks": {
         "name": "遮罩组"
@@ -2769,7 +2655,7 @@
     }
   },
   "model_diff_inpaint": {
-    "display_name": "model_diff_inpaint",
+    "display_name": "模型_差异重绘",
     "inputs": {
       "model": {
         "name": "模型"
@@ -2815,7 +2701,7 @@
     }
   },
   "model_adjust_color": {
-    "display_name": "model_adjust_color",
+    "display_name": "模型_颜色调整",
     "inputs": {
       "model": {
         "name": "模型"
@@ -2855,7 +2741,7 @@
     }
   },
   "model_Regional": {
-    "display_name": "model_Regional",
+    "display_name": "模型_遮罩分区",
     "inputs": {
       "model": {
         "name": "模型"
@@ -3995,7 +3881,7 @@
     }
   },
   "AD_sch_latent": {
-    "display_name": "AD_sch_latent",
+    "display_name": "AD_latent调度",
     "inputs": {
       "text": {
         "name": "文本"
@@ -6914,7 +6800,7 @@
     }
   },
   "AD_DrawSchedule": {
-    "display_name": "AD_DrawSchedule",
+    "display_name": "AD_调度示意图",
     "inputs": {
       "schedule": {
         "name": "调度表"
@@ -6933,7 +6819,7 @@
     }
   },
   "AD_slice_Condi": {
-    "display_name": "AD_slice_Condi",
+    "display_name": "AD_条件偏移",
     "inputs": {
       "keyframed_condition": {
         "name": "条件关键帧"
@@ -6955,7 +6841,7 @@
     }
   },
   "AD_sch_prompt_adv": {
-    "display_name": "AD_sch_prompt_adv",
+    "display_name": "AD_提示词高级调度",
     "inputs": {
       "conditioning": {
         "name": "条件"
@@ -7037,7 +6923,7 @@
     }
   },
   "basic_Ksampler_batch": {
-    "display_name": "basic_Ksampler_batch",
+    "display_name": "基础采样器_批次",
     "inputs": {
       "model": {
         "name": "模型"
@@ -7076,64 +6962,9 @@
       }
     }
   },
-  "KSamplerProvider": {
-    "display_name": "KSamplerProvider",
-    "inputs": {
-      "seed": {
-        "name": "种子"
-      },
-      "steps": {
-        "name": "步数"
-      },
-      "cfg": {
-        "name": "cfg"
-      },
-      "sampler_name": {
-        "name": "采样器"
-      },
-      "scheduler": {
-        "name": "调度器"
-      },
-      "denoise": {
-        "name": "降噪"
-      },
-      "basic_pipe": {
-        "name": "基础管道"
-      },
-      "scheduler_func_opt": {
-        "name": "scheduler_func_opt"
-      }
-    },
-    "outputs": {
-      "ksampler": {
-        "name": "ksampler"
-      }
-    }
-  },
-  "TwoSamplersForMask": {
-    "display_name": "TwoSamplersForMask",
-    "inputs": {
-      "latent_image": {
-        "name": "latent_image"
-      },
-      "base_sampler": {
-        "name": "base_sampler"
-      },
-      "mask_sampler": {
-        "name": "mask_sampler"
-      },
-      "mask": {
-        "name": "遮罩"
-      }
-    },
-    "outputs": {
-      "latent": {
-        "name": "latent"
-      }
-    }
-  },
+
   "chx_Ksampler_dual_area": {
-    "display_name": "chx_Ksampler_dual_area",
+    "display_name": "采样器_双区采样",
     "inputs": {
       "context": {
         "name": "context"
@@ -7197,7 +7028,7 @@
     }
   },
   "chx_ksampler_Deforum": {
-    "display_name": "chx_ksampler_Deforum",
+    "display_name": "采样器_deform",
     "inputs": {
       "context": {
         "name": "context"
@@ -7246,7 +7077,7 @@
     }
   },
   "chx_ksampler_Deforum_math": {
-    "display_name": "chx_ksampler_Deforum_math",
+    "display_name": "采样器_deform公式",
     "inputs": {
       "context": {
         "name": "context"
@@ -7295,7 +7126,7 @@
     }
   },
   "chx_ksampler_Deforum_sch": {
-    "display_name": "chx_ksampler_Deforum_sch",
+    "display_name": "采样器_deform调度",
     "inputs": {
       "context": {
         "name": "context"
@@ -7344,7 +7175,7 @@
     }
   },
   "chx_ksampler_tile": {
-    "display_name": "chx_ksampler_tile",
+    "display_name": "采样器_tile放大",
     "inputs": {
       "context": {
         "name": "context"
@@ -7417,7 +7248,7 @@
     }
   },
   "model_Style_Align": {
-    "display_name": "model_Style_Align",
+    "display_name": "模型_风格对齐",
     "inputs": {
       "model": {
         "name": "模型"
@@ -7439,7 +7270,7 @@
     }
   },
   "chx_Ksampler_VisualStyle": {
-    "display_name": "chx_Ksampler_VisualStyle",
+    "display_name": "采样器_可视化风格",
     "inputs": {
       "context": {
         "name": "context"
@@ -7484,39 +7315,10 @@
       }
     }
   },
-  "pre_inpaint_xl": {
-    "display_name": "pre_inpaint_xl",
-    "inputs": {
-      "context": {
-        "name": "context"
-      },
-      "pixels": {
-        "name": "像素"
-      },
-      "mask": {
-        "name": "遮罩"
-      },
-      "head": {
-        "name": "head"
-      },
-      "patch": {
-        "name": "patch"
-      },
-      "h": {
-        "name": "h"
-      },
-      "transformer_options": {
-        "name": "变换_选项"
-      }
-    },
-    "outputs": {
-      "run_context": {
-        "name": "context"
-      }
-    }
-  },
+
+
   "chx_Ksampler_dual_paint": {
-    "display_name": "chx_Ksampler_dual_paint",
+    "display_name": "采样器_双区重绘",
     "inputs": {
       "context": {
         "name": "context"
@@ -7557,7 +7359,7 @@
   },
 
   "chx_Ksampler_inpaint": {
-    "display_name": "chx_Ksampler_inpaint",
+    "display_name": "采样器_局部重绘",
     "inputs": {
       "context": {
         "name": "context"
@@ -7612,19 +7414,22 @@
       }
     },
     "outputs": {
-      "run_context": {
+      "0": {
         "name": "context"
       },
-      "image": {
-        "name": "图像"
+      "1": {
+        "name": "输出图"
       },
-      "mask": {
+      "2": {
+        "name": "采样图"
+      },
+      "3": {
         "name": "遮罩"
       }
     }
   },
   "lay_texture_Offset": {
-    "display_name": "lay_texture_Offset",
+    "display_name": "排版_纹理偏移",
     "inputs": {
       "pixels": {
         "name": "像素"
@@ -7643,7 +7448,7 @@
     }
   },
   "sampler_DynamicTileSplit": {
-    "display_name": "sampler_DynamicTileSplit",
+    "display_name": "采样处理_图片tile分割",
     "inputs": {
       "image": {
         "name": "图像"
@@ -7671,7 +7476,7 @@
     }
   },
   "sampler_DynamicTileMerge": {
-    "display_name": "sampler_DynamicTileMerge",
+    "display_name": "采样处理_合并tile图片",
     "inputs": {
       "images": {
         "name": "图像"
@@ -7690,7 +7495,7 @@
     }
   },
   "sampler_enhance": {
-    "display_name": "sampler_enhance",
+    "display_name": "采样处理_细节增强",
     "inputs": {
       "sampler": {
         "name": "采样器"
@@ -7715,7 +7520,7 @@
     }
   },
   "sampler_sigmas": {
-    "display_name": "sampler_sigmas",
+    "display_name": "采样处理_采样曲线",
     "inputs": {
       "model": {
         "name": "模型"
@@ -7746,7 +7551,7 @@
     }
   },
   "sampler_InpaintCrop": {
-    "display_name": "sampler_InpaintCrop",
+    "display_name": "采样处理_重绘分割",
     "inputs": {
       "image": {
         "name": "图像"
@@ -7858,7 +7663,7 @@
     }
   },
   "sampler_InpaintStitch": {
-    "display_name": "sampler_InpaintStitch",
+    "display_name": "采样处理_重绘合并",
     "inputs": {
       "inpainted_image": {
         "name": "重绘图像"
@@ -7898,7 +7703,7 @@
     }
   },
   "Data_chx_Merge": {
-    "display_name": "Data_chx_Merge",
+    "display_name": "管道数据_合并",
     "inputs": {
       "context": {
         "name": "context"
@@ -7919,8 +7724,23 @@
       }
     }
   },
+
+  "Data_bus_chx": {
+    "display_name": "管道数据_巴士",
+    "inputs": {
+      "context": {
+        "name": "context"
+      }
+    },
+    "outputs": {
+      "run_context": {
+        "name": "context"
+      }
+    }
+  },
+
   "Data_basic": {
-    "display_name": "Data_basic",
+    "display_name": "管道数据_基础",
     "inputs": {
       "context": {
         "name": "context"
@@ -7977,48 +7797,9 @@
       }
     }
   },
-  "Data_basic_easy": {
-    "display_name": "Data_basic_easy",
-    "inputs": {
-      "context": {
-        "name": "context"
-      },
-      "model": {
-        "name": "模型"
-      },
-      "clip": {
-        "name": "CLIP"
-      },
-      "positive": {
-        "name": "正条件"
-      },
-      "negative": {
-        "name": "负条件"
-      },
-      "latent": {
-        "name": "latent"
-      }
-    },
-    "outputs": {
-      "run_context": {
-        "name": "context"
-      },
-      "model": {
-        "name": "模型"
-      },
-      "clip": {
-        "name": "CLIP"
-      },
-      "conditioning": {
-        "name": "条件"
-      },
-      "latent": {
-        "name": "latent"
-      }
-    }
-  },
+  
   "Data_sampleData": {
-    "display_name": "Data_sampleData",
+    "display_name": "管道数据_采样",
     "inputs": {
       "context": {
         "name": "context"
@@ -8040,7 +7821,7 @@
     }
   },
   "Data_select": {
-    "display_name": "Data_select",
+    "display_name": "管道数据_选择",
     "inputs": {
       "context": {
         "name": "context"
@@ -8056,7 +7837,7 @@
     }
   },
   "Data_presetData": {
-    "display_name": "Data_presetData",
+    "display_name": "管道数据_预设",
     "inputs": {
       "context": {
         "name": "context"
@@ -8179,253 +7960,6 @@
     }
   },
 
-  "sum_load_only_model": {
-    "display_name": "sum_load_only_model",
-    "inputs": {
-      "ckpt_name": {
-        "name": "ckpt模型"
-      },
-      "unet_name": {
-        "name": "unet模型"
-      },
-      "unet_Weight_Dtype": {
-        "name": "unet权重类型"
-      },
-      "clip_type": {
-        "name": "clip类型"
-      },
-      "clip1": {
-        "name": "clip1"
-      },
-      "clip2": {
-        "name": "clip2"
-      },
-      "guidance": {
-        "name": "引导"
-      },
-      "clip3": {
-        "name": "clip3"
-      },
-      "clip4": {
-        "name": "clip4"
-      },
-      "vae": {
-        "name": "VAE"
-      },
-      "lora": {
-        "name": "lora"
-      },
-      "lora_strength": {
-        "name": "lora强度"
-      },
-      "width": {
-        "name": "宽度"
-      },
-      "height": {
-        "name": "高度"
-      },
-      "batch": {
-        "name": "批次"
-      },
-      "steps": {
-        "name": "步数"
-      },
-      "cfg": {
-        "name": "cfg"
-      },
-      "sampler": {
-        "name": "采样器"
-      },
-      "scheduler": {
-        "name": "调度器"
-      },
-      "pos": {
-        "name": "正条件"
-      },
-      "neg": {
-        "name": "负条件"
-      },
-      "over_model": {
-        "name": "覆盖模型"
-      },
-      "over_clip": {
-        "name": "覆盖clip"
-      },
-      "over_vae": {
-        "name": "覆盖vae"
-      },
-      "node_id": {
-        "name": "node_id"
-      },
-      "device": {
-        "name": "device"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "模型"
-      },
-      "1": {
-        "name": "clip"
-      },
-      "2": {
-        "name": "vae"
-      }
-    }
-  },
-
-  "load_clip": {
-    "display_name": "load_clip",
-    "inputs": {
-      "preset": {
-        "name": "预设"
-      },
-      "ckpt_name": {
-        "name": "ckpt模型"
-      },
-      "unet_name": {
-        "name": "unet模型"
-      },
-      "unet_Weight_Dtype": {
-        "name": "unet权重类型"
-      },
-      "clip_type": {
-        "name": "clip类型"
-      },
-      "clip1": {
-        "name": "clip1"
-      },
-      "vae": {
-        "name": "VAE"
-      },
-      "lora": {
-        "name": "lora"
-      },
-      "lora_strength": {
-        "name": "lora强度"
-      },
-      "width": {
-        "name": "宽度"
-      },
-      "height": {
-        "name": "高度"
-      },
-      "batch": {
-        "name": "批次"
-      },
-      "steps": {
-        "name": "步数"
-      },
-      "cfg": {
-        "name": "cfg"
-      },
-      "sampler": {
-        "name": "采样器"
-      },
-      "scheduler": {
-        "name": "调度器"
-      },
-      "pos": {
-        "name": "正条件"
-      },
-      "neg": {
-        "name": "负条件"
-      },
-      "lora_stack": {
-        "name": "lora堆"
-      },
-      "node_id": {
-        "name": "node_id"
-      },
-      "device": {
-        "name": "device"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "context"
-      },
-      "1": {
-        "name": "模型"
-      },
-      "2": {
-        "name": "保存预设"
-      }
-    }
-  },
-  "load_only_clip": {
-    "display_name": "load_only_clip",
-    "inputs": {
-      "preset": {
-        "name": "预设"
-      },
-      "clip_type": {
-        "name": "clip类型"
-      },
-      "clip1": {
-        "name": "clip1"
-      },
-      "clip2": {
-        "name": "clip2"
-      },
-      "guidance": {
-        "name": "引导"
-      },
-      "clip3": {
-        "name": "clip3"
-      },
-      "vae": {
-        "name": "VAE"
-      },
-      "width": {
-        "name": "宽度"
-      },
-      "height": {
-        "name": "高度"
-      },
-      "batch": {
-        "name": "批次"
-      },
-      "steps": {
-        "name": "步数"
-      },
-      "cfg": {
-        "name": "cfg"
-      },
-      "sampler": {
-        "name": "采样器"
-      },
-      "scheduler": {
-        "name": "调度器"
-      },
-      "pos": {
-        "name": "正条件"
-      },
-      "neg": {
-        "name": "负条件"
-      },
-      "over_model": {
-        "name": "覆盖模型"
-      },
-      "node_id": {
-        "name": "node_id"
-      },
-      "device": {
-        "name": "device"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "context"
-      },
-      "1": {
-        "name": "模型"
-      },
-      "2": {
-        "name": "保存预设"
-      }
-    }
-  },
   "load_basic": {
     "display_name": "load_basic",
     "inputs": {
@@ -8493,6 +8027,7 @@
       }
     }
   },
+
   "load_FLUX": {
     "display_name": "load_FLUX",
     "inputs": {
@@ -8715,8 +8250,9 @@
       }
     }
   },
+
   "Data_preset_save": {
-    "display_name": "Data_preset_save",
+    "display_name": "管道数据_保存",
     "inputs": {
       "param": {
         "name": "参数"
@@ -8730,6 +8266,7 @@
     },
     "outputs": {}
   },
+
   "pre_controlnet": {
     "display_name": "pre_controlnet",
     "inputs": {
@@ -8797,8 +8334,9 @@
       }
     }
   },
+
   "sum_lora": {
-    "display_name": "sum_lora",
+    "display_name": "总控_lora",
     "inputs": {
       "context": {
         "name": "context"
@@ -8846,6 +8384,7 @@
       }
     }
   },
+
   "pre_sample_data": {
     "display_name": "pre_sample_data",
     "inputs": {
@@ -8871,6 +8410,7 @@
       }
     }
   },
+
   "sum_editor": {
     "display_name": "sum_editor",
     "inputs": {
@@ -8956,8 +8496,9 @@
       }
     }
   },
+
   "sum_latent": {
-    "display_name": "sum_latent",
+    "display_name": "总控_latent",
     "inputs": {
       "context": {
         "name": "context"
@@ -8996,70 +8537,9 @@
       }
     }
   },
-  "sum_text": {
-    "display_name": "sum_text",
-    "inputs": {
-      "context": {
-        "name": "context"
-      },
-      "positive": {
-        "name": "正条件"
-      },
-      "negative": {
-        "name": "负条件"
-      },
-      "target": {
-        "name": "替换目标"
-      },
-      "replace": {
-        "name": "替换内容"
-      },
-      "pos1": {
-        "name": "追加正向词"
-      },
-      "neg1": {
-        "name": "追加负向词"
-      },
-      "style": {
-        "name": "风格"
-      },
-      "node_id": {
-        "name": "node_id"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "context"
-      },
-      "1": {
-        "name": "正文本"
-      }
-    }
-  },
-  "text_manual": {
-    "display_name": "text_manual",
-    "inputs": {
-      "preset": {
-        "name": "预设"
-      },
-      "title": {
-        "name": "标题"
-      },
-      "note": {
-        "name": "注释"
-      },
-      "node_id": {
-        "name": "node_id"
-      }
-    },
-    "outputs": {
-      "pdata": {
-        "0": "pdata"
-      }
-    }
-  },
+
   "basic_Ksampler_full": {
-    "display_name": "basic_Ksampler_full",
+    "display_name": "基础采样器_全参数",
     "inputs": {
       "context": {
         "name": "context"
@@ -9141,7 +8621,7 @@
     }
   },
   "basic_Ksampler_mid": {
-    "display_name": "basic_Ksampler_mid",
+    "display_name": "基础采样器_半参数",
     "inputs": {
       "context": {
         "name": "context"
@@ -9208,7 +8688,7 @@
     }
   },
   "basic_Ksampler_simple": {
-    "display_name": "basic_Ksampler_simple",
+    "display_name": "基础采样器_简易",
     "inputs": {
       "context": {
         "name": "context"
@@ -9244,7 +8724,7 @@
 
 
   "chx_Ksampler_Kontext": {
-    "display_name": "chx_Ksampler_Kontext",
+    "display_name": "采样器_Kontext",
     "inputs": {
       "context": {
         "name": "context"
@@ -9309,7 +8789,7 @@
   },
 
   "basic_Ksampler_custom": {
-    "display_name": "basic_Ksampler_custom",
+    "display_name": "基础采样器_自定义",
     "inputs": {
       "context": {
         "name": "context"
@@ -9379,7 +8859,7 @@
     }
   },
   "basic_Ksampler_adv": {
-    "display_name": "basic_Ksampler_adv",
+    "display_name": "基础采样器_高级",
     "inputs": {
       "context": {
         "name": "context"
@@ -9431,7 +8911,7 @@
     }
   },
   "chx_Ksampler_mix": {
-    "display_name": "chx_Ksampler_mix",
+    "display_name": "采样器_混合",
     "inputs": {
       "context": {
         "name": "context"
@@ -9483,7 +8963,7 @@
     }
   },
   "chx_Ksampler_texture": {
-    "display_name": "chx_Ksampler_texture",
+    "display_name": "采样器_纹理",
     "inputs": {
       "context": {
         "name": "context"
@@ -9523,7 +9003,7 @@
     }
   },
   "chx_Ksampler_refine": {
-    "display_name": "chx_Ksampler_refine",
+    "display_name": "采样器_fefine放大",
     "inputs": {
       "context": {
         "name": "context"
@@ -9951,7 +9431,7 @@
     }
   },
   "AD_sch_IPA": {
-    "display_name": "AD_sch_IPA",
+    "display_name": "AD_IPA调度",
     "inputs": {
       "preset": {
         "name": "预设"
@@ -10123,67 +9603,7 @@
       }
     }
   },
-  "YC_LG_Redux": {
-    "display_name": "YC_LG_Redux",
-    "inputs": {
-      "positive": {
-        "name": "正条件"
-      },
-      "style_model": {
-        "name": "风格模型"
-      },
-      "clip_vision": {
-        "name": "CLIP视觉"
-      },
-      "image": {
-        "name": "图像"
-      },
-      "crop": {
-        "name": "裁切"
-      },
-      "sharpen": {
-        "name": "锐化"
-      },
-      "patch_res": {
-        "name": "patch_res"
-      },
-      "style_strength": {
-        "name": "风格强度"
-      },
-      "prompt_strength": {
-        "name": "提示词强度"
-      },
-      "blend_mode": {
-        "name": "混合模式"
-      },
-      "noise_level": {
-        "name": "噪波等级"
-      },
-      "mask": {
-        "name": "遮罩"
-      },
-      "guidance": {
-        "name": "引导"
-      },
-      "strength": {
-        "name": "强度"
-      },
-      "cond": {
-        "name": "条件"
-      },
-      "txt": {
-        "name": "文本"
-      },
-      "mode": {
-        "name": "模式"
-      }
-    },
-    "outputs": {
-      "conditioning": {
-        "name": "条件"
-      }
-    }
-  },
+
   "Stack_Redux": {
     "display_name": "Stack_Redux",
     "inputs": {
@@ -10345,7 +9765,7 @@
     }
   },
   "AD_sch_prompt_stack": {
-    "display_name": "AD_sch_prompt_stack",
+    "display_name": "AD_提示词调度_堆",
     "inputs": {
       "prompts": {
         "name": "提示词组"
@@ -10429,7 +9849,7 @@
     }
   },
   "sum_stack_image": {
-    "display_name": "sum_stack_image",
+    "display_name": "总控_图像堆",
     "inputs": {
       "context": {
         "name": "context"
@@ -10490,7 +9910,7 @@
     }
   },
   "sum_stack_AD": {
-    "display_name": "sum_stack_AD",
+    "display_name": "总控_AD堆",
     "inputs": {
       "context": {
         "name": "context"
@@ -10542,7 +9962,7 @@
     }
   },
   "sum_stack_all": {
-    "display_name": "sum_stack_all",
+    "display_name": "总控_总堆包",
     "inputs": {
       "context": {
         "name": "context"
@@ -10619,6 +10039,91 @@
       }
     }
   },
+
+  "AD_font2img": {
+    "display_name": "AD_字体动画",
+    "inputs": {
+        "input_images": {
+            "name": "输入图像"
+        },
+        "transcription": {
+            "name": "转录（带时间戳）"
+        },
+        "font_file": {
+            "name": "字体文件"
+        },
+        "font_color": {
+            "name": "字体颜色"
+        },
+        "background_color": {
+            "name": "背景颜色"
+        },
+        "line_spacing": {
+            "name": "行间距"
+        },
+        "kerning": {
+            "name": "字间距"
+        },
+        "padding": {
+            "name": "内边距"
+        },
+        "frame_count": {
+            "name": "帧数"
+        },
+        "image_height": {
+            "name": "图像高度"
+        },
+        "image_width": {
+            "name": "图像宽度"
+        },
+        "text_alignment": {
+            "name": "文本对齐方式"
+        },
+        "text_interpolation_options": {
+            "name": "文本插值选项"
+        },
+        "Text": {
+            "name": "文本内容"
+        },
+        "start_font_size": {
+            "name": "起始字体大小"
+        },
+        "end_font_size": {
+            "name": "结束字体大小"
+        },
+        "start_x_offset": {
+            "name": "起始X偏移"
+        },
+        "end_x_offset": {
+            "name": "结束X偏移"
+        },
+        "start_y_offset": {
+            "name": "起始Y偏移"
+        },
+        "end_y_offset": {
+            "name": "结束Y偏移"
+        },
+        "start_rotation": {
+            "name": "起始旋转角度"
+        },
+        "end_rotation": {
+            "name": "结束旋转角度"
+        },
+        "rotation_anchor_x": {
+            "name": "旋转锚点X坐标"
+        },
+        "rotation_anchor_y": {
+            "name": "旋转锚点Y坐标"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "字体转图像结果"
+        }
+    }
+  },
+  
+
   "IPA_dapterSD3LOAD": {
     "display_name": "IPA_dapterSD3LOAD",
     "inputs": {
@@ -10647,6 +10152,7 @@
       }
     }
   },
+
   "WanImageToVideo": {
     "display_name": "WanImageToVideo",
     "inputs": {
@@ -10687,6 +10193,7 @@
       }
     }
   },
+
   "WanFunControlToVideo": {
     "display_name": "WanFunControlToVideo",
     "inputs": {
@@ -10730,6 +10237,7 @@
       }
     }
   },
+
   "WanFirstLastFrameToVideo": {
     "display_name": "WanFirstLastFrameToVideo",
     "inputs": {
@@ -10776,6 +10284,7 @@
       }
     }
   },
+
   "WanFunInpaintToVideo": {
     "display_name": "WanFunInpaintToVideo",
     "inputs": {
@@ -10819,6 +10328,7 @@
       }
     }
   },
+
   "Stack_WanImageToVideo": {
     "display_name": "Stack_WanImageToVideo",
     "inputs": {
@@ -10847,6 +10357,7 @@
       }
     }
   },
+
   "Stack_WanFunControlToVideo": {
     "display_name": "Stack_WanFunControlToVideo",
     "inputs": {
@@ -10878,6 +10389,7 @@
       }
     }
   },
+
   "Stack_WanFirstLastFrameToVideo": {
     "display_name": "Stack_WanFirstLastFrameToVideo",
     "inputs": {
@@ -10915,6 +10427,7 @@
       }
     }
   },
+
   "Stack_WanFunInpaintToVideo": {
     "display_name": "Stack_WanFunInpaintToVideo",
     "inputs": {
@@ -10946,8 +10459,9 @@
       }
     }
   },
+
   "sum_stack_Wan": {
-    "display_name": "sum_stack_Wan",
+    "display_name": "总控_wan堆",
     "inputs": {
       "context": {
         "name": "context"
@@ -10989,8 +10503,9 @@
       }
     }
   },
+
   "pre_mask_Mulcondi": {
-    "display_name": "pre_mask_Mulcondi",
+    "display_name": "pre_多条件遮罩",
     "inputs": {
       "context": {
         "name": "context"
@@ -11056,50 +10571,7 @@
       }
     }
   },
-  "chx_Upscale_simple": {
-    "display_name": "chx_Upscale_simple",
-    "inputs": {
-      "context": {
-        "name": "context"
-      },
-      "image": {
-        "name": "图像"
-      },
-      "upscale_model": {
-        "name": "放大模型"
-      },
-      "upscale_method": {
-        "name": "放大方法"
-      },
-      "Add_img_scale": {
-        "name": "添加图像缩放比例"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "context"
-      },
-      "1": {
-        "name": "图像"
-      }
-    }
-  },
-  "chx_re_fluxguide": {
-    "display_name": "chx_re_fluxguide",
-    "inputs": {
-      "context": {
-        "name": "context"
-      },
-      "guidance": {
-        "name": "引导"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "context"
-      }
-    }
-  },
+
   "pre_Flex2": {
     "display_name": "pre_Flex2",
     "inputs": {
@@ -11132,108 +10604,8 @@
     }
   },
 
-  "WebCanvasNode": {
-    "display_name": "WebCanvasNode",
-    "inputs": {
-      "back_image": {
-        "name": "背景图"
-      },
-      "img1": {
-        "name": "图像_1"
-      },
-      "seed": {
-        "name": "种子"
-      },
-      "mask1": {
-        "name": "遮罩_1"
-      },
-      "img2": {
-        "name": "图像_2"
-      },
-      "mask2": {
-        "name": "遮罩_2"
-      },
-      "img3": {
-        "name": "图像3"
-      },
-      "mask3": {
-        "name": "遮罩3"
-      },
-      "prompt": {
-        "name": "提示词"
-      },
-      "extra_pnginfo": {
-        "name": "附加PNG信息"
-      },
-      "image": {
-        "name": "图像"
-      },
-      "x": {
-        "name": "X坐标"
-      },
-      "y": {
-        "name": "Y坐标"
-      },
-      "scale": {
-        "name": "缩放"
-      },
-      "rotation": {
-        "name": "旋转"
-      }
-    },
-    "outputs": {
-      "image": {
-        "name": "图像"
-      },
-      "mask": {
-        "name": "遮罩"
-      }
-    }
-  },
-
-  "chx_latent_blend": {
-    "display_name": "chx_latent_blend",
-    "inputs": {
-      "context": {
-        "name": "context"
-      },
-      "img_targe": {
-        "name": "目标图像"
-      },
-      "img_blend": {
-        "name": "混合图像"
-      },
-      "blend_ratio": {
-        "name": "混合比例"
-      },
-      "operation": {
-        "name": "运算"
-      },
-      "op_strength": {
-        "name": "运算强度"
-      },
-      "normalize": {
-        "name": "归一化"
-      },
-      "clamp_min": {
-        "name": "最小钳值"
-      },
-      "clamp_max": {
-        "name": "最大钳值"
-      }
-    },
-    "outputs": {
-      "context": {
-        "name": "context"
-      },
-      "latent": {
-        "name": "潜在空间数据"
-      }
-    }
-  },
-
   "chx_latent_adjust": {
-    "display_name": "chx_latent_adjust",
+    "display_name": "latent_调色",
     "inputs": {
       "context": {
         "name": "context"
@@ -11274,7 +10646,7 @@
   },
 
   "Mask_combine_sum": {
-    "display_name": "Mask_combine_sum",
+    "display_name": "遮罩_合并(总)",
     "inputs": {
       "img1": {
         "name": "图像1"
@@ -11308,27 +10680,31 @@
     }
   },
 
-  "Mask_combine_crop": {
-    "display_name": "Mask_combine_crop",
+
+"Mask_combine_crop": {
+    "display_name": "蒙版_合并裁剪",
     "inputs": {
-      "img1": {
-        "name": "图像1"
-      },
-      "mask1": {
-        "name": "蒙版1"
-      },
-      "img2": {
-        "name": "图像2"
-      },
-      "mask2": {
-        "name": "蒙版2"
-      },
-      "lay_mode": {
-        "name": "排版方向"
-      },
-      "out_width": {
-        "name": "输出宽度"
-      }
+        "img1": {
+            "name": "图像1"
+        },
+        "mask1": {
+            "name": "蒙版1"
+        },
+        "img2": {
+            "name": "图像2"
+        },
+        "mask2": {
+            "name": "蒙版2"
+        },
+        "lay_mode": {
+            "name": "排版模式"
+        },
+        "out_width": {
+            "name": "输出宽度"
+        },
+        "bj_color": {
+            "name": "背景颜色"
+        }
     },
     "outputs": {
       "0": {
@@ -11343,8 +10719,350 @@
     }
   },
 
+"Mask_face_detect": {
+    "display_name": "蒙版_人脸检测",
+    "inputs": {
+        "image": {
+            "name": "图像"
+        },
+        "skin": {
+            "name": "皮肤"
+        },
+        "left_brow": {
+            "name": "左眉毛"
+        },
+        "right_brow": {
+            "name": "右眉毛"
+        },
+        "left_eye": {
+            "name": "左眼"
+        },
+        "right_eye": {
+            "name": "右眼"
+        },
+        "eyeglasses": {
+            "name": "眼镜"
+        },
+        "left_ear": {
+            "name": "左耳"
+        },
+        "right_ear": {
+            "name": "右耳"
+        },
+        "earring": {
+            "name": "耳环"
+        },
+        "nose": {
+            "name": "鼻子"
+        },
+        "mouth": {
+            "name": "嘴巴"
+        },
+        "upper_lip": {
+            "name": "上嘴唇"
+        },
+        "lower_lip": {
+            "name": "下嘴唇"
+        },
+        "neck": {
+            "name": "脖子"
+        },
+        "necklace": {
+            "name": "项链"
+        },
+        "cloth": {
+            "name": "衣物"
+        },
+        "hair": {
+            "name": "头发"
+        },
+        "hat": {
+            "name": "帽子"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "遮罩"
+        }
+    }
+  },
+
+"lay_compare_img": {
+  "display_name": "排版_图片对比",
+  "inputs": {
+      "image1": {
+          "name": "图像1"
+      },
+      "image2": {
+          "name": "图像2"
+      },
+      "text1": {
+          "name": "文本"
+      },
+      "text2": {
+          "name": "文本"
+      },
+      "footer_height": {
+          "name": "页脚高度"
+      },
+      "font_name": {
+          "name": "字体名称"
+      },
+      "font_size": {
+          "name": "字体大小"
+      },
+      "mode": {
+          "name": "模式"
+      },
+      "border_thickness": {
+          "name": "边框厚度"
+      }
+  },
+  "outputs": {
+      "0": {
+          "name": "图像"
+      }
+    }
+  },
+
+"lay_images_free_layout": {
+    "display_name": "排版_自由布局",
+    "inputs": {
+        "images": {
+            "name": "图像"
+        },
+        "page_width": {
+            "name": "页面宽度"
+        },
+        "page_height": {
+            "name": "页面高度"
+        },
+        "template": {
+            "name": "模板"
+        },
+        "border_thickness": {
+            "name": "边框厚度"
+        },
+        "outline_thickness": {
+            "name": "轮廓厚度"
+        },
+        "outline_color": {
+            "name": "轮廓颜色"
+        },
+        "panel_color": {
+            "name": "面板颜色"
+        },
+        "bg_color": {
+            "name": "背景颜色"
+        },
+        "custom_panel_layout": {
+            "name": "自定义面板布局"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "图像"
+        }
+    }
+  },
+
+
+"lay_image_grid_note": {
+    "display_name": "排版_图像网格排版",
+    "inputs": {
+        "images": {
+            "name": "图像"
+        },
+        "rows": {
+            "name": "行数"
+        },
+        "columns": {
+            "name": "列数"
+        },
+        "gap": {
+            "name": "间距"
+        },
+        "font_size": {
+            "name": "字体大小"
+        },
+        "row_texts": {
+            "name": "行文本"
+        },
+        "col_texts": {
+            "name": "列文本"
+        },
+        "bg_color": {
+            "name": "背景颜色"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "图像"
+        }
+    }
+  },
+
+
+"create_Mask_sole": {
+    "display_name": "创建_蒙版(单独)",
+    "inputs": {
+        "C_Width": {
+            "name": "画布宽度"
+        },
+        "C_Height": {
+            "name": "画布高度"
+        },
+        "X": {
+            "name": "X坐标"
+        },
+        "Y": {
+            "name": "Y坐标"
+        },
+        "Width": {
+            "name": "宽度"
+        },
+        "Height": {
+            "name": "高度"
+        },
+        "Intenisit y": {
+            "name": "强度"
+        },
+        "Blur": {
+            "name": "模糊度"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "蒙版"
+        }
+    }
+  },
+
+"create_Mask_lay_X": {
+    "display_name": "创建_X向蒙版",
+    "inputs": {
+        "Width": {
+            "name": "宽度"
+        },
+        "Height": {
+            "name": "高度"
+        },
+        "X": {
+            "name": "X坐标"
+        },
+        "Y": {
+            "name": "Y坐标"
+        },
+        "unlimit_top": {
+            "name": "顶部无限制"
+        },
+        "unlimit_bottom": {
+            "name": "底部无限制"
+        },
+        "unlimit_left": {
+            "name": "左侧无限制"
+        },
+        "unlimit_right": {
+            "name": "右侧无限制"
+        },
+        "Layout": {
+            "name": "布局"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "图像"
+        },
+        "1": {
+            "name": "矩形蒙版"
+        }
+    }
+  },
+
+"create_Mask_lay_Y": {
+    "display_name": "创建_Y向蒙版",
+    "inputs": {
+        "Width": {
+            "name": "宽度"
+        },
+        "Height": {
+            "name": "高度"
+        },
+        "Colum_first": {
+            "name": "列优先"
+        },
+        "Rows": {
+            "name": "行数"
+        },
+        "Columns": {
+            "name": "列数"
+        },
+        "Layout": {
+            "name": "布局"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "图像"
+        },
+        "1": {
+            "name": "矩形蒙版"
+        }
+    }
+  },
+
+"create_Mask_Rectangles": {
+    "display_name": "创建_蒙版矩形组",
+    "inputs": {
+        "PngRectangles": {
+            "name": "矩形蒙版"
+        },
+        "Intensity": {
+            "name": "强度"
+        },
+        "Blur": {
+            "name": "模糊度"
+        },
+        "Start_At_Index": {
+            "name": "起始索引"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "蒙版_0"
+        },
+        "1": {
+            "name": "蒙版_1"
+        },
+        "2": {
+            "name": "蒙版_2"
+        },
+        "3": {
+            "name": "蒙版_3"
+        },
+        "4": {
+            "name": "蒙版_4"
+        },
+        "5": {
+            "name": "蒙版_5"
+        },
+        "6": {
+            "name": "蒙版_6"
+        },
+        "7": {
+            "name": "蒙版_7"
+        },
+        "8": {
+            "name": "蒙版_8"
+        },
+        "9": {
+            "name": "蒙版_9"
+        }
+    }
+  },
+
   "Image_crop_box2": {
-    "display_name": "Image_crop_box2",
+    "display_name": "图像_裁切box2",
     "inputs": {
       "image": {
         "name": "图像"
@@ -11366,3 +11084,5 @@
     }
   }
 }
+
+
