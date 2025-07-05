@@ -401,7 +401,7 @@ class WanPhantomSubjectToVideo:
 
 
 
-class chx_vae_encode_tile:
+class IO_video_encode:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -420,7 +420,7 @@ class chx_vae_encode_tile:
     
     RETURN_TYPES = ("RUN_CONTEXT", "IMAGE",)
     RETURN_NAMES = ("context", "image",)
-    CATEGORY = "Apt_Preset/chx_ksample"
+    CATEGORY = "Apt_Preset/View_IO"
     FUNCTION = "encode_tile"
 
 
