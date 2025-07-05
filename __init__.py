@@ -22,7 +22,7 @@ from .NodeBasic.C_image import *
 from .NodeBasic.C_promp import *
 from .NodeBasic.C_imgEffect import *
 from .NodeBasic.C_type import *
-from .NodeBasic.C_GPT import *
+
 from .NodeBasic.C_test import *
 from .NodeCollect.mask_face import *
 from .NodeCollect.text_font2img import *
@@ -375,19 +375,6 @@ NODE_CLASS_MAPPINGS= {
 "text_free_wildcards": text_free_wildcards,
 "text_stack_wildcards": text_stack_wildcards,
 "text_sum": NS_PromptList,#web
-
-
-
-
-
-
-#---------Gpt modle---------------
-"GPT_ChineseToEnglish": GPT_ChineseToEnglish,
-"GPT_EnglishToChinese": GPT_EnglishToChinese,
-"GPT_deepseek_api_text": GPT_deepseek_api_text,
-"GPT_Janus_img_2_text": GPT_Janus_img_2_text,
-"GPT_Janus_generate_img": GPT_Janus_generate_img,
-"GPT_MiniCPM": GPT_MiniCPM,
 
 
 }
