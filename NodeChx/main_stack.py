@@ -791,42 +791,51 @@ class Apply_latent:
     FUNCTION = "apply_latent_stack"
     CATEGORY = "Apt_Preset/stack/apply"
 
+
+    def generate(self, ratio_selected, batch_size=1):
+        width = self.ratio_dict[ratio_selected]["width"]
+        height = self.ratio_dict[ratio_selected]["height"]
+        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
+        return ({"samples": latent}, )
+
+
     def apply_latent_stack(self, model, positive, negative, vae, latent_stack):
-        # 先初始化一个默认的 latent ，避免后续操作中 latent 为 None 的情况
-        default_width = 512
-        default_height = 512
-        batch_size = 1
+        model = DifferentialDiffusion().apply(model)[0]       
+        if positive is None:
+            positive = []
+        if negative is None:
+            negative = []
 
         for latent_info in latent_stack:
             latent, pixels, mask, noise_mask, smoothness, ratio_selected, batch_size = latent_info
 
-            if ratio_selected == "None" and latent is None and pixels is None:
-                raise ValueError("pls input latent, or  pixels, or ratio_selected.")
+        if latent is not None and pixels is not None:
+            raise ValueError("Only one of 'latent', 'pixels' should be provided.")
+        if latent is not None:
+            latent = latentrepeat(latent, batch_size)[0]
+            return model, positive, negative, latent
+        if latent is None and pixels is None and ratio_selected == "None":
+            raise ValueError("one of 'latent', 'pixels' or 'ratio_selected' should be provided.")
 
 
-            if ratio_selected != "None":
-                width = self.ratio_dict[ratio_selected]["width"]
-                height = self.ratio_dict[ratio_selected]["height"]
-                latent = {"samples": torch.zeros([batch_size, 4, height // 8, width // 8])}
-                return model, positive, negative, latent
+        if ratio_selected != "None":
+            latent = self.generate(ratio_selected, batch_size)[0]
 
-            if latent is None :
-                latent = {"samples": torch.zeros([batch_size, 4, default_height // 8, default_width // 8])}
-                
-            if pixels is not None:
-                latent = VAEEncode().encode(vae, pixels)[0]
-
-            if pixels is None and mask is None:
-                raise TypeError("No input pixels")
-            
+        if pixels is not None:
             if mask is not None:
-                mask = tensor2pil(mask)
-                feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
-                mask = pil2tensor(feathered_image)
-                positive, negative, latent = InpaintModelConditioning().encode(positive, negative, pixels, vae, mask, noise_mask)
-                model = DifferentialDiffusion().apply(model)[0]
+                if torch.all(mask == 0):
+                    latent = VAEEncode().encode(vae, pixels)[0]
+                else:
+                    mask = tensor2pil(mask)
+                    if not isinstance(mask, Image.Image):
+                        raise TypeError("mask is not a valid PIL Image object")
+                    feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+                    mask = pil2tensor(feathered_image)
+                    positive, negative, latent = InpaintModelConditioning().encode(positive, negative, pixels, vae, mask, noise_mask)
+            else:
+                latent = VAEEncode().encode(vae, pixels)[0]
+            latent = latentrepeat(latent, batch_size)[0]
 
-        latent = latentrepeat(latent, batch_size)[0]
         return model, positive, negative, latent
 
 
