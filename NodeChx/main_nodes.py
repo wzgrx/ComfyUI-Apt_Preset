@@ -1601,48 +1601,50 @@ class sum_latent:
         return ({"samples": latent}, )
 
 
-    def process(self,  noise_mask, ratio_selected,smoothness=1, batch_size=1, context=None, latent=None, pixels=None, mask=None,):
-        
-        vae = context.get("vae")
-        positive = context.get("positive")
-        negative = context.get("negative")
-        model = context.get("model")
+    def process(self, noise_mask, ratio_selected, smoothness=1, batch_size=1, context=None, latent=None, pixels=None, mask=None):
 
-        if latent is None and pixels is None:
-            latent=context.get("latent",None)
+        model = context.get("model")
+        model = DifferentialDiffusion().apply(model)[0]
+
+        if latent is not None and pixels is not None:
+            raise ValueError("Only one of 'latent', 'pixels' should be provided.")
+        if latent is not None:
+            latent = latentrepeat(latent, batch_size)[0]
+            context = new_context(context, model=model,latent=latent)
+            return (context, latent, None)
+        if latent is None and pixels is None and ratio_selected == "None":
+            latent = context.get("latent", None)
+            latent = latentrepeat(latent, batch_size)[0]
+            context = new_context(context, model=model,latent=latent)
             return (context, latent, None)
 
+        vae = context.get("vae")
+        positive = context.get("positive", None)
+        negative = context.get("negative", None)
+
+
         if ratio_selected != "None":
-            latent = self.generate(ratio_selected, batch_size)[0]    
-            context = new_context(context, latent=latent)
-            return (context,latent, None)
+           latent = self.generate(ratio_selected, batch_size)[0]
 
-        if latent is None:
-            latent=context.get("latent",None)
-        
-        if pixels is not None :
-            latent = VAEEncode().encode(vae, pixels)[0]
+        if pixels is not None:
+            if mask is not None:
+                if torch.all(mask == 0):
+                    latent = VAEEncode().encode(vae, pixels)[0]
+                else:
+                    mask = tensor2pil(mask)
+                    if not isinstance(mask, Image.Image):
+                        raise TypeError("mask is not a valid PIL Image object")
+                    feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+                    mask = pil2tensor(feathered_image)
+                    positive, negative, latent = InpaintModelConditioning().encode(positive, negative, pixels, vae, mask, noise_mask)
+            else:
+                latent = VAEEncode().encode(vae, pixels)[0]
+            latent = latentrepeat(latent, batch_size)[0]
+        context = new_context(context, model=model, positive=positive, negative=negative, latent=latent)
 
-        if pixels is None and mask is None:
-            raise TypeError("No input pixels")
+        return (context, latent, mask)
 
-        if mask is not None :
-            mask=tensor2pil(mask)
-            if not isinstance(mask, Image.Image):
-                raise TypeError("mask is not a valid PIL Image object")
-            
-            feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
-            mask=pil2tensor(feathered_image)
-            
-            positive, negative, latent=InpaintModelConditioning().encode(positive, negative, pixels, vae, mask, noise_mask)   #out[0], out[1], out_latent
-            model = DifferentialDiffusion().apply(model)[0] 
-            
-        latent = latentrepeat(latent, batch_size)[0]   # latent批次
-        context = new_context(context, model = model, positive =positive, negative =negative , latent=latent)
-        return (context,latent,mask)
-
-
-
+    
 class sum_text:
     @classmethod
     def INPUT_TYPES(cls):
