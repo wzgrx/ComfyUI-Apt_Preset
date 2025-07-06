@@ -3765,9 +3765,9 @@ class chx_Ksampler_Kontext_adv:
                 "add_noise": (["enable", "disable"], ),
 
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-
+                    "steps": ("INT", {"default": 20, "min": 0, "max": 10000}),
                     "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
-                    "end_at_step": ("INT", {"default": 20, "min": 0, "max": 10000}),
+                    "end_at_step": ("INT", {"default": 1000, "min": 0, "max": 10000}),
                     "return_with_leftover_noise": (["disable", "enable"], ),
 
 
@@ -3791,13 +3791,12 @@ class chx_Ksampler_Kontext_adv:
     CATEGORY = "Apt_Preset/chx_ksample"
     OUTPUT_NODE = True
 
-    def run(self, context, seed, image_output="Preview", image=None, mask=None, prompt_weight=0.5,  pos="", prompt=None, extra_pnginfo=None, add_noise="enable", start_at_step=0, end_at_step=0, return_with_leftover_noise="disable"):
+    def run(self, context, seed,steps, image_output="Preview", image=None, mask=None, prompt_weight=0.5,  pos="", prompt=None, extra_pnginfo=None, add_noise="enable", start_at_step=0, end_at_step=0, return_with_leftover_noise="disable"):
         denoise=1
         smoothness=0
         vae = context.get("vae")
         model = context.get("model")
         clip = context.get("clip")
-        steps = context.get("steps")
         cfg = context.get("cfg")
         sampler = context.get("sampler")
         scheduler = context.get("scheduler")
