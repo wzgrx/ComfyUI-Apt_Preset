@@ -8242,6 +8242,18 @@
       "model": {
         "name": "模型"
       },
+      "positive": {
+        "name": "正条件"
+      },
+       "negative": {
+        "name": "负条件"
+      },
+      "latent": {
+        "name": "latent"
+      },
+      "vae": {
+        "name": "vae"
+      },
       "clip": {
         "name": "clip"
       },
