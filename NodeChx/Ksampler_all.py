@@ -3578,6 +3578,222 @@ class pre_Kontext:
 
 
 
+class chx_Ksampler_Kontext_adv:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+                "add_noise": (["enable", "disable"], ),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "steps": ("INT", {"default": 20, "min": 0, "max": 10000}),
+                "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
+                "end_at_step": ("INT", {"default": 1000, "min": 0, "max": 10000}),
+                "return_with_leftover_noise": (["disable", "enable"], ),
+
+                "prompt_weight": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
+                "auto_adjust_image": ("BOOLEAN", {"default": True}), 
+                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
+            },
+            "optional": {
+                "image": ("IMAGE", ),  # 保持原始名称，但支持批量输入
+                "mask": ("MASK", ),
+                "pos": ("STRING", {"multiline": True, "default": ""}),
+            },
+            "hidden": {
+                "prompt": "PROMPT",
+                "extra_pnginfo": "EXTRA_PNGINFO"
+            }
+        }
+
+    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE")
+    RETURN_NAMES = ("context", "image")
+    FUNCTION = "run"
+    CATEGORY = "Apt_Preset/chx_ksample"
+    OUTPUT_NODE = True
+
+    def run(self, context, seed, steps, image_output="Preview", image=None, mask=None, prompt_weight=0.5,  pos="", auto_adjust_image=True, prompt=None, extra_pnginfo=None, add_noise="enable", start_at_step=0, end_at_step=0, return_with_leftover_noise="disable"):
+        denoise=1
+        smoothness=0
+        vae = context.get("vae")
+        model = context.get("model")
+        clip = context.get("clip")
+        cfg = context.get("cfg")
+        sampler = context.get("sampler")
+        scheduler = context.get("scheduler")
+        guidance = context.get("guidance",3.5)
+
+        force_full_denoise = True
+        if return_with_leftover_noise == "enable":
+            force_full_denoise = False
+        disable_noise = False
+        if add_noise == "disable":
+            disable_noise = True
+
+        # 获取图像
+        if image is None:
+            image = context.get("images", None)
+        assert image is not None, "Image must be provided or exist in the context."
+
+        # 确保输入有批次维度
+        if image.dim() == 3:
+            image = image.unsqueeze(0)  # 添加批次维度
+
+        all_output_images = []
+        all_results = []
+
+        # 处理每张图像
+        for i in range(image.shape[0]):
+            img = image[i:i+1]  # 提取单张图像，保持批次维度
+            
+            pixels = img
+            if auto_adjust_image:      
+                width = img.shape[2]
+                height = img.shape[1]
+                aspect_ratio = width / height
+                _, target_width, target_height = min(
+                    (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
+                )
+
+                scaled_image = comfy.utils.common_upscale(
+                    img.movedim(-1, 1),
+                    target_width,
+                    target_height,
+                    "lanczos",
+                    "center"
+                ).movedim(1, -1)
+                pixels = scaled_image[:, :, :, :3].clamp(0, 1)
+            
+            encoded_latent = vae.encode(pixels)[0]
+            
+            # 确保 latent 有正确的维度
+            if encoded_latent.dim() == 3:
+                encoded_latent = encoded_latent.unsqueeze(0)
+                
+            latent = {"samples": encoded_latent}
+
+            # 处理 positive conditioning
+            positive = None
+            if pos and pos.strip():
+                positive, = CLIPTextEncode().encode(clip, pos)
+            else:
+                positive = context.get("positive", None)
+
+            # 注入 reference_latents
+            if positive is not None and prompt_weight > 0:
+                influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
+                scaled_latent = latent["samples"] * influence
+                positive = node_helpers.conditioning_set_values(
+                    positive,
+                    {"reference_latents": [scaled_latent]},
+                    append=True
+                )
+                positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
+
+            # 处理 mask
+            if mask is not None:
+                mask = tensor2pil(mask)
+                feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+                mask = pil2tensor(feathered_image)
+                # 注意：这里假设mask适用于所有图像，如果需要为每张图像提供不同的mask，需要额外处理
+                latent["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
+
+            # 更新 context
+            context = new_context(context, positive=positive, latent=latent)
+
+            # 执行采样
+            negative = context.get("negative", None)
+
+            # 执行采样并获取结果
+            result_tuple = common_ksampler(
+                model, 
+                seed + i,  # 为每张图像使用不同的种子，确保结果不同
+                steps, 
+                cfg, 
+                sampler, 
+                scheduler, 
+                positive, 
+                negative, 
+                latent, 
+                denoise=denoise, 
+                disable_noise=disable_noise, 
+                start_step=start_at_step, 
+                last_step=end_at_step,
+                force_full_denoise=force_full_denoise
+            )[0]  # 注意这里保留了[0]索引，因为原代码中有
+
+            # 安全处理采样结果
+            if isinstance(result_tuple, dict):
+                # 处理字典格式的结果
+                if "samples" in result_tuple:
+                    result_latent = result_tuple["samples"]
+                else:
+                    # 如果字典中没有 samples 键，尝试将整个字典作为 latent
+                    result_latent = result_tuple
+            elif isinstance(result_tuple, (list, tuple)):
+                # 处理列表/元组格式的结果
+                if len(result_tuple) > 0:
+                    result_latent = result_tuple[0]
+                else:
+                    result_latent = None
+            else:
+                # 处理其他格式的结果
+                result_latent = result_tuple
+                
+            assert result_latent is not None, "Failed to get valid latent from common_ksampler"
+
+            # 确保结果是张量且有正确的维度
+            if isinstance(result_latent, dict):
+                # 如果 result_latent 是字典，从中提取 samples 张量
+                if "samples" in result_latent:
+                    samples = result_latent["samples"]
+                    if isinstance(samples, torch.Tensor):
+                        if samples.dim() == 3:
+                            samples = samples.unsqueeze(0)
+                        result_latent = samples
+                    else:
+                        raise TypeError(f"Expected tensor but got {type(samples).__name__} in 'samples' key")
+                else:
+                    raise KeyError("Result dictionary does not contain 'samples' key")
+            elif isinstance(result_latent, torch.Tensor):
+                # 如果 result_latent 已经是张量，确保其维度正确
+                if result_latent.dim() == 3:
+                    result_latent = result_latent.unsqueeze(0)
+            else:
+                raise TypeError(f"Unsupported result type: {type(result_latent).__name__}")
+
+            # 关键修改：根据 VAEDecode 节点的预期格式包装结果
+            if isinstance(result_latent, torch.Tensor):
+                # 如果是张量，包装成字典格式
+                samples_dict = {"samples": result_latent}
+            else:
+                samples_dict = result_latent
+
+            # 解码图像
+            output_image = VAEDecode().decode(vae, samples_dict)[0]
+            
+            # 收集输出图像
+            all_output_images.append(output_image)
+            
+            # 图像保存逻辑
+            results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+            all_results.extend(results)
+
+        # 合并所有输出图像
+        final_output = torch.cat(all_output_images, dim=0) if all_output_images else None
+
+        # 更新 context
+        context = new_context(context, latent=samples_dict, images=final_output)
+
+        # 返回值处理
+        if image_output == "None":
+            return (context, None)
+        elif image_output in ("Hide", "Hide/Save"):
+            return {"ui": {}, "result": (context, final_output)}
+        else:
+            return {"ui": {"images": all_results}, "result": (context, final_output)}
+
+
 class chx_Ksampler_Kontext:
     @classmethod
     def INPUT_TYPES(cls):
@@ -3590,7 +3806,7 @@ class chx_Ksampler_Kontext:
                 "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
             },
             "optional": {
-                "image": ("IMAGE", ),
+                "image": ("IMAGE", ),  # 保持原始名称，但支持批量输入
                 "mask": ("MASK", ),
                 "pos": ("STRING", {"multiline": True, "default": ""}),
             },
@@ -3623,337 +3839,144 @@ class chx_Ksampler_Kontext:
             image = context.get("images", None)
         assert image is not None, "Image must be provided or exist in the context."
 
-        pixels = image
-        if auto_adjust_image:      
-
-            width = image.shape[2]
-            height = image.shape[1]
-            aspect_ratio = width / height
-            _, target_width, target_height = min(
-                (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
-            )
-
-            scaled_image = comfy.utils.common_upscale(
-                image.movedim(-1, 1),
-                target_width,
-                target_height,
-                "lanczos",
-                "center"
-            ).movedim(1, -1)
-            pixels = scaled_image[:, :, :, :3].clamp(0, 1)
-        
         # 确保输入有批次维度
-        if pixels.dim() == 3:
-            pixels = pixels.unsqueeze(0)  # 添加批次维度
-        
-        encoded_latent = vae.encode(pixels)[0]
-        
-        # 确保 latent 有正确的维度
-        if encoded_latent.dim() == 3:
-            encoded_latent = encoded_latent.unsqueeze(0)
+        if image.dim() == 3:
+            image = image.unsqueeze(0)  # 添加批次维度
+
+        all_output_images = []
+        all_results = []
+
+        # 处理每张图像
+        for i in range(image.shape[0]):
+            img = image[i:i+1]  # 提取单张图像，保持批次维度
             
-        latent = {"samples": encoded_latent}
+            pixels = img
+            if auto_adjust_image:      
+                width = img.shape[2]
+                height = img.shape[1]
+                aspect_ratio = width / height
+                _, target_width, target_height = min(
+                    (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
+                )
 
-        # 处理 positive conditioning
-        positive = None
-        if pos and pos.strip():
-            positive, = CLIPTextEncode().encode(clip, pos)
-        else:
-            positive = context.get("positive", None)
-
-
-
- 
-        # 注入 reference_latents
-        if positive is not None and prompt_weight > 0:
-            influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
-            scaled_latent = latent["samples"] * influence
-            positive = node_helpers.conditioning_set_values(
-                positive,
-                {"reference_latents": [scaled_latent]},
-                append=True
-            )
-            positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-
-        # 处理 mask
-        if mask is not None:
-            mask = tensor2pil(mask)
-            feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
-            mask = pil2tensor(feathered_image)
-            latent["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
-
-        # 更新 context
-        context = new_context(context, positive=positive, latent=latent)
-
-        # 执行采样
-        negative = context.get("negative", None)
-
-        # 执行采样并获取结果
-        result_tuple = common_ksampler(model, seed, steps, cfg, sampler, scheduler, positive, negative, latent, denoise=denoise)
-        
-        # 安全处理采样结果
-        if isinstance(result_tuple, dict):
-            # 处理字典格式的结果
-            if "samples" in result_tuple:
-                result_latent = result_tuple["samples"]
-            else:
-                # 如果字典中没有 samples 键，尝试将整个字典作为 latent
-                result_latent = result_tuple
-        elif isinstance(result_tuple, (list, tuple)):
-            # 处理列表/元组格式的结果
-            if len(result_tuple) > 0:
-                result_latent = result_tuple[0]
-            else:
-                result_latent = None
-        else:
-            # 处理其他格式的结果
-            result_latent = result_tuple
+                scaled_image = comfy.utils.common_upscale(
+                    img.movedim(-1, 1),
+                    target_width,
+                    target_height,
+                    "lanczos",
+                    "center"
+                ).movedim(1, -1)
+                pixels = scaled_image[:, :, :, :3].clamp(0, 1)
             
-        assert result_latent is not None, "Failed to get valid latent from common_ksampler"
+            encoded_latent = vae.encode(pixels)[0]
+            
+            # 确保 latent 有正确的维度
+            if encoded_latent.dim() == 3:
+                encoded_latent = encoded_latent.unsqueeze(0)
+                
+            latent = {"samples": encoded_latent}
 
-        # 确保结果是张量且有正确的维度
-        if isinstance(result_latent, dict):
-            # 如果 result_latent 是字典，从中提取 samples 张量
-            if "samples" in result_latent:
-                samples = result_latent["samples"]
-                if isinstance(samples, torch.Tensor):
-                    if samples.dim() == 3:
-                        samples = samples.unsqueeze(0)
-                    result_latent = samples
+            # 处理 positive conditioning
+            positive = None
+            if pos and pos.strip():
+                positive, = CLIPTextEncode().encode(clip, pos)
+            else:
+                positive = context.get("positive", None)
+
+            # 注入 reference_latents
+            if positive is not None and prompt_weight > 0:
+                influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
+                scaled_latent = latent["samples"] * influence
+                positive = node_helpers.conditioning_set_values(
+                    positive,
+                    {"reference_latents": [scaled_latent]},
+                    append=True
+                )
+                positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
+
+            # 处理 mask
+            if mask is not None:
+                mask = tensor2pil(mask)
+                feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+                mask = pil2tensor(feathered_image)
+                latent["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
+
+            # 更新 context
+            context = new_context(context, positive=positive, latent=latent)
+
+            # 执行采样
+            negative = context.get("negative", None)
+
+            # 执行采样并获取结果
+            result_tuple = common_ksampler(model, seed + i, steps, cfg, sampler, scheduler, positive, negative, latent, denoise=denoise)
+            
+            # 安全处理采样结果
+            if isinstance(result_tuple, dict):
+                # 处理字典格式的结果
+                if "samples" in result_tuple:
+                    result_latent = result_tuple["samples"]
                 else:
-                    raise TypeError(f"Expected tensor but got {type(samples).__name__} in 'samples' key")
+                    # 如果字典中没有 samples 键，尝试将整个字典作为 latent
+                    result_latent = result_tuple
+            elif isinstance(result_tuple, (list, tuple)):
+                # 处理列表/元组格式的结果
+                if len(result_tuple) > 0:
+                    result_latent = result_tuple[0]
+                else:
+                    result_latent = None
             else:
-                raise KeyError("Result dictionary does not contain 'samples' key")
-        elif isinstance(result_latent, torch.Tensor):
-            # 如果 result_latent 已经是张量，确保其维度正确
-            if result_latent.dim() == 3:
-                result_latent = result_latent.unsqueeze(0)
-        else:
-            raise TypeError(f"Unsupported result type: {type(result_latent).__name__}")
+                # 处理其他格式的结果
+                result_latent = result_tuple
+                
+            assert result_latent is not None, "Failed to get valid latent from common_ksampler"
 
-        # 关键修改：根据 VAEDecode 节点的预期格式包装结果
-        if isinstance(result_latent, torch.Tensor):
-            # 如果是张量，包装成字典格式
-            samples_dict = {"samples": result_latent}
-        else:
-            samples_dict = result_latent
+            # 确保结果是张量且有正确的维度
+            if isinstance(result_latent, dict):
+                # 如果 result_latent 是字典，从中提取 samples 张量
+                if "samples" in result_latent:
+                    samples = result_latent["samples"]
+                    if isinstance(samples, torch.Tensor):
+                        if samples.dim() == 3:
+                            samples = samples.unsqueeze(0)
+                        result_latent = samples
+                    else:
+                        raise TypeError(f"Expected tensor but got {type(samples).__name__} in 'samples' key")
+                else:
+                    raise KeyError("Result dictionary does not contain 'samples' key")
+            elif isinstance(result_latent, torch.Tensor):
+                # 如果 result_latent 已经是张量，确保其维度正确
+                if result_latent.dim() == 3:
+                    result_latent = result_latent.unsqueeze(0)
+            else:
+                raise TypeError(f"Unsupported result type: {type(result_latent).__name__}")
 
-        # 解码图像
-        output_image = VAEDecode().decode(vae, samples_dict)[0]
+            # 关键修改：根据 VAEDecode 节点的预期格式包装结果
+            if isinstance(result_latent, torch.Tensor):
+                # 如果是张量，包装成字典格式
+                samples_dict = {"samples": result_latent}
+            else:
+                samples_dict = result_latent
+
+            # 解码图像
+            output_image = VAEDecode().decode(vae, samples_dict)[0]
+            
+            # 收集输出图像
+            all_output_images.append(output_image)
+            
+            # 图像保存逻辑
+            results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+            all_results.extend(results)
+
+        # 合并所有输出图像
+        final_output = torch.cat(all_output_images, dim=0) if all_output_images else None
 
         # 更新 context
-        context = new_context(context, latent=samples_dict, images=output_image)
-
-        # 图像保存逻辑
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+        context = new_context(context, latent=samples_dict, images=final_output)
 
         # 返回值处理
         if image_output == "None":
             return (context, None)
         elif image_output in ("Hide", "Hide/Save"):
-            return {"ui": {}, "result": (context, output_image)}
+            return {"ui": {}, "result": (context, final_output)}
         else:
-            return {"ui": {"images": results}, "result": (context, output_image)}
-
-
-
-
-class chx_Ksampler_Kontext_adv:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "add_noise": (["enable", "disable"], ),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "steps": ("INT", {"default": 20, "min": 0, "max": 10000}),
-                    "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
-                    "end_at_step": ("INT", {"default": 1000, "min": 0, "max": 10000}),
-                    "return_with_leftover_noise": (["disable", "enable"], ),
-
-                "prompt_weight": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
-                "auto_adjust_image": ("BOOLEAN", {"default": True}), 
-                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
-            },
-            "optional": {
-                "image": ("IMAGE", ),
-                "mask": ("MASK", ),
-                "pos": ("STRING", {"multiline": True, "default": ""}),
-            },
-            "hidden": {
-                "prompt": "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO"
-            }
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE")
-    RETURN_NAMES = ("context", "image")
-    FUNCTION = "run"
-    CATEGORY = "Apt_Preset/chx_ksample"
-    OUTPUT_NODE = True
-
-    def run(self, context, seed,steps, image_output="Preview", image=None, mask=None, prompt_weight=0.5,  pos="",auto_adjust_image=True, prompt=None, extra_pnginfo=None, add_noise="enable", start_at_step=0, end_at_step=0, return_with_leftover_noise="disable"):
-        denoise=1
-        smoothness=0
-        vae = context.get("vae")
-        model = context.get("model")
-        clip = context.get("clip")
-        cfg = context.get("cfg")
-        sampler = context.get("sampler")
-        scheduler = context.get("scheduler")
-        guidance = context.get("guidance",3.5)
-
-        force_full_denoise = True
-        if return_with_leftover_noise == "enable":
-            force_full_denoise = False
-        disable_noise = False
-        if add_noise == "disable":
-            disable_noise = True
-
-
-        # 获取图像
-        if image is None:
-            image = context.get("images", None)
-        assert image is not None, "Image must be provided or exist in the context."
-
-        pixels = image
-        if auto_adjust_image:      
-            width = image.shape[2]
-            height = image.shape[1]
-            aspect_ratio = width / height
-            _, target_width, target_height = min(
-                (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
-            )
-            scaled_image = comfy.utils.common_upscale(
-                image.movedim(-1, 1),
-                target_width,
-                target_height,
-                "lanczos",
-                "center"
-            ).movedim(1, -1)
-            pixels = scaled_image[:, :, :, :3].clamp(0, 1)
-            
-        # 确保输入有批次维度
-        if pixels.dim() == 3:
-            pixels = pixels.unsqueeze(0)  # 添加批次维度
-        
-        encoded_latent = vae.encode(pixels)[0]
-        
-        # 确保 latent 有正确的维度
-        if encoded_latent.dim() == 3:
-            encoded_latent = encoded_latent.unsqueeze(0)
-            
-        latent = {"samples": encoded_latent}
-
-        # 处理 positive conditioning
-        positive = None
-        if pos and pos.strip():
-            positive, = CLIPTextEncode().encode(clip, pos)
-        else:
-            positive = context.get("positive", None)
-
-
-
- 
-        # 注入 reference_latents
-        if positive is not None and prompt_weight > 0:
-            influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
-            scaled_latent = latent["samples"] * influence
-            positive = node_helpers.conditioning_set_values(
-                positive,
-                {"reference_latents": [scaled_latent]},
-                append=True
-            )
-            positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-
-        # 处理 mask
-        if mask is not None:
-            mask = tensor2pil(mask)
-            feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
-            mask = pil2tensor(feathered_image)
-            latent["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
-
-        # 更新 context
-        context = new_context(context, positive=positive, latent=latent)
-
-        # 执行采样
-        negative = context.get("negative", None)
-
-        # 执行采样并获取结果
-       
-        result_tuple = common_ksampler(model, seed, steps, cfg, sampler, scheduler, 
-                                positive, negative, latent, denoise=denoise, 
-                                disable_noise=disable_noise, 
-                                start_step=start_at_step, 
-                                last_step=end_at_step,
-                                force_full_denoise=force_full_denoise)[0]
-
-
-        # 安全处理采样结果
-        if isinstance(result_tuple, dict):
-            # 处理字典格式的结果
-            if "samples" in result_tuple:
-                result_latent = result_tuple["samples"]
-            else:
-                # 如果字典中没有 samples 键，尝试将整个字典作为 latent
-                result_latent = result_tuple
-        elif isinstance(result_tuple, (list, tuple)):
-            # 处理列表/元组格式的结果
-            if len(result_tuple) > 0:
-                result_latent = result_tuple[0]
-            else:
-                result_latent = None
-        else:
-            # 处理其他格式的结果
-            result_latent = result_tuple
-            
-        assert result_latent is not None, "Failed to get valid latent from common_ksampler"
-
-        # 确保结果是张量且有正确的维度
-        if isinstance(result_latent, dict):
-            # 如果 result_latent 是字典，从中提取 samples 张量
-            if "samples" in result_latent:
-                samples = result_latent["samples"]
-                if isinstance(samples, torch.Tensor):
-                    if samples.dim() == 3:
-                        samples = samples.unsqueeze(0)
-                    result_latent = samples
-                else:
-                    raise TypeError(f"Expected tensor but got {type(samples).__name__} in 'samples' key")
-            else:
-                raise KeyError("Result dictionary does not contain 'samples' key")
-        elif isinstance(result_latent, torch.Tensor):
-            # 如果 result_latent 已经是张量，确保其维度正确
-            if result_latent.dim() == 3:
-                result_latent = result_latent.unsqueeze(0)
-        else:
-            raise TypeError(f"Unsupported result type: {type(result_latent).__name__}")
-
-        # 关键修改：根据 VAEDecode 节点的预期格式包装结果
-        if isinstance(result_latent, torch.Tensor):
-            # 如果是张量，包装成字典格式
-            samples_dict = {"samples": result_latent}
-        else:
-            samples_dict = result_latent
-
-        # 解码图像
-        output_image = VAEDecode().decode(vae, samples_dict)[0]
-
-        # 更新 context
-        context = new_context(context, latent=samples_dict, images=output_image)
-
-        # 图像保存逻辑
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-
-        # 返回值处理
-        if image_output == "None":
-            return (context, None)
-        elif image_output in ("Hide", "Hide/Save"):
-            return {"ui": {}, "result": (context, output_image)}
-        else:
-            return {"ui": {"images": results}, "result": (context, output_image)}
-
-
-
+            return {"ui": {"images": all_results}, "result": (context, final_output)}
