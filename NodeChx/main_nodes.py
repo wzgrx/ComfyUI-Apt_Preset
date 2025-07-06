@@ -3257,5 +3257,38 @@ class chx_Style_Redux:
 #endregion-----------风格组--------------------------------------------------------------------------------------#--
 
 
+class pre_sample_data:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+                "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == no change"}),
+                "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == no change"}),
+                "sampler": (['None'] + comfy.samplers.KSampler.SAMPLERS, {"default": "None"}),  
+                "scheduler": (['None'] + comfy.samplers.KSampler.SCHEDULERS, {"default": "None"}), 
+                
+                
+            },
+        }
+
+    RETURN_TYPES = ("RUN_CONTEXT", )
+    RETURN_NAMES = ("context", )
+    FUNCTION = "sample"
+    CATEGORY = "Apt_Preset/chx_tool"
+
+    def sample(self, context, steps, cfg, sampler, scheduler):
+        
+        if cfg == 0.0:
+            cfg = context.get("cfg")
+        if steps == 0:
+            steps = context.get("steps")
+        if sampler == "None":
+            sampler = context.get("sampler")
+        if scheduler == "None":
+            scheduler = context.get("scheduler")
+        
+        context = new_context(context, steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler)
+        return (context, )
 #------------------
 
