@@ -3573,7 +3573,7 @@ class pre_Kontext:
 
         context = new_context(context, positive=conditioning, latent=latent)
 
-        return context
+        return (context,)
 
 
 
