@@ -20,6 +20,10 @@
           
 2025.7.3  增加Kontext采样器，连续编辑
 
+2025.7.6  添加Kontext采样器尺寸选择，自定义或官方自动尺寸
+
+
+
 连续编辑Continuous editing     ksampler_Kontext
 ![image](https://github.com/user-attachments/assets/e84c2e03-32af-4608-bb5b-5ed683628c69)
 
