@@ -3,8 +3,6 @@ import math
 import os
 import sys
 from dataclasses import dataclass
-from io import BytesIO
-from telnetlib import OUTMRK
 import enum
 from enum import Enum
 
@@ -26,7 +24,6 @@ from comfy_extras.nodes_custom_sampler import Noise_EmptyNoise, Noise_RandomNois
 from comfy_extras.nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
 from comfy.ldm.modules.attention import default, optimized_attention, optimized_attention_masked
 from comfy.model_patcher import ModelPatcher
-from comfy.model_base import BaseModel
 from comfy.cli_args import args
 import folder_paths
 import node_helpers
@@ -34,20 +31,15 @@ import latent_preview
 import nodes
 from nodes import CLIPTextEncode, common_ksampler, VAEDecode, VAEEncode, ImageScale, KSampler, SetLatentNoiseMask, KSamplerAdvanced,InpaintModelConditioning
 from einops import rearrange
-import kornia.filters
 from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
 import matplotlib
-import matplotlib.scale
-import matplotlib.pyplot as plt
 from PIL import Image, ImageFilter
 from scipy.stats import norm
 from scipy.ndimage import gaussian_filter, grey_dilation, binary_fill_holes, binary_closing
 from typing import Any, Dict, Optional, Tuple, Union, cast
 from comfy.samplers import KSAMPLER
-from comfy.model_management import cast_to_device
 import torchvision.transforms as transforms
 import types
-import torch.nn.functional as F
 from comfy.utils import load_torch_file
 from comfy import lora
 import functools
@@ -1771,44 +1763,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "co
 matplotlib.use('Agg')
 
 
-class GraphScale(enum.StrEnum):
-    linear = "linear"
-    log = "log"
-
-
-
-
-def tensor_to_graph_image(tensor, color="blue", scale: GraphScale=GraphScale.linear):
-    SCALE_FUNCTIONS: dict[str, matplotlib.scale.ScaleBase] = {
-        GraphScale.linear: matplotlib.scale.LinearScale,
-        GraphScale.log: matplotlib.scale.LogScale,
-    }
-    plt.figure()
-    plt.plot(tensor.numpy(), marker='o', linestyle='-', color=color)
-    plt.title("Graph from Tensor")
-    plt.xlabel("Index")
-    plt.ylabel("Value")
-    plt.yscale(scale)
-    with BytesIO() as buf:
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-        image = Image.open(buf).copy()
-    plt.close()
-    return image
-
-
-def fibonacci_normalized_descending(n):
-    fib_sequence = [0, 1]
-    for _ in range(n):
-        if n > 1:
-            fib_sequence.append(fib_sequence[-1] + fib_sequence[-2])
-    max_value = fib_sequence[-1]
-    normalized_sequence = [x / max_value for x in fib_sequence]
-    descending_sequence = normalized_sequence[::-1]
-    return descending_sequence
-
-
-
 
 def get_dd_schedule(
     sigma: float,
@@ -2215,64 +2169,6 @@ class sampler_enhance:
                 },
             ),
         )
-
-
-class sampler_sigmas:
-    def __init__(self):
-        pass
-    
-    @classmethod
-    def INPUT_TYPES(s):
-        scale_options = [option.value for option in GraphScale]
-        return {
-            "required": {
-                "model": ("MODEL",),
-                "schedule": ("STRING", {"default": "((1 - cos(2 * pi * (1-y**0.5) * 0.5)) / 2)*sigmax+((1 - cos(2 * pi * y**0.5 * 0.5)) / 2)*sigmin"}),
-                "steps": ("INT", {"default": 20, "min": 0, "max": 100000, "step": 1}),
-                "sgm": ("BOOLEAN", {"default": False}),
-                "color": (["black", "red", "green", "blue"], {"default": "blue"}),
-                "scale": (scale_options, {"default": GraphScale.linear})
-            }
-        }
-
-    FUNCTION = "simple_output"
-    RETURN_TYPES = ("SIGMAS","IMAGE",)
-    RETURN_NAMES = ("sigmas","sch_image",)
-    CATEGORY = "Apt_Preset/chx_ksample"
-    
-    
-    def simple_output(self, model, schedule, steps, sgm, color, scale: GraphScale):
-        if sgm:
-            steps += 1
-        s = model.get_model_object("model_sampling")
-        sigmin = s.sigma(s.timestep(s.sigma_min))
-        sigmax = s.sigma(s.timestep(s.sigma_max))
-        phi = (1 + 5 ** 0.5) / 2
-        sigmas = []
-        s = steps
-        fibo = fibonacci_normalized_descending(s)
-        for j in range(steps):
-            y = j / (s - 1)
-            x = 1 - y
-            f = fibo[j]
-            try:
-                f = eval(schedule)
-            except:
-                print(f"could not evaluate {schedule}")
-                f = 0
-            sigmas.append(f)
-        if sgm:
-            sigmas = sigmas[:-1]
-        sigmas = torch.tensor(sigmas + [0])
-
-        sigmas_graph = tensor_to_graph_image(sigmas.cpu(), color=color, scale=scale)
-        numpy_image = np.array(sigmas_graph)
-        numpy_image = numpy_image / 255.0
-        tensor_image = torch.from_numpy(numpy_image)
-        tensor_image = tensor_image.unsqueeze(0)
-        images_tensor = torch.cat([tensor_image], 0)
-        
-        return (sigmas, images_tensor,)
 
 
 
