@@ -2190,8 +2190,9 @@ class basic_Ksampler_adv:
                     "context": ("RUN_CONTEXT",),
                     "add_noise": (["enable", "disable"], ),
                     "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == None"}),
                     "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
-                    "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
+                    "end_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
                     "return_with_leftover_noise": (["disable", "enable"], ),
                     "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Hide"}),
                     },
@@ -2209,7 +2210,7 @@ class basic_Ksampler_adv:
     FUNCTION = "sample"
     CATEGORY = "Apt_Preset/chx_ksample"
 
-    def sample(self, context, add_noise, noise_seed, steps,  start_at_step, return_with_leftover_noise, denoise=1.0, 
+    def sample(self, context, add_noise, steps, noise_seed, start_at_step,end_at_step, return_with_leftover_noise, denoise=1.0, 
                 pos="", neg="", latent=None, prompt=None, image_output=None, extra_pnginfo=None, ):
         force_full_denoise = True
         if return_with_leftover_noise == "enable":
@@ -2224,7 +2225,8 @@ class basic_Ksampler_adv:
         sampler_name = context.get("sampler", None) 
         scheduler = context.get("scheduler", None) 
         latent = latent or context.get("latent", None)
-        
+
+
         positive = context.get("positive", None)
         negative = context.get("negative", None)
 
@@ -2233,9 +2235,13 @@ class basic_Ksampler_adv:
             guidance = 3.5  # 默认值
         positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
 
-        latent = common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, positive, negative, latent, denoise=denoise, disable_noise=disable_noise, start_step=start_at_step, last_step=steps, force_full_denoise=force_full_denoise)[0]
-        
-        
+
+        latent = common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, 
+                                positive, negative, latent, denoise=denoise, 
+                                disable_noise=disable_noise, 
+                                start_step=start_at_step, 
+                                last_step=end_at_step,
+                                force_full_denoise=force_full_denoise)[0]      
         
         
         if image_output =="None":
@@ -3256,7 +3262,6 @@ class chx_Style_Redux:
 
 #endregion-----------风格组--------------------------------------------------------------------------------------#--
 
-
 class pre_sample_data:
     @classmethod
     def INPUT_TYPES(s):
@@ -3265,8 +3270,8 @@ class pre_sample_data:
                 "context": ("RUN_CONTEXT",),
                 "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == no change"}),
                 "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == no change"}),
-                "sampler": (['None'] + comfy.samplers.KSampler.SAMPLERS, {"default": "None"}),  
-                "scheduler": (['None'] + comfy.samplers.KSampler.SCHEDULERS, {"default": "None"}), 
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}),  
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "normal"}), 
                 
                 
             },
@@ -3283,12 +3288,11 @@ class pre_sample_data:
             cfg = context.get("cfg")
         if steps == 0:
             steps = context.get("steps")
-        if sampler == "None":
-            sampler = context.get("sampler")
-        if scheduler == "None":
-            scheduler = context.get("scheduler")
+        sampler = context.get("sampler","euler")
+        scheduler = context.get("scheduler","normal")
         
         context = new_context(context, steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler)
         return (context, )
+
 #------------------
 
