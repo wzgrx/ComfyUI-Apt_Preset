@@ -1,4 +1,4 @@
-
+from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
 from torch import Tensor
 from math import cos, sin, pi
 from random import random
@@ -6,14 +6,13 @@ import torch
 import comfy.model_management
 from typing import Callable
 import comfy.latent_formats
-from dataclasses import dataclass
 import torch.nn as nn
 from comfy.model_patcher import ModelPatcher
 from typing import Union
 import node_helpers
 T = torch.Tensor
 
-
+#from dataclasses import dataclass
 
 
 
@@ -154,31 +153,27 @@ SHARE_ATTN_OPTIONS = ["q+k", "q+k+v", "disabled"]
 #endregion
 
 
+
 class model_diff_inpaint:
     @classmethod
     def INPUT_TYPES(s):
-        return {
-            "required": {
-                "model": ("MODEL", ),
-                "positive": ("CONDITIONING", ),
-                "negative": ("CONDITIONING", ),
-                "vae": ("VAE", ),
-                "pixels": ("IMAGE", ),
-                "mask": ("MASK", ),
-                "noise_mask": ("BOOLEAN", {"default": True, }),
+        return {"required": {
+                            "model": ("MODEL", ),
+                            "positive": ("CONDITIONING", ),
+                             "negative": ("CONDITIONING", ),
+                             "vae": ("VAE", ),
+                             "pixels": ("IMAGE", ),
+                             "mask": ("MASK", ),
+                             "noise_mask": ("BOOLEAN", {"default": True, "tooltip": "Add a noise mask to the latent so sampling will only happen within the mask. Might improve results or completely break things depending on the model."}),
+                             }}
 
-            }
-        }
 
     RETURN_TYPES = ( "MODEL", "CONDITIONING", "CONDITIONING", "LATENT",)
     RETURN_NAMES = ("model", "positive", "negative", "latent", )
     FUNCTION = "process"
     CATEGORY = "Apt_Preset/model"
 
-    def process(self, positive, negative, pixels, vae, mask, noise_mask, model):
-        
-        
-        # To_inpaint functionality
+    def process(self,model, positive, negative, pixels, vae, mask, noise_mask=True):
         x = (pixels.shape[1] // 8) * 8
         y = (pixels.shape[2] // 8) * 8
         mask = torch.nn.functional.interpolate(mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])), size=(pixels.shape[1], pixels.shape[2]), mode="bilinear")
@@ -188,47 +183,35 @@ class model_diff_inpaint:
         if pixels.shape[1] != x or pixels.shape[2] != y:
             x_offset = (pixels.shape[1] % 8) // 2
             y_offset = (pixels.shape[2] % 8) // 2
-            pixels = pixels[:, x_offset:x + x_offset, y_offset:y + y_offset, :]
-            mask = mask[:, :, x_offset:x + x_offset, y_offset:y + y_offset]
+            pixels = pixels[:,x_offset:x + x_offset, y_offset:y + y_offset,:]
+            mask = mask[:,:,x_offset:x + x_offset, y_offset:y + y_offset]
 
         m = (1.0 - mask.round()).squeeze(1)
         for i in range(3):
-            pixels[:, :, :, i] -= 0.5
-            pixels[:, :, :, i] *= m
-            pixels[:, :, :, i] += 0.5
+            pixels[:,:,:,i] -= 0.5
+            pixels[:,:,:,i] *= m
+            pixels[:,:,:,i] += 0.5
         concat_latent = vae.encode(pixels)
         orig_latent = vae.encode(orig_pixels)
 
-        out_latent = {"samples": orig_latent}
+        out_latent = {}
+
+        out_latent["samples"] = orig_latent
         if noise_mask:
             out_latent["noise_mask"] = mask
 
         out = []
         for conditioning in [positive, negative]:
-            c = node_helpers.conditioning_set_values(conditioning, {"concat_latent_image": concat_latent, "concat_mask": mask})
+            c = node_helpers.conditioning_set_values(conditioning, {"concat_latent_image": concat_latent,
+                                                                    "concat_mask": mask})
             out.append(c)
 
-        # To_Differ functionality
-        model = model.clone()
-        model.set_model_denoise_mask_function(self.forward)
 
-        return (out[0], out[1], out_latent, model)
+        model =DifferentialDiffusion().apply(model)[0]
 
-    def forward(self, sigma: torch.Tensor, denoise_mask: torch.Tensor, extra_options: dict):
-        model = extra_options["model"]
-        step_sigmas = extra_options["sigmas"]
-        sigma_to = model.inner_model.model_sampling.sigma_min
-        if step_sigmas[-1] > sigma_to:
-            sigma_to = step_sigmas[-1]
-        sigma_from = step_sigmas[0]
+        return (model, out[0], out[1], out_latent)
 
-        ts_from = model.inner_model.model_sampling.timestep(sigma_from)
-        ts_to = model.inner_model.model_sampling.timestep(sigma_to)
-        current_ts = model.inner_model.model_sampling.timestep(sigma[0])
 
-        threshold = (current_ts - ts_to) / (ts_from - ts_to)
-
-        return (denoise_mask >= threshold).to(denoise_mask.dtype)
 
 
 
