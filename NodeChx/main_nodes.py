@@ -11,7 +11,7 @@ import json
 import math
 from telnetlib import OUTMRK
 import re
-from turtle import width
+#from turtle import width
 
 # 第三方库
 import numpy as np
