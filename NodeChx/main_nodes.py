@@ -1355,9 +1355,6 @@ class pre_controlnet:
                         image1=None, image2=None, image3=None, vae=None,):
 
 
-        if switch == "false":
-            return (context,context.get("positive"),context.get("negative"))
-
         positive = context.get("positive", [])
         negative = context.get("negative", [])
         vae = context.get("vae", None)
@@ -1646,6 +1643,7 @@ class sum_latent:
 
         return (context, latent, mask)
 
+
     
 class sum_text:
     @classmethod
@@ -1715,7 +1713,7 @@ class sum_text:
 
 
 
-class sum_create_chx:
+class Xsum_create_chx:
     @classmethod
     def INPUT_TYPES(cls):
 
@@ -1738,27 +1736,35 @@ class sum_create_chx:
                 "model": ("MODEL",),
                 "clip": ("CLIP",),  
                 "over_vae": ("VAE",),
-                "positive": ("CONDITIONING",),
-                "negative": ("CONDITIONING",),
+                "over_positive": ("CONDITIONING",),
+                "over_negative": ("CONDITIONING",),
+                "lora_stack": ("LORASTACK",),
                 "data":(ANY_TYPE,),
-                        },
+            },
         }
 
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL","CLIP","CONDITIONING","CONDITIONING",  ANY_TYPE )
-    RETURN_NAMES = ("context","model","clip","positive","negative","data", )
+
+
+    RETURN_TYPES = ("RUN_CONTEXT","MODEL","CONDITIONING","CONDITIONING", "LATENT", "VAE","CLIP", ANY_TYPE )
+    RETURN_NAMES = ("context","model","positive","negative","latent", "vae","clip","data", )
     FUNCTION = "process_settings"
     CATEGORY = "Apt_Preset/chx_load"
 
 
     def process_settings(self, 
-                        width, height, batch, steps, cfg, sampler, scheduler, data=None,guidance=3.5,
-                        vae=None, over_vae=None, clip=None, model=None, positive=None, negative=None,pos="default", neg="default",):
+                        width, height, batch, steps, cfg, sampler, scheduler, data=None,guidance=3.5,lora_stack=None,
+                        vae=None, over_vae=None, clip=None, model=None, over_positive=None, over_negative=None,pos="default", neg="default",):
 
 
         width, height = width - (width % 8), height - (height % 8)
         latent = torch.zeros([batch, 4, height // 8, width // 8])
         if latent.shape[1] != 16:  # Check if the latent has 16 channels
             latent = latent.repeat(1, 16 // 4, 1, 1)  
+
+        model = None
+        positive = None
+        negative = None
+        clip = None
 
         if over_vae is not None:
             vae = over_vae
@@ -1768,23 +1774,22 @@ class sum_create_chx:
 
         if model:
             model = model
-        else:
-            model = None
+
 
         if clip:
+            if lora_stack is not None and model is not None:
+                model, clip = apply_lora_stack(model, clip, lora_stack)
             positive, = CLIPTextEncode().encode(clip, pos)
             negative, = CLIPTextEncode().encode(clip, neg)
-        if positive:
-            positive = positive
+
+        if over_positive:
+            positive = over_positive
             if negative is None:
-                negative=condi_zero_out(positive)[0]
-        if negative:
-            negative = negative
+                negative=condi_zero_out(over_positive)[0]
+        if over_negative:
+            negative = over_negative
 
 
-        else:
-            positive = None
-            negative = None
 
 
         context = {
@@ -1812,12 +1817,120 @@ class sum_create_chx:
             "batch": batch,
             "data":data,
         }
-        return (context, model, clip,positive, negative, data)
+
+       
+        return (context, model, positive, negative,  latent, vae, clip, data)
 
 
 
 
+class sum_create_chx:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "vae": (["None"] + available_vaes, ),
+                "width": ("INT", {"default": 512, "min": 8, "max": 16384}),
+                "height": ("INT", {"default": 512, "min": 8, "max": 16384}),
+                "batch": ("INT", {"default": 1, "min": 1, "max": 999999}),
+                "steps": ("INT", {"default": 20, "min": 1, "max": 999999}),
+                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.5, "round": 0.01}),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
+                "guidance": ("FLOAT", {"default": 3.5, "min": 0.0, "max": 100.0, "step": 0.1}),
+                "pos": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "a girl"}), 
+                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
+            },
+            
+            "optional": { 
+                "model": ("MODEL",),
+                "clip": ("CLIP",),  
+                "over_vae": ("VAE",),
+                "over_positive": ("CONDITIONING",),
+                "over_negative": ("CONDITIONING",),
+                "lora_stack": ("LORASTACK",),
+                "data":(ANY_TYPE,),
+            },
+        }
 
+    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT", "VAE", "CLIP", "ANY_TYPE")
+    RETURN_NAMES = ("context", "model", "positive", "negative", "latent", "vae", "clip", "data")
+    FUNCTION = "process_settings"
+    CATEGORY = "Apt_Preset/chx_load"
+
+    def process_settings(self, 
+                        width, height, batch, steps, cfg, sampler, scheduler, data=None, guidance=3.5, lora_stack=None,
+                        vae=None, over_vae=None, clip=None, model=None, over_positive=None, over_negative=None, pos="default", neg="default"):
+
+        # 分辨率修正
+        width, height = width - (width % 8), height - (height % 8)
+        latent = torch.zeros([1, 4, height // 8, width // 8])
+        if latent.shape[1] != 16:
+            latent = latent.repeat(1, 16 // 4, 1, 1)
+
+
+        # 处理VAE
+        if over_vae is not None:
+            vae = over_vae
+        elif over_vae is None and vae != "None":
+            vae_path = folder_paths.get_full_path("vae", vae)
+            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
+
+        # 初始化条件为None
+        positive = None
+        negative = None
+        
+        # 处理LoRA和文本编码
+        if clip is not None:
+            # 如果提供了clip，可以处理文本条件
+            # 只有当model和clip都提供时，才应用LoRA
+            if model is not None and lora_stack is not None:
+                model, clip = apply_lora_stack(model, clip, lora_stack)
+                
+            # 处理条件
+            positive, = CLIPTextEncode().encode(clip, pos)
+            negative, = CLIPTextEncode().encode(clip, neg)
+
+        # 覆盖条件（如果提供）
+        if over_positive:
+            positive = over_positive
+            if negative is None:
+                negative = condi_zero_out(over_positive)[0]
+                
+        if over_negative:
+            negative = over_negative
+
+        # 确保latent格式正确
+        latent_dict = {"samples": latent}
+
+        # 创建上下文
+        context = {
+            "model": model,
+            "positive": positive,
+            "negative": negative,
+            "latent": latent_dict,  # 使用正确格式的latent
+            "vae": vae,
+            "clip": clip,
+            "steps": steps,
+            "cfg": cfg,
+            "sampler": sampler,
+            "scheduler": scheduler,
+            "guidance": guidance,
+            "clip1": None,
+            "clip2": None,
+            "clip3": None,
+            "clip4": None,
+            "unet_name": None,
+            "ckpt_name": None,
+            "pos": pos, 
+            "neg": neg, 
+            "width": width,
+            "height": height,
+            "batch": batch,
+            "data": data,
+        }
+
+        return (context, model, positive, negative, latent_dict, vae, clip, data)  # 返回正确格式的latent
 
 #endregion---------加载器-----------------------------------------------------------------------------------#
 
