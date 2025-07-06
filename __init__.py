@@ -22,7 +22,7 @@ from .NodeBasic.C_image import *
 from .NodeBasic.C_promp import *
 from .NodeBasic.C_imgEffect import *
 from .NodeBasic.C_type import *
-
+from .NodeBasic.C_basinInput import *
 from .NodeBasic.C_test import *
 from .NodeCollect.mask_face import *
 from .NodeCollect.text_font2img import *
@@ -72,6 +72,7 @@ NODE_CLASS_MAPPINGS= {
 "chx_Ksampler_texture": chx_Ksampler_texture,
 "chx_Ksampler_mix": chx_Ksampler_mix,
 "chx_Ksampler_Kontext": chx_Ksampler_Kontext,
+"chx_Ksampler_Kontext_adv": chx_Ksampler_Kontext_adv,
 
 "chx_Ksampler_dual_paint": chx_Ksampler_dual_paint,
 "chx_Ksampler_dual_area": chx_Ksampler_dual_area,
@@ -203,6 +204,14 @@ NODE_CLASS_MAPPINGS= {
 
 
 #-------------view-IO-------------------
+"basicIn_int": basicIn_int,
+"basicIn_float": basicIn_float,
+"basicIn_string": basicIn_string,
+"basicIn_Scheduler": basicIn_Scheduler,
+"basicIn_Sampler": basicIn_Sampler,
+"basicIn_Seed": basicIn_Seed,
+
+
 "IO_input_any": IO_input_any,
 "IO_inputbasic": IO_inputbasic,
 "IO_load_anyimage":IO_load_anyimage,
