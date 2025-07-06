@@ -13,6 +13,8 @@ from telnetlib import OUTMRK
 import re
 #from turtle import width
 
+
+
 # 第三方库
 import numpy as np
 import torch
@@ -2190,9 +2192,9 @@ class basic_Ksampler_adv:
                     "context": ("RUN_CONTEXT",),
                     "add_noise": (["enable", "disable"], ),
                     "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == None"}),
+                    "steps": ("INT", {"default": 20, "min": 0, "max": 10000,"tooltip": "  0  == None"}),
                     "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
-                    "end_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
+                    "end_at_step": ("INT", {"default": 1000, "min": 0, "max": 10000}),
                     "return_with_leftover_noise": (["disable", "enable"], ),
                     "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Hide"}),
                     },
