@@ -3509,11 +3509,12 @@ class pre_Kontext:
             "required": {
                 "context": ("RUN_CONTEXT",),
             },
-        "optional": {
+            "optional": {
                 "image": ("IMAGE", ),
                 "mask": ("MASK",),
                 "prompt_weight":("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
                 "smoothness":("INT", {"default": 0,  "min":0, "max": 10, "step": 0.1,}),
+                "auto_adjust_image": ("BOOLEAN", {"default": True}),  # 新增的输入开关
             },
         }
 
@@ -3522,37 +3523,37 @@ class pre_Kontext:
     FUNCTION = "process"
     CATEGORY = "Apt_Preset/chx_tool"
 
-
-    def process(self, context=None, image=None, mask=None,prompt_weight=0.5, smoothness=0):
-
+    def process(self, context=None, image=None, mask=None, prompt_weight=0.5, smoothness=0, auto_adjust_image=True):  # 添加参数
         conditioning = context.get("positive", None)
         vae = context.get("vae", None)
 
         if image is None:
             image = context.get("images", None)
 
-        width = image.shape[2]
-        height = image.shape[1]
-        aspect_ratio = width / height
-        _, target_width, target_height = min(
-            (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
-        )
+        #-----------------------------
+        if auto_adjust_image:  # 当 auto_adjust_image 为 True 时执行图像调整        
+            width = image.shape[2]
+            height = image.shape[1]
+            aspect_ratio = width / height
+            _, target_width, target_height = min(
+                (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
+            )
 
-        scaled_image = comfy.utils.common_upscale(
-            image.movedim(-1, 1),
-            target_width,
-            target_height,
-            "lanczos",
-            "center"
-        ).movedim(1, -1)
+            scaled_image = comfy.utils.common_upscale(
+                image.movedim(-1, 1),
+                target_width,
+                target_height,
+                "lanczos",
+                "center"
+            ).movedim(1, -1)
+            image = scaled_image[:, :, :, :3]  # 只保留 RGB 通道
+        #-----------------------------
 
-        pixels = scaled_image[:, :, :, :3]  # 只保留 RGB 通道
-        encoded_latent = vae.encode(pixels)  # 注意：某些 VAE 实现可能需要归一化处理
+        encoded_latent = vae.encode(image)  #
         latent = {"samples": encoded_latent}
 
         if conditioning is not None:
-
-            influence= 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
+            influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
             scaled_latent = latent["samples"] * influence
             conditioning = node_helpers.conditioning_set_values(
                 conditioning,
@@ -3585,6 +3586,7 @@ class chx_Ksampler_Kontext:
                 "context": ("RUN_CONTEXT",),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                 "prompt_weight": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
+                "auto_adjust_image": ("BOOLEAN", {"default": True}),  # 新增的输入开关
                 "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
             },
             "optional": {
@@ -3604,7 +3606,7 @@ class chx_Ksampler_Kontext:
     CATEGORY = "Apt_Preset/chx_ksample"
     OUTPUT_NODE = True
 
-    def run(self, context, seed, image_output="Preview", image=None, mask=None, prompt_weight=0.5,  pos="", prompt=None, extra_pnginfo=None):
+    def run(self, context, seed, image_output="Preview", image=None, mask=None, prompt_weight=0.5, auto_adjust_image=True, pos="", prompt=None, extra_pnginfo=None):
         denoise=1
         smoothness=0
         vae = context.get("vae")
@@ -3621,23 +3623,24 @@ class chx_Ksampler_Kontext:
             image = context.get("images", None)
         assert image is not None, "Image must be provided or exist in the context."
 
-        width = image.shape[2]
-        height = image.shape[1]
-        aspect_ratio = width / height
-        _, target_width, target_height = min(
-            (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
-        )
+        pixels = image
+        if auto_adjust_image:      
 
-        # 缩放图像
-        scaled_image = comfy.utils.common_upscale(
-            image.movedim(-1, 1),
-            target_width,
-            target_height,
-            "lanczos",
-            "center"
-        ).movedim(1, -1)
+            width = image.shape[2]
+            height = image.shape[1]
+            aspect_ratio = width / height
+            _, target_width, target_height = min(
+                (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
+            )
 
-        pixels = scaled_image[:, :, :, :3].clamp(0, 1)
+            scaled_image = comfy.utils.common_upscale(
+                image.movedim(-1, 1),
+                target_width,
+                target_height,
+                "lanczos",
+                "center"
+            ).movedim(1, -1)
+            pixels = scaled_image[:, :, :, :3].clamp(0, 1)
         
         # 确保输入有批次维度
         if pixels.dim() == 3:
@@ -3763,15 +3766,14 @@ class chx_Ksampler_Kontext_adv:
             "required": {
                 "context": ("RUN_CONTEXT",),
                 "add_noise": (["enable", "disable"], ),
-
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                     "steps": ("INT", {"default": 20, "min": 0, "max": 10000}),
                     "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
                     "end_at_step": ("INT", {"default": 1000, "min": 0, "max": 10000}),
                     "return_with_leftover_noise": (["disable", "enable"], ),
 
-
                 "prompt_weight": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
+                "auto_adjust_image": ("BOOLEAN", {"default": True}), 
                 "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
             },
             "optional": {
@@ -3791,7 +3793,7 @@ class chx_Ksampler_Kontext_adv:
     CATEGORY = "Apt_Preset/chx_ksample"
     OUTPUT_NODE = True
 
-    def run(self, context, seed,steps, image_output="Preview", image=None, mask=None, prompt_weight=0.5,  pos="", prompt=None, extra_pnginfo=None, add_noise="enable", start_at_step=0, end_at_step=0, return_with_leftover_noise="disable"):
+    def run(self, context, seed,steps, image_output="Preview", image=None, mask=None, prompt_weight=0.5,  pos="",auto_adjust_image=True, prompt=None, extra_pnginfo=None, add_noise="enable", start_at_step=0, end_at_step=0, return_with_leftover_noise="disable"):
         denoise=1
         smoothness=0
         vae = context.get("vae")
@@ -3815,24 +3817,23 @@ class chx_Ksampler_Kontext_adv:
             image = context.get("images", None)
         assert image is not None, "Image must be provided or exist in the context."
 
-        width = image.shape[2]
-        height = image.shape[1]
-        aspect_ratio = width / height
-        _, target_width, target_height = min(
-            (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
-        )
-
-        # 缩放图像
-        scaled_image = comfy.utils.common_upscale(
-            image.movedim(-1, 1),
-            target_width,
-            target_height,
-            "lanczos",
-            "center"
-        ).movedim(1, -1)
-
-        pixels = scaled_image[:, :, :, :3].clamp(0, 1)
-        
+        pixels = image
+        if auto_adjust_image:      
+            width = image.shape[2]
+            height = image.shape[1]
+            aspect_ratio = width / height
+            _, target_width, target_height = min(
+                (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
+            )
+            scaled_image = comfy.utils.common_upscale(
+                image.movedim(-1, 1),
+                target_width,
+                target_height,
+                "lanczos",
+                "center"
+            ).movedim(1, -1)
+            pixels = scaled_image[:, :, :, :3].clamp(0, 1)
+            
         # 确保输入有批次维度
         if pixels.dim() == 3:
             pixels = pixels.unsqueeze(0)  # 添加批次维度
@@ -3953,4 +3954,6 @@ class chx_Ksampler_Kontext_adv:
             return {"ui": {}, "result": (context, output_image)}
         else:
             return {"ui": {"images": results}, "result": (context, output_image)}
+
+
 
