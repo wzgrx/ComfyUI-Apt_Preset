@@ -97,7 +97,10 @@ NODE_CLASS_MAPPINGS= {
 "sum_stack_Wan": sum_stack_Wan,
 "sum_stack_AD": sum_stack_AD,
 
+
+
 "pre_Kontext": pre_Kontext, 
+"pre_sample_data": pre_sample_data,
 "pre_controlnet": pre_controlnet,
 "pre_controlnet_union": pre_controlnet_union,
 "pre_mask_Mulcondi": pre_mask_Mulcondi,
