@@ -35,6 +35,7 @@ app.registerExtension({
             nodeData.name.startsWith('lay_') ||
             nodeData.name.startsWith('GPT_') ||
             nodeData.name.startsWith('pre_') ||
+            nodeData.name.startsWith('basicIn_') ||
             nodeData.name.startsWith('sampler_') ||
             nodeData.name.startsWith('Amp_') ||
             nodeData.name.startsWith('excel_') ||
