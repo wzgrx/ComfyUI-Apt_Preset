@@ -85,7 +85,6 @@ NODE_CLASS_MAPPINGS= {
 "sampler_DynamicTileSplit": DynamicTileSplit, 
 "sampler_DynamicTileMerge": DynamicTileMerge,
 "sampler_enhance": sampler_enhance,
-"sampler_sigmas": sampler_sigmas,
 
 
 #---------control tool------------------------------------------#
