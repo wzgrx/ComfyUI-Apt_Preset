@@ -385,7 +385,7 @@ NODE_CLASS_MAPPINGS= {
 "text_SuperPrompter": text_SuperPrompter,
 "text_free_wildcards": text_free_wildcards,
 "text_stack_wildcards": text_stack_wildcards,
-"text_sum": NS_PromptList,#web
+"text_sum": text_sum,#web
 
 
 }
