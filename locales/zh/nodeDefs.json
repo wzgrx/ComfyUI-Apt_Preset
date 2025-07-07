@@ -11179,6 +11179,163 @@
     }
   },
 
+
+"excel_read": {
+    "display_name": "Excel_读取",
+    "inputs": {
+        "excel_path": {
+            "name": "Excel路径"
+        },
+        "sheet_name": {
+            "name": "工作表名称"
+        },
+        "row_start": {
+            "name": "起始行"
+        },
+        "row_end": {
+            "name": "结束行"
+        },
+        "col_start": {
+            "name": "起始列"
+        },
+        "col_end": {
+            "name": "结束列"
+        }
+    },
+    "outputs": {
+        "data": {
+            "name": "数据"
+        }
+    }
+},
+
+
+
+"excel_write_data": {
+    "display_name": "Excel_写入数据",
+    "inputs": {
+        "excel_path": {
+            "name": "Excel路径"
+        },
+        "sheet_name": {
+            "name": "工作表名称"
+        },
+        "row_start": {
+            "name": "起始行"
+        },
+        "row_end": {
+            "name": "结束行"
+        },
+        "col_start": {
+            "name": "起始列"
+        },
+        "col_end": {
+            "name": "结束列"
+        },
+        "data": {
+            "name": "数据"
+        }
+    },
+    "outputs": {
+        "debug": {
+            "name": "调试信息"
+        }
+    }
+},
+
+
+
+"excel_insert_image": {
+    "display_name": "Excel_插入图像",
+    "inputs": {
+        "excel_path": {
+            "name": "Excel路径"
+        },
+        "sheet_name": {
+            "name": "工作表名称"
+        },
+        "row_start": {
+            "name": "起始行"
+        },
+        "row_end": {
+            "name": "结束行"
+        },
+        "col_start": {
+            "name": "起始列"
+        },
+        "col_end": {
+            "name": "结束列"
+        },
+        "image_path": {
+            "name": "图像路径"
+        }
+    },
+    "outputs": {
+        "debug": {
+            "name": "调试信息"
+        }
+    }
+},
+
+
+
+"excel_search_data": {
+    "display_name": "Excel_搜索数据",
+    "inputs": {
+        "excel_path": {
+            "name": "Excel路径"
+        },
+        "sheet_name": {
+            "name": "工作表名称"
+        },
+        "search_content": {
+            "name": "搜索内容"
+        },
+        "search_mode": {
+            "name": "搜索模式",
+            "options": {
+                "Precise_search": "精确搜索",
+                "Fuzzy_search": "模糊搜索"
+            }
+        }
+    },
+    "outputs": {
+        "debug": {
+            "name": "调试信息"
+        },
+        "row": {
+            "name": "行号"
+        },
+        "col": {
+            "name": "列号"
+        }
+    }
+},
+
+
+"excel_row_diff": {
+    "display_name": "Excel_有效行差值",
+    "inputs": {
+        "excel_path": {
+            "name": "Excel路径"
+        },
+        "sheet_name": {
+            "name": "工作表名称"
+        },
+        "column_A": {
+            "name": "列A"
+        },
+        "column_B": {
+            "name": "列B"
+        }
+    },
+    "outputs": {
+        "diff_count": {
+            "name": "差异计数"
+        }
+    }
+},
+
   "Image_crop_box2": {
     "display_name": "图像_裁切box2",
     "inputs": {
