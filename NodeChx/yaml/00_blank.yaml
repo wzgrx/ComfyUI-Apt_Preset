@@ -8,7 +8,7 @@ ollama run:
 
 通用-基础:
   prompt: "best quality,masterpiece,realistic, ultra-fine painting"
-
+  negative: blur
 
 通用-写实:
   prompt: "(masterpiece:1.3), (best quality:1.3), (high resolution:1.2), (high detail:1.2), 8k resolution, RAW photo, ultra-high quality, realistic photo, photographic masterpiece, hyper-realistic, true-to-life photo realism"
