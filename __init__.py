@@ -31,13 +31,10 @@ from .NodeChx.sum_text_yaml import *
 
 
 
-
 #-load------------------------------------------#
 
 NODE_CLASS_MAPPINGS= {
 
-#"sum_text": sum_text,  
-# "sum_load_only_model": sum_load_only_model, 
 
 "sum_load_adv": sum_load_adv,
 "sum_create_chx": sum_create_chx,
