@@ -1,21 +1,32 @@
 import { app } from "../../../scripts/app.js";
 import { LoraInfoDialog } from "../../ComfyUI-Custom-Scripts/js/modelInfo.js";
 
-const infoHandlers = {
-    "Stack_LoRA": true,
-    "Stack_LoRA": true
-}
+// 定义支持的节点类型和它们的LoRA参数名称模式
+const supportedNodes = {
+    "Stack_LoRA": {
+        loraParamPattern: /^lora_name_\d+$/
+    },
+    "sum_lora": {
+        loraParamPattern: /^lora_\d+$/
+    },
+    "sum_load_adv": {
+        loraParamPattern: /^lora\d+$/
+    },
+    // 可以在这里添加更多节点类型...
+};
 
 app.registerExtension({
     name: "autotrigger.LoraInfo",
     beforeRegisterNodeDef(nodeType) {
-        if (!infoHandlers[nodeType.comfyClass]) {
+        const nodeConfig = supportedNodes[nodeType.comfyClass];
+        if (!nodeConfig) {
             return;
         }
         
         const getExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
         nodeType.prototype.getExtraMenuOptions = function (_, options) {
-            const loraWidgets = this.widgets.filter(w => w.name.startsWith("lora_name_"));
+            // 使用节点配置中的正则表达式识别LoRA小部件
+            const loraWidgets = this.widgets.filter(w => nodeConfig.loraParamPattern.test(w.name));
             
             if (loraWidgets.length === 0) {
                 return;
@@ -23,7 +34,6 @@ app.registerExtension({
             
             // 为每个LoRA添加单独的菜单项
             for (const widget of loraWidgets) {
-                const loraIndex = widget.name.split('_').pop();
                 let value = widget.value;
                 
                 if (!value || (value === "None")) {
@@ -33,6 +43,10 @@ app.registerExtension({
                 if (value.content) {
                     value = value.content;
                 }
+                
+                // 提取编号部分（如果有的话）用于菜单项显示
+                const match = widget.name.match(/\d+$/);
+                const loraIndex = match ? match[0] : "";
                 
                 options.unshift({
                     content: `View info for LoRA ${loraIndex} (${value})`,
