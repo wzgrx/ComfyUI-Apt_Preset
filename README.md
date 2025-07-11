@@ -95,6 +95,8 @@ Or you can use `load create_chx` to create a custom loader. Just like Nunchaku b
 | Chx_Ksampler_VisualStyle  | 风格一致性采样   | Style Consistency Sampling   |
 | Chx_ksampler_Deforum_math | 数学公式驱动    | Driven by Formulas           |
 | Chx_ksampler_Deforum_sch  | 调度数据驱动    | Driven by Scheduling Data    |
+| Chx_ksampler_kontext      | kontext采样器    | kontext Sampler           |
+| Chx_ksampler_kontext_avd  | kontext高级采样器   |Advanced   kontext Sampler    |
 
 集成好的采样器能快速实现常用功能，一般的工作流要实现生成图，修复、放大全流程，需要大量的节点配合，像下面会变的非常简单 
 The integrated sampler can quickly implement common functions. To achieve the full process of generating images, repairing, and enlarging in a general workflow, a large number of nodes are required. For example, it will become very simple as follows.
@@ -121,52 +123,8 @@ Adopt the sum to summarize the control nodes, especially the stack centralized c
 ![image](https://github.com/user-attachments/assets/a477dd17-80c1-4759-9a10-d69c855c1c52)
 
 
-**4、基础节点 Basic nodes：系统分类，完整规划 System classification, complete planning**
-
-一些节点还在调试中，会不断更新Some of these nodes are still under debugging and will be updated continuously.
-
-| **<font color="#ff0000">mask</font>** | **<font color="#ff0000">math</font>** | **<font color="#ff0000">image</font>** | **<font color="#ff0000">imgEffect</font>** |
-| ------------------------------------- | ------------------------------------- | -------------------------------------- | ------------------------------------------ |
-| Mask_AD_generate                      | list_num_range                        | pad_uv_fill                            | img_Loadeffect                             |
-| Mask_inpaint_Grey                     | list_cycler_Value                     | pad_color_fill                         | img_Upscaletile                            |
-| Mask_math                             | list_input_text                       | Image_LightShape                       | img_Remove_bg                              |
-| Mask_Detect_label                     | list_input_Value                      | Image_Normal_light                     | img_CircleWarp                             |
-| Mask_mulcolor_img                     | ListGetByIndex                        | Image_keep_OneColorr                   | img_Stretch                                |
-| Mask_mulcolor_mask                    | ListSlice                             | Image_transform                        | img_WaveWarp                               |
-| Mask_Outline                          | MergeList                             | Image_cutResize                        | img_Liquify                                |
-| Mask_Smooth                           | batch_cycler_Prompt                   | Image_Resize                           | img_Seam_adjust_size                       |
-| Mask_Offset                           | batch_cycler_Value                    | Image_scale_adjust                     | img_texture_Offset                         |
-| Mask_cut_mask                         | batch_cycler_text                     | image_sumTransform                     | img_White_balance                          |
-| Mask_image2mask                       | batch_cycler_split_text               | Image_overlay                          | img_HDR                                    |
-| Mask_mask2mask                        | batch_cycler_image                    | Image_overlay_mask                     | color_adjust                               |
-| Mask_mask2img                         | batch_cycler_mask                     | Image_overlay_composite                | color_Match                                |
-| Mask_splitMask                        | Remap_basic_data                      | Image_overlay_transform                | color_match_adv                            |
-|                                       | Remap_mask                            | Image_overlay_sum                      | color_input                                |
-|                                       | math_BinaryOperation                  | Image_Extract_Channel                  | color_color2hex                            |
-|                                       | math_BinaryCondition                  | Image_Apply_Channel                    | color_hex2color                            |
-|                                       | math_UnaryOperation                   | Image_RemoveAlpha                      | color_image_Replace                        |
-|                                       | math_UnaryCondition                   | image_selct_batch                      | color_pure_img                             |
-|                                       | math_Exec                             | Image_scale_match                      | color_Gradient                             |
-|                                       |                                       |                                        | color_RadialGradient                       |
-
-| <font color="#ff0000">View_IO</font> | <font color="#ff0000">prompt</font> | <font color="#ff0000">type</font> | <font color="#ff0000">layout</font> |
-| ------------------------------------ | ----------------------------------- | --------------------------------- | ----------------------------------- |
-| IO_inputbasic                        | text_CSV_load                       | Pack                              | lay_ImageGrid                       |
-| IO_load_anyimage                     | text_SuperPrompter                  | Unpack                            | lay_MaskGrid                        |
-| IO_clip_vision                       | text_mul_replace                    | creat_mask_batch                  | lay_match_W_or_H                    |
-| IO_clear_cache                       | text_mul_remove                     | creat_mask_batch_input            | lay_match_W_and_H                   |
-| view_Data                            | text_free_wildcards                 | creat_image_batch                 | lay_edge_cut                        |
-| view_bridge_image                    | text_stack_wildcards                | creat_image_batch_input           | lay_text                            |
-| view_bridge_Text                     |                                     | creat_any_List                    |                                     |
-| view_mask                            |                                     | AnyCast                           |                                     |
-| view_LatentAdvanced                  |                                     | type_Anyswitch                    |                                     |
-| view_combo                           |                                     | type_BasiPIPE                     |                                     |
-| view_node_Script                     |                                     | type_Image_List2Batch             |                                     |
-| view_GetLength                       |                                     | type_Image_Batch2List             |                                     |
-| view_GetShape                        |                                     | type_Mask_Batch2List              |                                     |
-| view_GetWidgetsValues                |                                     | type_Mask_List2Batch              |                                     |
-|                                      |                                     | type_text_list2batch              |                                     |
-|                                      |                                     | type_text_2_UTF8                  |                                     |
+**4、基础节点 Basic nodes**
+持续更新中Continuously updating
 
 # <font color="#000000"> 三 、Installation</font>
 Clone the repository to the **custom_nodes** directory and install dependencies
@@ -181,10 +139,6 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 
 ```
 注意Note：
-
-要使用AD简化的功能，请先安装 To use the simplified functions of AD, you need to install it first.
-
-[Kosinkadink/ComfyUI-AnimateDiff-Evolved](https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved)
 
 要使用功能controlNet schdule控制，请先安装To use the function of controlNet schdule control, please install it first.
 
