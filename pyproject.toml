@@ -1,7 +1,7 @@
 [project]
 name = "ComfyUI-Apt_Preset"
 description = "ComfyUI Preset Manager, supporting various preset templates and workflow management"
-version = "5.1.1"
+version = "6.0"
 license = { file = "LICENSE.txt" }
 
 [project.urls]
