@@ -2430,6 +2430,10 @@
       }
     }
   },
+
+
+
+  
   "list_ListMerge": {
     "display_name": "list_ListMerge",
     "inputs": {
@@ -2449,8 +2453,8 @@
       }
     }
   },
-  "list_cycler_Value": {
-    "display_name": "列表_循环值",
+  "list_sch_Value": {
+    "display_name": "list_调度值",
     "inputs": {
       "schedule": {
         "name": "调度表"
@@ -2472,7 +2476,7 @@
     }
   },
   "list_num_range": {
-    "display_name": "列表_数量范围",
+    "display_name": "list_数量范围",
     "inputs": {
       "start": {
         "name": "起始"
@@ -2485,19 +2489,19 @@
       }
     },
     "outputs": {
-      "float": {
-        "name": "浮点数"
-      },
-      "list": {
+      "0": {
         "name": "列表"
       },
-      "int": {
-        "name": "整数"
+      "1": {
+        "name": "批次"
+      },
+      "2": {
+        "name": "长度"
       }
     }
   },
-  "batch_cycler_split_text": {
-    "display_name": "批次_循环分割文本",
+  "sch_split_text": {
+    "display_name": "调度_分割文本",
     "inputs": {
       "text": {
         "name": "文本"
@@ -2518,8 +2522,8 @@
       }
     }
   },
-  "batch_cycler_text": {
-    "display_name": "批次_循环文本",
+  "sch_text": {
+    "display_name": "调度_文本",
     "inputs": {
       "keyframe_list": {
         "name": "关键帧列表"
@@ -2543,8 +2547,8 @@
       }
     }
   },
-  "batch_cycler_Value": {
-    "display_name": "批次_循环值",
+  "sch_Value": {
+    "display_name": "调度_值",
     "inputs": {
       "schedule": {
         "name": "调度表"
@@ -2565,8 +2569,8 @@
       }
     }
   },
-  "batch_cycler_Prompt": {
-    "display_name": "批次_循环条件",
+  "sch_Prompt": {
+    "display_name": "调度_循环条件",
     "inputs": {
       "clip": {
         "name": "CLIP"
@@ -2587,8 +2591,8 @@
       }
     }
   },
-  "batch_cycler_image": {
-    "display_name": "批次_循环图像",
+  "sch_image": {
+    "display_name": "调度_图像",
     "inputs": {
       "images": {
         "name": "图像"
@@ -2606,8 +2610,8 @@
       }
     }
   },
-  "batch_cycler_mask": {
-    "display_name": "批次_循环遮罩",
+  "sch_mask": {
+    "display_name": "调度_遮罩",
     "inputs": {
       "masks": {
         "name": "遮罩组"
@@ -7379,6 +7383,9 @@
       "model": {
         "name": "模型"
       },
+      "steps": {
+        "name": "步数"
+      },
       "image": {
         "name": "图像"
       },
@@ -7430,6 +7437,9 @@
       },
       "prompt_weight": {
         "name": "提示词权重"
+      },
+      "steps": {
+        "name": "步数"
       },
       "mask_extend": {
         "name": "遮罩扩张"
@@ -8799,6 +8809,9 @@
       "inpaint_relevance": {
         "name": "重绘关联性"
       },
+      "steps": {
+        "name": "步数"
+      },
       "mask_scale": {
         "name": "遮罩放大裁切"
       },
@@ -8894,6 +8907,7 @@
       "start_at_step": {
         "name": "开始步数"
       },
+      
       "end_at_step": {
         "name": "结束步数"
       },
@@ -11288,6 +11302,9 @@
       "col_end": {
         "name": "结束列"
       },
+      "img_height": {
+        "name": "图像高度"
+      },
       "image_path": {
         "name": "图像路径"
       }
@@ -11339,19 +11356,54 @@
       "sheet_name": {
         "name": "工作表名称"
       },
-      "column_A": {
-        "name": "列A"
+      "col_data": {
+        "name": "数据列"
       },
-      "column_B": {
-        "name": "列B"
+      "col_finish": {
+        "name": "待完成列"
       }
     },
     "outputs": {
-      "diff_count": {
-        "name": "差异计数"
-      }
+      "0": {
+        "name": "差值"
+      },
+      "1": {
+        "name": "数据行数"
+      },
+      "2": {
+        "name": "待完成行数"
+      }      
     }
   },
+  "excel_column_diff": {
+    "display_name": "Excel_有效列差值",
+    "inputs": {
+      "excel_path": {
+        "name": "Excel路径"
+      },
+      "sheet_name": {
+        "name": "工作表名称"
+      },
+      "row_data": {
+        "name": "数据行"
+      },
+      "row_finish": {
+        "name": "待完成行"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "差值"
+      },
+      "1": {
+        "name": "数据列数"
+      },
+      "2": {
+        "name": "待完成列数"
+      }      
+    }
+  },
+
   "Image_crop_box2": {
     "display_name": "图像_裁切box2",
     "inputs": {
