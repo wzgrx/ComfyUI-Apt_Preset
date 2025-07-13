@@ -25,6 +25,8 @@
 2025.7.9  添加在线PS工具和lora触发词获取添加到stack lora
 
 2025.7.12  添加节点 kontext_inpaint
+
+2025.7.13   kontext官方presets 安排仅text_sum预设了
 连续编辑Continuous editing     ksampler_Kontext
 ![image](https://github.com/user-attachments/assets/e84c2e03-32af-4608-bb5b-5ed683628c69)
 
