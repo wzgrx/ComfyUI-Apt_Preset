@@ -10,12 +10,20 @@ from einops import rearrange
 from comfy.ldm.modules.attention import optimized_attention
 from comfy.ldm.modules.diffusionmodules.mmdit import (RMSNorm,JointBlock,)
 import math
-from diffusers.models.embeddings import Timesteps, TimestepEmbedding
+
 import comfy.model_patcher
 import comfy.samplers
 import torch
 
 from ..main_unit import *
+
+
+
+
+try:
+    from diffusers.models.embeddings import Timesteps, TimestepEmbedding
+except ImportError: 
+    pass
 
 
 #region---------------SD3.5 style-----------------------------------
