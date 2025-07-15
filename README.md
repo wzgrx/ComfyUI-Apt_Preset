@@ -28,6 +28,14 @@
 
 2025.7.13  添加 kontext官方presets。放入了 text_sum
 
+2025.7.15  添加 kontext多条件遮罩 pre kontext_mul 
+Simultaneously issue commands to generate for multiple objects
+
+<img width="2829" height="1347" alt="image" src="https://github.com/user-attachments/assets/5b32b4dd-2f2e-4324-95ad-2b646854073c" />
+
+
+
+
 
 连续编辑Continuous editing     ksampler_Kontext
 ![image](https://github.com/user-attachments/assets/e84c2e03-32af-4608-bb5b-5ed683628c69)
