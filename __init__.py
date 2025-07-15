@@ -1,6 +1,6 @@
 WEB_DIRECTORY = "./web"
-from .server_patch import patch_server_initialization
-patch_server_initialization()
+#from .server_patch import patch_server_initialization
+#patch_server_initialization()
 
 
 
