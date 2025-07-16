@@ -324,47 +324,43 @@ class Apply_LoRAStack:
 
 
 
-
 class Stack_condi:
     @classmethod
     def INPUT_TYPES(s):
-
         return {
-
-            "required": {
-            },
-
+            "required": {},
             "optional": {
                 "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
                 "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
                 "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
                 "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
-                # 将 background 重命名为 background
+                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),  # 新增pos5
                 "mask_1": ("MASK", ),
                 "mask_2": ("MASK", ),
                 "mask_3": ("MASK", ),
                 "mask_4": ("MASK", ),
-                # 移除原有的 mask_5 输入
-                # "mask_5": ("MASK", ),
+                "mask_5": ("MASK", ),  # 新增mask_5输入
                 "mask_1_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
                 "mask_2_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
                 "mask_3_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
                 "mask_4_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "set_cond_area": (["default", "mask bounds"],),
-
+                "mask_5_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),  # 新增mask_5强度
+                #"set_cond_area": (["default", "mask bounds"],),
                 "background": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "background is sea"}),
-                "neg": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "Poor quality"}),
+                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "Poor quality"}),
             }
         }
-        
+    
     RETURN_TYPES = ("STACK_CONDI",)
     RETURN_NAMES = ("condi_stack", )
     FUNCTION = "stack_condi"
     CATEGORY = "Apt_Preset/stack"
 
-    def stack_condi(self, pos1, pos2, pos3, pos4, background, neg, set_cond_area, mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_1=None, mask_2=None, mask_3=None, mask_4=None):
+    def stack_condi(self, pos1, pos2, pos3, pos4, pos5, background, neg, 
+                    mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength,
+                    mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None):
         condi_stack = list()
-        
+        set_cond_area ="default"
         # 打包逻辑：每组 pos、mask 和 mask_strength 是配套的
         def pack_group(pos, mask, mask_strength):
             if mask is not None:  # 如果 mask 存在，则打包整组
@@ -384,19 +380,22 @@ class Stack_condi:
             valid_masks.append(mask_3)
         if mask_4 is not None:
             valid_masks.append(mask_4)
+        if mask_5 is not None:  # 新增mask_5检查
+            valid_masks.append(mask_5)
 
         if valid_masks:
             total_mask = sum(valid_masks)
-            mask_5 = 1 - total_mask
+            mask_bg = 1 - total_mask  # 原mask_5重命名为mask_bg
         else:
-            mask_5 = None
+            mask_bg = None
 
         # 打包每组信息
         group1 = pack_group(pos1, mask_1, mask_1_strength)
         group2 = pack_group(pos2, mask_2, mask_2_strength)
         group3 = pack_group(pos3, mask_3, mask_3_strength)
         group4 = pack_group(pos4, mask_4, mask_4_strength)
-        group5 = pack_group(background, mask_5, 1)
+        group5 = pack_group(pos5, mask_5, mask_5_strength)  # 新增组5
+        group_bg = pack_group(background, mask_bg, 1)  # 使用mask_bg
         
         # 将打包的组添加到 condi_stack
         if group1 is not None:
@@ -407,8 +406,10 @@ class Stack_condi:
             condi_stack.append(group3)
         if group4 is not None:
             condi_stack.append(group4)
-        if group5 is not None:
+        if group5 is not None:  # 添加组5
             condi_stack.append(group5)
+        if group_bg is not None:  # 添加背景组
+            condi_stack.append(group_bg)
         
         # 打包负面提示和 set_cond_area
         condi_stack.append({
@@ -458,7 +459,6 @@ class Apply_condiStack:
         positive = positive
 
         return (positive, negative)
-
 
 
 
