@@ -9739,40 +9739,49 @@
     "display_name": "Stack_condi",
     "inputs": {
       "pos1": {
-        "name": "正面_1"
+        "name": "条件1"
       },
       "pos2": {
-        "name": "pos2"
+        "name": "条件2"
       },
       "pos3": {
-        "name": "pos3"
+        "name": "条件3"
       },
       "pos4": {
-        "name": "pos4"
+        "name": "条件4"
+      },
+      "pos5": {
+        "name": "条件5"
       },
       "mask_1": {
-        "name": "mask1"
+        "name": "遮罩1"
       },
       "mask_2": {
-        "name": "mask2"
+        "name": "遮罩2"
       },
       "mask_3": {
-        "name": "mask3"
+        "name": "遮罩3"
       },
       "mask_4": {
-        "name": "mask4"
+        "name": "遮罩4"
+      },
+      "mask_5": {
+        "name": "遮罩5"
       },
       "mask_1_strength": {
-        "name": "mask1强度"
+        "name": "遮罩1强度"
       },
       "mask_2_strength": {
-        "name": "mask2强度"
+        "name": "遮罩2强度"
       },
       "mask_3_strength": {
-        "name": "mask3强度"
+        "name": "遮罩3强度"
       },
       "mask_4_strength": {
-        "name": "mask4强度"
+        "name": "遮罩4强度"
+      },
+      "mask_5_strength": {
+        "name": "遮罩5强度"
       },
       "set_cond_area": {
         "name": "条件范围"
