@@ -420,7 +420,157 @@ class Stack_condi:
         return (condi_stack,)
 
 
+
+
+class Stack_condi:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {},
+            "optional": {
+                "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
+                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),  # 新增pos5
+                "mask_1": ("MASK", ),
+                "mask_2": ("MASK", ),
+                "mask_3": ("MASK", ),
+                "mask_4": ("MASK", ),
+                "mask_5": ("MASK", ),  # 新增mask_5输入
+                "mask_1_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_2_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_3_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_4_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_5_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),  # 新增mask_5强度
+                "background": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "background is sea"}),
+                "background_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),  # 新增背景强度
+                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "Poor quality"}),
+            }
+        }
+    
+    RETURN_TYPES = ("STACK_CONDI",)
+    RETURN_NAMES = ("condi_stack", )
+    FUNCTION = "stack_condi"
+    CATEGORY = "Apt_Preset/stack"
+
+    def stack_condi(self, pos1, pos2, pos3, pos4, pos5, background, background_strength, neg, 
+                    mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength,
+                    mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None):
+        condi_stack = list()
+        set_cond_area ="default"
+        
+        # 打包逻辑：每组 pos、mask 和 mask_strength 是配套的
+        def pack_group(pos, mask, mask_strength):
+            if mask is None or mask_strength <= 0:  # 新增mask_strength检查
+                return None
+            return {
+                "pos": pos,
+                "mask": mask,
+                "mask_strength": mask_strength,
+            }
+        
+        valid_masks = []
+        if mask_1 is not None:
+            valid_masks.append(mask_1)
+        if mask_2 is not None:
+            valid_masks.append(mask_2)
+        if mask_3 is not None:
+            valid_masks.append(mask_3)
+        if mask_4 is not None:
+            valid_masks.append(mask_4)
+        if mask_5 is not None:
+            valid_masks.append(mask_5)
+
+        # 计算背景遮罩，确保范围在0-1之间
+        if valid_masks:
+            total_mask = sum(valid_masks)
+            # 确保总遮罩不超过1
+            total_mask = torch.clamp(total_mask, 0, 1)
+            mask_bg = 1 - total_mask
+        else:
+            # 如果没有有效遮罩，背景遮罩应该是全1
+            mask_bg = None  # 注意：这里改为None，在Apply_condiStack中处理全1的情况
+        
+        # 打包每组信息
+        group1 = pack_group(pos1, mask_1, mask_1_strength)
+        group2 = pack_group(pos2, mask_2, mask_2_strength)
+        group3 = pack_group(pos3, mask_3, mask_3_strength)
+        group4 = pack_group(pos4, mask_4, mask_4_strength)
+        group5 = pack_group(pos5, mask_5, mask_5_strength)
+        group_bg = pack_group(background, mask_bg, background_strength)  # 使用背景强度参数
+        
+        # 将打包的组添加到 condi_stack
+        if group1 is not None:
+            condi_stack.append(group1)
+        if group2 is not None:
+            condi_stack.append(group2)
+        if group3 is not None:
+            condi_stack.append(group3)
+        if group4 is not None:
+            condi_stack.append(group4)
+        if group5 is not None:
+            condi_stack.append(group5)
+        if group_bg is not None:  # 添加背景组
+            condi_stack.append(group_bg)
+        
+        # 打包负面提示和 set_cond_area
+        condi_stack.append({
+            "neg": neg,
+            "set_cond_area": set_cond_area,
+        })
+        
+        return (condi_stack,)
+
+
 class Apply_condiStack:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "clip": ("CLIP",),
+            "stack_condi": ("STACK_CONDI",),
+        }}
+
+    RETURN_TYPES = ("CONDITIONING", "CONDITIONING")
+    RETURN_NAMES = ("positive", "negative")
+    FUNCTION = "condiStack"
+    CATEGORY = "Apt_Preset/stack/apply"
+
+    def condiStack(self, clip, stack_condi):
+        neg_data = stack_condi[-1]
+        neg = neg_data["neg"]
+        set_cond_area = neg_data["set_cond_area"]
+
+        negative, = CLIPTextEncode().encode(clip, neg)
+        positive = []
+        set_area_to_bounds = (set_cond_area != "default")
+
+        for group in stack_condi[:-1]:
+            pos = group["pos"]
+            mask = group["mask"]
+            mask_strength = group["mask_strength"]
+
+            encoded_pos, = CLIPTextEncode().encode(clip, pos)
+
+            if mask is None:
+                # 处理背景遮罩为None的情况（即全1遮罩）
+                for t in encoded_pos:
+                    # 创建一个全1的遮罩
+                    full_mask = torch.ones_like(t[0][0]) if t is not None and len(t) > 0 and len(t[0]) > 0 else None
+                    if full_mask is not None:
+                        append_helper(t, full_mask, positive, set_area_to_bounds, mask_strength)
+            else:
+                if len(mask.shape) < 3:
+                    mask = mask.unsqueeze(0)
+                for t in encoded_pos:
+                    append_helper(t, mask, positive, set_area_to_bounds, mask_strength)
+                    
+        return (positive, negative)
+
+
+
+class XXApply_condiStack:
 
     @classmethod
     def INPUT_TYPES(cls):
