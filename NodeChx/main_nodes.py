@@ -2636,7 +2636,7 @@ class pre_controlnet_union:
         return (context, positive, negative, )
 
 
-class pre_mul_Mulcondi:
+class XXpre_mul_Mulcondi:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -2723,6 +2723,110 @@ class pre_mul_Mulcondi:
         context = new_context(context, positive=c, negative=negative, clip=clip)
 
         return (context, c, negative)
+
+
+
+class pre_mul_Mulcondi:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {
+                "context": ("RUN_CONTEXT",),
+                "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
+                "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
+                "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
+                "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
+                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
+                "mask_1": ("MASK", ),
+                "mask_2": ("MASK", ),
+                "mask_3": ("MASK", ),
+                "mask_4": ("MASK", ),
+                "mask_5": ("MASK", ),
+                "mask_1_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_2_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_3_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_4_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "mask_5_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "background": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "background is sea"}),
+                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True,"default": "Poor quality" }),
+            }
+        }
+        
+    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING", "CONDITIONING", )
+    RETURN_NAMES = ("context","positive", "negative",)
+
+    FUNCTION = "Mutil_Clip"
+    CATEGORY = "Apt_Preset/chx_tool"
+
+    def Mutil_Clip (self, pos1, pos2, pos3, pos4, pos5, background, neg,  mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength, mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None, context=None):
+        set_cond_area = "default"
+        clip = context.get("clip")
+        positive_1, = CLIPTextEncode().encode(clip, pos1)
+        positive_2, = CLIPTextEncode().encode(clip, pos2)
+        positive_3, = CLIPTextEncode().encode(clip, pos3)
+        positive_4, = CLIPTextEncode().encode(clip, pos4)
+        positive_5, = CLIPTextEncode().encode(clip, pos5)
+        negative, = CLIPTextEncode().encode(clip, neg)
+
+        c = []
+        set_area_to_bounds = False
+        if set_cond_area != "default":
+            set_area_to_bounds = True
+        valid_masks = []
+        
+        # 处理遮罩维度
+        if mask_1 is not None and len(mask_1.shape) < 3:  
+            mask_1 = mask_1.unsqueeze(0)
+        if mask_2 is not None and len(mask_2.shape) < 3:  
+            mask_2 = mask_2.unsqueeze(0)
+        if mask_3 is not None and len(mask_3.shape) < 3:  
+            mask_3 = mask_3.unsqueeze(0)
+        if mask_4 is not None and len(mask_4.shape) < 3:  
+            mask_4 = mask_4.unsqueeze(0)
+        if mask_5 is not None and len(mask_5.shape) < 3:  
+            mask_5 = mask_5.unsqueeze(0)
+
+        # 应用各个遮罩并收集有效的遮罩
+        if mask_1 is not None:
+            for t in positive_1:
+                append_helper(t, mask_1, c, set_area_to_bounds, mask_1_strength)
+            valid_masks.append(mask_1)
+        if mask_2 is not None:
+            for t in positive_2:
+                append_helper(t, mask_2, c, set_area_to_bounds, mask_2_strength)
+            valid_masks.append(mask_2)
+        if mask_3 is not None:
+            for t in positive_3:
+                append_helper(t, mask_3, c, set_area_to_bounds, mask_3_strength)
+            valid_masks.append(mask_3)
+        if mask_4 is not None:
+            for t in positive_4:
+                append_helper(t, mask_4, c, set_area_to_bounds, mask_4_strength)
+            valid_masks.append(mask_4)
+        if mask_5 is not None:
+            for t in positive_5:
+                append_helper(t, mask_5, c, set_area_to_bounds, mask_5_strength)
+            valid_masks.append(mask_5)
+
+        # 计算背景遮罩
+        if valid_masks:
+            total_mask = sum(valid_masks)
+            # 确保总遮罩不超过1
+            total_mask = torch.clamp(total_mask, 0, 1)
+            mask_6 = 1 - total_mask
+        else:
+            mask_6 = torch.ones_like(mask_1) if mask_1 is not None else None
+
+        # 应用背景条件
+        if mask_6 is not None:
+            background_cond, = CLIPTextEncode().encode(clip, background)
+            for t in background_cond:
+                append_helper(t, mask_6, c, set_area_to_bounds, 1)
+
+        context = new_context(context, positive=c, negative=negative, clip=clip)
+
+        return (context, c, negative)
+
 
 
 #endregion-----------tool--------------------------------------------------------------------------------------#--
