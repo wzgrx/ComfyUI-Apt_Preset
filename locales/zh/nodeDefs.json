@@ -7550,8 +7550,11 @@
       "crop_area_extend": {
         "name": "裁切区扩张"
       },
-      "feather": {
+      "feather_mask": {
         "name": "遮罩羽化"
+      },
+      "feather_image": {
+        "name": "贴图羽化"
       },
       "model": {
         "name": "模型"
@@ -7612,6 +7615,7 @@
       }
     }
   },
+
   "sampler_DynamicTileSplit": {
     "display_name": "采样处理_图片tile分割",
     "inputs": {
@@ -9413,6 +9417,149 @@
       }
     }
   },
+
+"pre_mul_Mulcondi": {
+    "display_name": "pre_条件分区",
+    "inputs": {
+        "context": {
+            "name": "运行上下文"
+        },
+        "pos1": {
+            "name": "正条件1"
+        },
+        "pos2": {
+            "name": "正条件2"
+        },
+        "pos3": {
+            "name": "正条件3"
+        },
+        "pos4": {
+            "name": "正条件4"
+        },
+        "pos5": {
+            "name": "正条件5"
+        },
+        "mask_1": {
+            "name": "遮罩1"
+        },
+        "mask_2": {
+            "name": "遮罩2"
+        },
+        "mask_3": {
+            "name": "遮罩3"
+        },
+        "mask_4": {
+            "name": "遮罩4"
+        },
+        "mask_5": {
+            "name": "遮罩5"
+        },
+        "mask_1_strength": {
+            "name": "遮罩1强度"
+        },
+        "mask_2_strength": {
+            "name": "遮罩2强度"
+        },
+        "mask_3_strength": {
+            "name": "遮罩3强度"
+        },
+        "mask_4_strength": {
+            "name": "遮罩4强度"
+        },
+        "mask_5_strength": {
+            "name": "遮罩5强度"
+        },
+        "background": {
+            "name": "背景描述"
+        },
+        "neg": {
+            "name": "负条件"
+        }
+    },
+    "outputs": {
+        "context": {
+            "name": "运行上下文"
+        },
+        "positive": {
+            "name": "正条件"
+        },
+        "negative": {
+            "name": "负条件"
+        }
+    }
+  },
+
+"pre_Kontext_mul": {
+    "display_name": "pre_Kontext分区",
+    "inputs": {
+        "context": {
+            "name": "context"
+        },
+        "image": {
+            "name": "图像"
+        },
+        "mask": {
+            "name": "总遮罩"
+        },
+        "pos1": {
+            "name": "正条件1"
+        },
+        "pos2": {
+            "name": "正条件2"
+        },
+        "pos3": {
+            "name": "正条件3"
+        },
+        "pos4": {
+            "name": "正条件4"
+        },
+        "pos5": {
+            "name": "正条件5"
+        },
+        "mask1": {
+            "name": "遮罩1"
+        },
+        "mask2": {
+            "name": "遮罩2"
+        },
+        "mask3": {
+            "name": "遮罩3"
+        },
+        "mask4": {
+            "name": "遮罩4"
+        },
+        "mask5": {
+            "name": "遮罩5"
+        },
+        "prompt_weight1": {
+            "name": "提示词权重1"
+        },
+        "prompt_weight2": {
+            "name": "提示词权重2"
+        },
+        "prompt_weight3": {
+            "name": "提示词权重3"
+        },
+        "prompt_weight4": {
+            "name": "提示词权重4"
+        },
+        "prompt_weight5": {
+            "name": "提示词权重5"
+        }
+    },
+    "outputs": {
+        "context": {
+            "name": "运行上下文"
+        },
+        "positive": {
+            "name": "正条件"
+        },
+        "latent": {
+            "name": "潜在空间"
+        }
+    }
+},
+
   "Stack_ControlNet": {
     "display_name": "Stack_ControlNet",
     "inputs": {
