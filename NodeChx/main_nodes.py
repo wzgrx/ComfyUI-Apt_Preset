@@ -2640,9 +2640,7 @@ class pre_mul_Mulcondi:
     @classmethod
     def INPUT_TYPES(s):
         return {
-
             "optional": {
-                
                 "context": ("RUN_CONTEXT",),
                 "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
                 "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
@@ -2659,22 +2657,19 @@ class pre_mul_Mulcondi:
                 "mask_3_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
                 "mask_4_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
                 "mask_5_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "set_cond_area": (["default", "mask bounds"],),
-
-                "neg": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "Poor quality" }),
+                "background": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "background is sea"}),
+                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True,"default": "Poor quality" }),
             }
         }
         
     RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING", "CONDITIONING", )
     RETURN_NAMES = ("context","positive", "negative",)
 
-
     FUNCTION = "Mutil_Clip"
     CATEGORY = "Apt_Preset/chx_tool"
 
-
-    def Mutil_Clip (self, pos1, pos2, pos3, pos4, pos5, neg,  set_cond_area, mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength,mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None,context=None,):
-
+    def Mutil_Clip (self, pos1, pos2, pos3, pos4, pos5, background, neg,  mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength, mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None, context=None):
+        set_cond_area = "default"
         clip = context.get("clip")
         positive_1, = CLIPTextEncode().encode(clip, pos1)
         positive_2, = CLIPTextEncode().encode(clip, pos2)
@@ -2685,9 +2680,9 @@ class pre_mul_Mulcondi:
 
         c = []
         set_area_to_bounds = False
-        if set_cond_area!= "default":
+        if set_cond_area != "default":
             set_area_to_bounds = True
-
+        valid_masks = []
         if mask_1 is not None and len(mask_1.shape) < 3:  
             mask_1 = mask_1.unsqueeze(0)
         if mask_2 is not None and len(mask_2.shape) < 3:  
@@ -2699,29 +2694,35 @@ class pre_mul_Mulcondi:
         if mask_5 is not None and len(mask_5.shape) < 3:  
             mask_5 = mask_5.unsqueeze(0)
 
-        if mask_1 is not None:  # 新增判断，如果 mask_1 不为 None 才处理 positive_1
+        if mask_1 is not None:
             for t in positive_1:
                 append_helper(t, mask_1, c, set_area_to_bounds, mask_1_strength)
-        if mask_2 is not None:  # 新增判断，如果 mask_2 不为 None 才处理 positive_2
+        if mask_2 is not None:
             for t in positive_2:
                 append_helper(t, mask_2, c, set_area_to_bounds, mask_2_strength)
-        if mask_3 is not None:  # 新增判断，如果 mask_3 不为 None 才处理 positive_3
+        if mask_3 is not None:
             for t in positive_3:
                 append_helper(t, mask_3, c, set_area_to_bounds, mask_3_strength)
-        if mask_4 is not None:  # 新增判断，如果 mask_4 不为 None 才处理 positive_4
+        if mask_4 is not None:
             for t in positive_4:
                 append_helper(t, mask_4, c, set_area_to_bounds, mask_4_strength)
-        if mask_5 is not None:  # 新增判断，如果 mask_5 不为 None 才处理 positive_5
+        if mask_5 is not None:
             for t in positive_5:
                 append_helper(t, mask_5, c, set_area_to_bounds, mask_5_strength)
 
+        if valid_masks:
+            total_mask = sum(valid_masks)
+            mask_6 = 1 - total_mask
+        else:
+            mask_6 = None
+            # 修正：background 是字符串，应该先编码
+            background_cond, = CLIPTextEncode().encode(clip, background)
+            for t in background_cond:
+                append_helper(t, mask_6, c, set_area_to_bounds, 1)
 
-        context = new_context(context, positive=c, negative=negative,clip=clip, )
+        context = new_context(context, positive=c, negative=negative, clip=clip)
 
         return (context, c, negative)
-
-
-
 
 
 #endregion-----------tool--------------------------------------------------------------------------------------#--
@@ -3468,7 +3469,7 @@ class pre_Kontext_mul:
                 "prompt_weight3": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "prompt_weight4": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "prompt_weight5": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "set_cond_area": (["default", "mask bounds"],),
+                #"set_cond_area": (["default", "mask bounds"],),
             }
         }
         
@@ -3478,8 +3479,10 @@ class pre_Kontext_mul:
     FUNCTION = "Mutil_Clip"
     CATEGORY = "Apt_Preset/chx_tool"
 
-    def Mutil_Clip(self, pos1, pos2, pos3, pos4, pos5, image, mask, set_cond_area,  prompt_weight1, prompt_weight2, prompt_weight3, prompt_weight4,prompt_weight5,
+    def Mutil_Clip(self, pos1, pos2, pos3, pos4, pos5, image, mask,  prompt_weight1, prompt_weight2, prompt_weight3, prompt_weight4,prompt_weight5,
                     mask1=None, mask2=None, mask3=None, mask4=None, mask5=None, context=None):
+        
+        set_cond_area = "default" 
         if mask is not None and image is not None:
             vae = context.get("vae", None)
             latent = encode(vae, image)[0]
