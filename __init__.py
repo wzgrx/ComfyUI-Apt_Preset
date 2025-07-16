@@ -208,7 +208,7 @@ NODE_CLASS_MAPPINGS= {
 "photoshop_preset_pack":photoshop_preset,
 "photoshop_preset_Unpack":Unpack_photoshop,
 "unpack_box2":unpack_box2,
-
+"unpack_Mask_color":unpack_Mask_color,
 
 
 #-------------view-IO-------------------
