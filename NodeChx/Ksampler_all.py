@@ -3965,14 +3965,13 @@ class chx_Ksampler_Kontext_inpaint:
             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             "denoise": ("FLOAT", {"default": 1, "min": 0.0, "max": 1.0, "step": 0.01}),
             "steps": ("INT", {"default": -1, "min": -1, "max": 10000,"tooltip": "-1 means no change"}),
-            #"repaint_mode": (["latent_image", "latent_blank"],),
             "mask_extend": ("INT", {"default": 0, "min": 0, "max": 64, "step": 1}),
-            "feather":("INT", {"default": 0, "min": 0, "max": 100, "step": 1}),
+            "feather_mask":("INT", {"default": 0, "min": 0, "max": 100, "step": 1, "tooltip": "羽化遮罩边缘"}),
             "prompt_weight":("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
             "crop_mask_as_inpaint_area": ("BOOLEAN", {"default": False,  "tooltip": "Below options are only valid when it is true."}),
+            "feather_image":("INT", {"default": 0, "min": 0, "max": 100, "step": 1, "tooltip": "羽化贴图边缘"}),
             "crop_area_scale": ("INT", {"default": 512, "min": 0, "max": 2048, "step": 8}),
             "crop_area_extend": ("INT", {"default": 10, "min": 0, "max": 500, "step": 1}),
-
 
         },
                 
@@ -3991,8 +3990,6 @@ class chx_Ksampler_Kontext_inpaint:
     CATEGORY = "Apt_Preset/chx_ksample"
 
     def mask_crop(self, image, mask, crop_area_extend, crop_area_scale=0):
-        
-
         image_pil = tensor2pil(image)
         mask_pil = tensor2pil(mask)
         mask_array = np.array(mask_pil) > 0
@@ -4052,7 +4049,7 @@ class chx_Ksampler_Kontext_inpaint:
         t = vae.encode(image)
         return {"samples": t, "noise_mask": (mask_erosion[:, :, :x, :y].round())}, None
     
-    def paste_cropped_image_with_mask(self, original_image, cropped_image, crop_coords, mask, MHmask, feather):
+    def paste_cropped_image_with_mask(self, original_image, cropped_image, crop_coords, mask, MHmask, feather_mask, feather_image, crop_mask_as_inpaint_area):
         y0, y1, x0, x1 = crop_coords
         original_image_pil = tensor2pil(original_image)
         cropped_image_pil = tensor2pil(cropped_image)
@@ -4064,11 +4061,14 @@ class chx_Ksampler_Kontext_inpaint:
         cropped_image_pil = cropped_image_pil.resize(crop_size, Image.LANCZOS)
         mask_pil = mask_pil.resize(crop_size, Image.LANCZOS)
 
+        # 处理遮罩羽化
         mask_binary = mask_pil.convert('L')
         mask_rgba = mask_binary.convert('RGBA')
-        blurred_mask = mask_rgba
-        transparent_mask = mask_binary
-        blurred_mask = mask_binary
+        if feather_mask > 0:
+            blurred_mask = mask_rgba.filter(ImageFilter.GaussianBlur(feather_mask))
+        else:
+            blurred_mask = mask_rgba
+            
         cropped_image_pil = cropped_image_pil.convert('RGBA')
         original_image_pil = original_image_pil.convert('RGBA')
         original_image_pil.paste(cropped_image_pil, (x0, y0), mask=blurred_mask)
@@ -4076,11 +4076,14 @@ class chx_Ksampler_Kontext_inpaint:
         IMAGEEE = pil2tensor(ZT_image_pil)        
         mask_ecmhpil= tensor2pil(MHmask)   
         mask_ecmh = mask_ecmhpil.convert('L')
-        mask_ecrgba = tensor2pil(MHmask)   
-        maskecmh = None
-        if feather is not None:
-            if feather > -1:
-                maskecmh = mask_ecrgba.filter(ImageFilter.GaussianBlur(feather))
+        mask_ecrgba = mask_ecmhpil
+        
+        # 处理合成图羽化（仅在裁剪模式下应用）
+        if crop_mask_as_inpaint_area and feather_image > 0:
+            maskecmh = mask_ecrgba.filter(ImageFilter.GaussianBlur(feather_image))
+        else:
+            maskecmh = mask_ecrgba
+            
         dyzz = pil2tensor(maskecmh)
         maskeccmh = pil2tensor(maskecmh)
         destination = original_image
@@ -4125,7 +4128,7 @@ class chx_Ksampler_Kontext_inpaint:
         return zztx,dyzz,dyyt
 
 
-    def sample(self, context, seed, steps,image=None, mask=None, pos=None, prompt_weight=0.5, mask_extend=6,  denoise=1.0, crop_mask_as_inpaint_area=False, crop_area_extend=0, crop_area_scale=0, feather=1, ):
+    def sample(self, context, seed, steps,image=None, mask=None, pos=None, prompt_weight=0.5, mask_extend=6,  denoise=1.0, crop_mask_as_inpaint_area=False, crop_area_extend=0, crop_area_scale=0, feather_mask=1, feather_image=1):
         
         repaint_mode="latent_image"
         guidance = context.get("guidance", 3.5)
@@ -4202,9 +4205,9 @@ class chx_Ksampler_Kontext_inpaint:
                                         positive_crop, negative, latent_image, denoise=denoise)
                 decoded_image = vae.decode(samples[0]["samples"])
                 
-                # 将生成的结果粘贴回原图
+                # 将生成的结果粘贴回原图（应用羽化参数）
                 final_image, dyzz, dyyt = self.paste_cropped_image_with_mask(
-                    original_image, decoded_image, crop_coords, mask, MHmask, feather
+                    original_image, decoded_image, crop_coords, mask, MHmask, feather_mask, feather_image, crop_mask_as_inpaint_area
                 )
                 
                 # 更新latent和context
@@ -4227,11 +4230,13 @@ class chx_Ksampler_Kontext_inpaint:
                 samples = common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise)
                 decoded_image = vae.decode(samples[0]["samples"])
                 
+                # 非裁剪模式下只应用feather_mask
                 mask_ecrgba = tensor2pil(mask)   
-                maskecmh = None
-                if feather is not None:
-                    if feather > -1:
-                        maskecmh = mask_ecrgba.filter(ImageFilter.GaussianBlur(feather))
+                if feather_mask > 0:
+                    maskecmh = mask_ecrgba.filter(ImageFilter.GaussianBlur(feather_mask))
+                else:
+                    maskecmh = mask_ecrgba
+                    
                 dyzz = pil2tensor(maskecmh)
                 mask = dyzz
                 
@@ -4275,5 +4280,16 @@ class chx_Ksampler_Kontext_inpaint:
                 latent = VAEEncode().encode(vae, zztx)[0]
                 context = new_context(context, latent=latent, positive=positive, negative=negative, pos=pos, images=zztx)
                 return (context, zztx, decoded_image)
+            
+
+
+
+
+
+
+
+
+
+
 
 
