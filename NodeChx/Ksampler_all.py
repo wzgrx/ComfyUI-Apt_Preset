@@ -3969,10 +3969,9 @@ class chx_Ksampler_Kontext_inpaint:
             "feather_mask":("INT", {"default": 0, "min": 0, "max": 100, "step": 1, "tooltip": "羽化遮罩边缘"}),
             "prompt_weight":("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
             "crop_mask_as_inpaint_area": ("BOOLEAN", {"default": False,  "tooltip": "Below options are only valid when it is true."}),
-            "feather_image":("INT", {"default": 0, "min": 0, "max": 100, "step": 1, "tooltip": "羽化贴图边缘"}),
             "crop_area_scale": ("INT", {"default": 512, "min": 0, "max": 2048, "step": 8}),
             "crop_area_extend": ("INT", {"default": 10, "min": 0, "max": 500, "step": 1}),
-
+            "feather_image":("INT", {"default": 0, "min": 0, "max": 100, "step": 1, "tooltip": "羽化贴图边缘"}),
         },
                 
             "optional": {
