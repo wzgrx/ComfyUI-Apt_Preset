@@ -1498,7 +1498,7 @@ class sum_stack_image:
     RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT" ,"IMAGE" )
     RETURN_NAMES = ("context", "model", "positive", "negative","latent", "image" )
     FUNCTION = "merge"
-    CATEGORY = "Apt_Preset/chx_load"
+    CATEGORY = "Apt_Preset/chx_tool"
 
     def merge(self, context=None, model=None, positive=None, ipa3_stack=None, ipa_stack=None, redux_stack=None, lora_stack=None, text_stack=None, condi_stack=None,union_stack=None, cn_stack=None, latent_stack=None):
         
@@ -1590,7 +1590,7 @@ class sum_stack_AD:
     RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT", "IMAGE" )
     RETURN_NAMES = ("context", "model", "positive", "negative", "latent","graph")
     FUNCTION = "merge"
-    CATEGORY = "Apt_Preset/chx_load"
+    CATEGORY = "Apt_Preset/chx_tool"
 
     def merge(self, model=None,chx_Merge=None, positive=None, ipa_stack=None, lora_stack=None, pos_sch_stack=None, cn_stack=None, context=None,latent_stack=None,):
 
@@ -1655,7 +1655,7 @@ class sum_stack_all:
     RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING","LATENT" ,"IMAGE" )
     RETURN_NAMES = ("context", "model", "positive", "negative","latent", "image" )
     FUNCTION = "merge"
-    CATEGORY = "Apt_Preset/chx_load"
+    CATEGORY = "Apt_Preset/chx_tool"
 
     def merge(self, context=None, model=None, positive=None, stack_pack=None,):
         
