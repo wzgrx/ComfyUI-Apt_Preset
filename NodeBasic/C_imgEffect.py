@@ -1642,7 +1642,7 @@ class create_Mask_location:
         return (mask_tensor, merged_rgba, output_box2)
 
 
-class create_Mask_color:
+class XXXcreate_Mask_color:
     def __init__(self):
         # 定义颜色映射（RGB格式）
         self.colors = {
@@ -1733,6 +1733,103 @@ class create_Mask_color:
         combined_image_tensor = combined_image_tensor.unsqueeze(0)
         
         return (combined_image_tensor,)
+
+
+
+class create_Mask_color:
+    def __init__(self):
+        # 定义颜色映射（RGB格式）
+        self.colors = {
+            "white": (255, 255, 255),
+            "black": (0, 0, 0),
+            "red": (255, 0, 0),
+            "green": (0, 255, 0),
+            "blue": (0, 0, 255),
+            "yellow": (255, 255, 0),
+            "cyan": (0, 255, 255),
+            "magenta": (255, 0, 255)
+        }
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "base_image": ("IMAGE",),
+                "mask": ("MASK",),
+                "ignore_threshold": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
+                "opacity": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05}),
+                "fill": ("BOOLEAN", {"default": True, }),
+                "outline_thickness": ("INT", {"default": 1, "min": 1, "max": 10, "step": 1})
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "separate"
+    CATEGORY = "Apt_Preset/imgEffect"
+    DESCRIPTION = """
+    - 色块按按最左上角的坐标，排列顺序:从上到下,从左到右  
+    - color mask order: from top to bottom, from left to right
+    - 1>2>3>4>5>6>7>8 
+    - 白色  >  黑色  > 红色 > 绿色   > 蓝色 > 黄色   > 青色  > 品红色
+    - white > black > red  > green > blue > yellow > cyan > magenta
+    """
+
+    def separate(self, mask, base_image, ignore_threshold=100, opacity=0.8, fill=True, outline_thickness=1):
+        opencv_gray_image = tensorMask2cv2img(mask)
+        _, binary_mask = cv2.threshold(opencv_gray_image, 1, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        contours_with_positions = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            contours_with_positions.append((x, y, contour))
+        
+        contours_with_positions.sort(key=lambda item: (item[1], item[0]))
+        sorted_contours = [item[2] for item in contours_with_positions]
+        
+        segmented_masks = []
+        for contour in sorted_contours[:8]:
+            area = cv2.contourArea(contour)
+            if area < ignore_threshold:
+                continue
+            segmented_mask = np.zeros_like(binary_mask)
+            
+            # 根据fill参数决定是否填充轮廓
+            thickness = cv2.FILLED if fill else outline_thickness
+            cv2.drawContours(segmented_mask, [contour], 0, (255, 255, 255), thickness=thickness)
+            
+            segmented_masks.append(segmented_mask)
+        
+        base_image_np = base_image[0].cpu().numpy() * 255.0
+        base_image_np = base_image_np.astype(np.float32)
+        h, w, _ = base_image_np.shape
+        
+        combined_image = base_image_np.copy()
+        
+        color_names = ["white", "black", "red", "green", "blue", "yellow", "cyan", "magenta"]
+        
+        for i, mask_np in enumerate(segmented_masks):
+            if i >= len(color_names):
+                break
+                
+            color = np.array(self.colors[color_names[i]], dtype=np.float32)
+            mask_float = mask_np.astype(np.float32) / 255.0
+            
+            for c in range(3):
+                combined_image[:, :, c] = (
+                    mask_float * (opacity * color[c] + (1 - opacity) * combined_image[:, :, c]) + 
+                    (1 - mask_float) * combined_image[:, :, c]
+                )
+        
+        combined_image = np.clip(combined_image, 0, 255).astype(np.uint8)
+        
+        combined_image_tensor = torch.from_numpy(combined_image).float() / 255.0
+        combined_image_tensor = combined_image_tensor.unsqueeze(0)
+        
+        return (combined_image_tensor,)
+
+
 
 
 #endregion-----------------------------------------------------------------------------------------------------
@@ -2451,6 +2548,155 @@ class lay_image_grid_note:
 
 
 
+import cv2
+import numpy as np
+import torch
+
+class create_Mask_color:
+    def __init__(self):
+        # 定义颜色映射（RGB格式）
+        self.colors = {
+            "white": (255, 255, 255),
+            "black": (0, 0, 0),
+            "red": (255, 0, 0),
+            "green": (0, 255, 0),
+            "blue": (0, 0, 255),
+            "yellow": (255, 255, 0),
+            "cyan": (0, 255, 255),
+            "magenta": (255, 0, 255)
+        }
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "base_image": ("IMAGE",),
+                "mask": ("MASK",),
+                "ignore_threshold": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
+                "opacity": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05}),
+                "fill": ("BOOLEAN", {"default": True, }),
+                "outline_thickness": ("INT", {"default": 1, "min": 1, "max": 10, "step": 1})
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "MASK_PACK")
+    RETURN_NAMES = ("image", "mask_pack")
+    FUNCTION = "separate"
+    CATEGORY = "Apt_Preset/imgEffect"
+    DESCRIPTION = """
+    - 色块按按最左上角的坐标，排列顺序:从上到下,从左到右  
+    - color mask order: from top to bottom, from left to right
+    - 1>2>3>4>5>6>7>8 
+    - 白色  >  黑色  > 红色 > 绿色   > 蓝色 > 黄色   > 青色  > 品红色
+    - white > black > red  > green > blue > yellow > cyan > magenta
+    """
+
+    def separate(self, mask, base_image, ignore_threshold=100, opacity=0.8, fill=True, outline_thickness=1):
+        opencv_gray_image = tensorMask2cv2img(mask)
+        _, binary_mask = cv2.threshold(opencv_gray_image, 1, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        contours_with_positions = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            contours_with_positions.append((x, y, contour))
+        
+        contours_with_positions.sort(key=lambda item: (item[1], item[0]))
+        sorted_contours = [item[2] for item in contours_with_positions]
+        
+        segmented_masks = []
+        for contour in sorted_contours[:8]:
+            area = cv2.contourArea(contour)
+            if area < ignore_threshold:
+                continue
+            segmented_mask = np.zeros_like(binary_mask)
+            
+            # 根据fill参数决定是否填充轮廓
+            thickness = cv2.FILLED if fill else outline_thickness
+            cv2.drawContours(segmented_mask, [contour], 0, (255, 255, 255), thickness=thickness)
+            
+            segmented_masks.append(segmented_mask)
+        
+        base_image_np = base_image[0].cpu().numpy() * 255.0
+        base_image_np = base_image_np.astype(np.float32)
+        h, w, _ = base_image_np.shape
+        
+        combined_image = base_image_np.copy()
+        
+        color_names = ["white", "black", "red", "green", "blue", "yellow", "cyan", "magenta"]
+        
+        # 生成彩色遮罩图像
+        for i, mask_np in enumerate(segmented_masks):
+            if i >= len(color_names):
+                break
+                
+            color = np.array(self.colors[color_names[i]], dtype=np.float32)
+            mask_float = mask_np.astype(np.float32) / 255.0
+            
+            for c in range(3):
+                combined_image[:, :, c] = (
+                    mask_float * (opacity * color[c] + (1 - opacity) * combined_image[:, :, c]) + 
+                    (1 - mask_float) * combined_image[:, :, c]
+                )
+        
+        combined_image = np.clip(combined_image, 0, 255).astype(np.uint8)
+        
+        combined_image_tensor = torch.from_numpy(combined_image).float() / 255.0
+        combined_image_tensor = combined_image_tensor.unsqueeze(0)
+        
+        # 转换遮罩为张量格式并打包
+        mask_tensors = []
+        for mask_np in segmented_masks[:8]:
+            mask_tensor = torch.from_numpy(mask_np).float() / 255.0
+            mask_tensors.append(mask_tensor)
+        
+        # 补齐到8个遮罩
+        while len(mask_tensors) < 8:
+            mask_tensors.append(torch.zeros_like(mask_tensors[0]) if mask_tensors else torch.zeros((h, w)))
+            
+        # 创建遮罩包
+        mask_pack = {
+            "white": mask_tensors[0],
+            "black": mask_tensors[1],
+            "red": mask_tensors[2],
+            "green": mask_tensors[3],
+            "blue": mask_tensors[4],
+            "yellow": mask_tensors[5],
+            "cyan": mask_tensors[6],
+            "magenta": mask_tensors[7]
+        }
+        
+        return (combined_image_tensor, mask_pack)
+
+class unpack_Mask_color:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mask_pack": ("MASK_PACK",),
+            }
+        }
+
+    RETURN_TYPES = ("MASK", "MASK", "MASK", "MASK", "MASK", "MASK", "MASK", "MASK")
+    RETURN_NAMES = ("white", "black", "red", "green", "blue", "yellow", "cyan", "magenta")
+    FUNCTION = "unpack_masks"
+    CATEGORY = "Apt_Preset/stack/unpack"
+
+
+    def unpack_masks(self, mask_pack):
+        # 确保所有颜色的遮罩都存在，没有则创建空遮罩
+        default_mask = torch.zeros(64, 64)  # 默认大小，实际应该从输入获取
+        
+        white_mask = mask_pack.get("white", default_mask)
+        black_mask = mask_pack.get("black", default_mask)
+        red_mask = mask_pack.get("red", default_mask)
+        green_mask = mask_pack.get("green", default_mask)
+        blue_mask = mask_pack.get("blue", default_mask)
+        yellow_mask = mask_pack.get("yellow", default_mask)
+        cyan_mask = mask_pack.get("cyan", default_mask)
+        magenta_mask = mask_pack.get("magenta", default_mask)
+        
+        return (white_mask, black_mask, red_mask, green_mask, blue_mask, yellow_mask, cyan_mask, magenta_mask)
 
 
 
