@@ -1581,8 +1581,8 @@ class sum_latent:
                 "pixels": ("IMAGE", ),
                 "mask": ("MASK", ),
                 "noise_mask": ("BOOLEAN", {"default": True, }),
-                "smoothness":("INT", {"default": 1,  "min":0, "max": 150, "step": 1,"display": "slider"}),
                 "diff_difusion": ("BOOLEAN", {"default": True}), 
+                "smoothness":("INT", {"default": 1,  "min":0, "max": 150, "step": 1,"display": "slider"}),
                 "ratio_selected": (['None'] + s.ratio_sizes, {"default": "None"}),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 300, })
                 
