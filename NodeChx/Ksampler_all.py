@@ -3415,7 +3415,7 @@ class chx_Ksampler_Kontext:
             all_results.extend(results)
 
         final_output = torch.cat(all_output_images, dim=0) if all_output_images else None
-        context = new_context(context, latent=samples_dict,pos=pos,positive=positive, negative=negative,mages=final_output)
+        context = new_context(context, latent=samples_dict,pos=pos,positive=positive, negative=negative,images=final_output)
 
         if image_output == "None": return (context, None, samples_dict)
         elif image_output in ("Hide", "Hide/Save"): return {"ui": {}, "result": (context, final_output, samples_dict)}
