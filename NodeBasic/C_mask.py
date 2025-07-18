@@ -1143,6 +1143,234 @@ class Mask_split_mulMask:   # 无需序号输入
 
 
 
+class Mask_sum_shape_sole:
+    def __init__(self):
+        # 定义颜色映射（RGB格式）
+        self.colors = {
+            "white": (255, 255, 255),
+            "black": (0, 0, 0),
+            "red": (255, 0, 0),
+            "green": (0, 255, 0),
+            "blue": (0, 0, 255),
+            "yellow": (255, 255, 0),
+            "cyan": (0, 255, 255),
+            "magenta": (255, 0, 255)
+        }
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "base_image": ("IMAGE",),
+                "mask": ("MASK",),
+                "ignore_threshold": ("INT", {"default": 0, "min": 0, "max": 10000, "step": 1}),
+                "opacity": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05}),
+                "mask_mode": (["original", "fill", "fill_block", "outline", "outline_block"], {"default": "original"}),
+                "outline_thickness": ("INT", {"default": 3, "min": 1, "max": 50, "step": 1}),
+                "smoothness": ("INT", {"default": 1, "min": 0, "max": 150, "step": 1,}),
+                "expand": ("INT", {"default": 0, "min": -100, "max": 100, "step": 1}),
+                "tapered_corners": ("BOOLEAN", {"default": True}),
+                "sum_mask_min": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 1.0, "step": 0.01}),
+                "sum_mask_max": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "MASK", "MASK", "MASK", "MASK", "MASK", "MASK", "MASK", "MASK", "MASK")
+    RETURN_NAMES = ("image", "mask", "white_1", "black_2", "red_3", "green_4", "blue_5", "yellow_6", "cyan_7", "magenta_8")
+    FUNCTION = "separate"
+    CATEGORY = "Apt_Preset/mask"
+    DESCRIPTION = """
+    - 色块按按最左上角的坐标，排列顺序:从上到下,从左到右  
+    - color mask order: from top to bottom, from left to right
+    - 1>2>3>4>5>6>7>8 
+    - 白色  >  黑色  > 红色 > 绿色   > 蓝色 > 黄色   > 青色  > 品红色
+    - white > black > red  > green > blue > yellow > cyan > magenta
+    """
+
+    def separate(self, mask, base_image, ignore_threshold=100, opacity=0.8, mask_mode="fill", 
+                 outline_thickness=1, smoothness=1, expand=0, tapered_corners=True, sum_mask_min=0.0, sum_mask_max=1.0):
+
+        # 辅助函数，用于将张量转换为PIL图像
+        def tensor2pil(image):
+            return Image.fromarray(np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
+        
+        # 辅助函数，用于将PIL图像转换为张量
+        def pil2tensor(image):
+            return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
+        
+        # 辅助函数，将张量遮罩转换为OpenCV图像
+        def tensorMask2cv2img(tensor_mask):
+            mask_np = tensor_mask.cpu().numpy().squeeze()
+            if len(mask_np.shape) == 3:
+                mask_np = mask_np[:, :, 0]  # 取单通道
+            return (mask_np * 255).astype(np.uint8)
+        
+        opencv_gray_image = tensorMask2cv2img(mask)
+        _, binary_mask = cv2.threshold(opencv_gray_image, 1, 255, cv2.THRESH_BINARY)
+        
+        # 查找轮廓并过滤小面积遮罩
+        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # 过滤面积小于阈值的轮廓
+        filtered_contours = []
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area >= ignore_threshold:
+                filtered_contours.append(contour)
+        
+        contours_with_positions = []
+        for contour in filtered_contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            contours_with_positions.append((x, y, contour))
+        
+        contours_with_positions.sort(key=lambda item: (item[1], item[0]))
+        sorted_contours = [item[2] for item in contours_with_positions]
+        
+        # 创建一个合并所有分割的最终遮罩
+        final_mask = np.zeros_like(binary_mask)
+        
+        # 创建8个单独的遮罩
+        individual_masks = [np.zeros_like(binary_mask) for _ in range(8)]
+        
+        # 生成膨胀/侵蚀的核
+        c = 0 if tapered_corners else 1
+        kernel = np.array([[c, 1, c],
+                          [1, 1, 1],
+                          [c, 1, c]], dtype=np.uint8)
+        
+        # 绘制轮廓到单独遮罩并应用expand操作
+        for i, contour in enumerate(sorted_contours[:8]):
+            # 创建当前轮廓的基础遮罩
+            temp_mask = np.zeros_like(binary_mask)
+            
+            # 判断是否使用区块模式
+            use_block = "_block" in mask_mode
+            
+            # 根据mask_mode决定绘制方式
+            if mask_mode == "original":
+                # 保留原始遮罩状态，但只取当前轮廓区域
+                cv2.drawContours(temp_mask, [contour], 0, 255, -1)
+                temp_mask = cv2.bitwise_and(opencv_gray_image, temp_mask)
+            elif mask_mode == "fill":
+                # 仅填充模式
+                cv2.drawContours(temp_mask, [contour], 0, (255, 255, 255), thickness=cv2.FILLED)
+            elif mask_mode == "fill_block":
+                # 填充外接矩形模式
+                x, y, w, h = cv2.boundingRect(contour)
+                cv2.rectangle(temp_mask, (x, y), (x+w, y+h), (255, 255, 255), thickness=cv2.FILLED)
+            elif mask_mode == "outline":
+                # 仅轮廓模式
+                cv2.drawContours(temp_mask, [contour], 0, (255, 255, 255), thickness=outline_thickness)
+            elif mask_mode == "outline_block":
+                # 外接矩形轮廓模式
+                x, y, w, h = cv2.boundingRect(contour)
+                cv2.rectangle(temp_mask, (x, y), (x+w, y+h), (255, 255, 255), thickness=outline_thickness)
+            
+            # 应用expand操作
+            if expand != 0:
+                if expand > 0:
+                    temp_mask = cv2.dilate(temp_mask, kernel, iterations=expand)
+                else:
+                    temp_mask = cv2.erode(temp_mask, kernel, iterations=abs(expand))
+            
+            # 更新最终遮罩和单独遮罩
+            final_mask = cv2.bitwise_or(final_mask, temp_mask)
+            individual_masks[i] = temp_mask
+        
+        # 应用平滑处理
+        if smoothness > 0:
+            # 对final_mask应用平滑处理
+            final_mask_pil = Image.fromarray(final_mask)
+            final_mask_pil = final_mask_pil.filter(ImageFilter.GaussianBlur(radius=smoothness))
+            final_mask = np.array(final_mask_pil)
+            
+            # 对individual_masks应用平滑处理
+            for i in range(8):
+                if np.sum(individual_masks[i]) > 0:
+                    mask_pil = Image.fromarray(individual_masks[i])
+                    mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=smoothness))
+                    individual_masks[i] = np.array(mask_pil)
+        
+        base_image_np = base_image[0].cpu().numpy() * 255.0
+        base_image_np = base_image_np.astype(np.float32)
+        h, w, _ = base_image_np.shape
+        
+        combined_image = base_image_np.copy()
+        
+        # 转换最终遮罩为张量格式
+        final_mask_tensor = torch.from_numpy(final_mask).float() / 255.0
+        
+        # 对最终遮罩应用min/max缩放（仅对总遮罩作用）
+        mask_max = torch.max(final_mask_tensor)
+        mask_max = mask_max if mask_max > 0 else 1
+        final_mask_tensor = (final_mask_tensor / mask_max) * (sum_mask_max - sum_mask_min) + sum_mask_min
+        final_mask_tensor = torch.clamp(final_mask_tensor, min=0.0, max=1.0)
+        
+        # 转回numpy用于后续处理
+        final_mask = final_mask_tensor.cpu().numpy() * 255
+        final_mask = final_mask.astype(np.uint8)
+        
+        # 生成彩色遮罩图像
+        for i, contour in enumerate(sorted_contours[:8]):
+            if i >= 8:
+                break
+                
+            # 直接使用颜色名称列表，不使用循环变量
+            color_name = ["white", "black", "red", "green", "blue", "yellow", "cyan", "magenta"][i]
+            color = np.array(self.colors[color_name], dtype=np.float32)
+            
+            # 对所有模式统一使用处理后的individual_masks
+            mask_float = individual_masks[i].astype(np.float32) / 255.0
+            
+            for c in range(3):
+                combined_image[:, :, c] = (
+                    mask_float * (opacity * color[c] + (1 - opacity) * combined_image[:, :, c]) + 
+                    (1 - mask_float) * combined_image[:, :, c]
+                )
+        
+        combined_image = np.clip(combined_image, 0, 255).astype(np.uint8)
+        
+        combined_image_tensor = torch.from_numpy(combined_image).float() / 255.0
+        combined_image_tensor = combined_image_tensor.unsqueeze(0)
+        
+        # 重新转换最终遮罩为张量格式
+        final_mask_tensor = torch.from_numpy(final_mask).float() / 255.0
+        final_mask_tensor = final_mask_tensor.unsqueeze(0)
+        
+        # 转换各个单独遮罩为张量格式
+        white_1_tensor = torch.zeros_like(mask) if len(sorted_contours) <= 0 else torch.from_numpy(individual_masks[0]).float() / 255.0
+        black_2_tensor = torch.zeros_like(mask) if len(sorted_contours) <= 1 else torch.from_numpy(individual_masks[1]).float() / 255.0
+        red_3_tensor = torch.zeros_like(mask) if len(sorted_contours) <= 2 else torch.from_numpy(individual_masks[2]).float() / 255.0
+        green_4_tensor = torch.zeros_like(mask) if len(sorted_contours) <= 3 else torch.from_numpy(individual_masks[3]).float() / 255.0
+        blue_5_tensor = torch.zeros_like(mask) if len(sorted_contours) <= 4 else torch.from_numpy(individual_masks[4]).float() / 255.0
+        yellow_6_tensor = torch.zeros_like(mask) if len(sorted_contours) <= 5 else torch.from_numpy(individual_masks[5]).float() / 255.0
+        cyan_7_tensor = torch.zeros_like(mask) if len(sorted_contours) <= 6 else torch.from_numpy(individual_masks[6]).float() / 255.0
+        magenta_8_tensor = torch.zeros_like(mask) if len(sorted_contours) <= 7 else torch.from_numpy(individual_masks[7]).float() / 255.0
+        
+        # 确保所有张量都有正确的维度
+        white_1_tensor = white_1_tensor.unsqueeze(0)
+        black_2_tensor = black_2_tensor.unsqueeze(0)
+        red_3_tensor = red_3_tensor.unsqueeze(0)
+        green_4_tensor = green_4_tensor.unsqueeze(0)
+        blue_5_tensor = blue_5_tensor.unsqueeze(0)
+        yellow_6_tensor = yellow_6_tensor.unsqueeze(0)
+        cyan_7_tensor = cyan_7_tensor.unsqueeze(0)
+        magenta_8_tensor = magenta_8_tensor.unsqueeze(0)
+        
+        return (combined_image_tensor, final_mask_tensor, 
+                white_1_tensor, black_2_tensor, red_3_tensor, 
+                green_4_tensor, blue_5_tensor, yellow_6_tensor, 
+                cyan_7_tensor, magenta_8_tensor)
+
+
+
+
+
+
+
+
+
+
 
 
 
