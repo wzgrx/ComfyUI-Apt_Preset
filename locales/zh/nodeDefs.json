@@ -2339,36 +2339,34 @@
       }
     }
   },
-
-"Mask_split_mulMask": {
+  "Mask_split_mulMask": {
     "display_name": "遮罩_分割多遮罩",
     "inputs": {
-        "mask": {
-            "name": "遮罩"
-        },
-        "ignore_threshold": {
-            "name": "忽略阈值"
-        }
+      "mask": {
+        "name": "遮罩"
+      },
+      "ignore_threshold": {
+        "name": "忽略阈值"
+      }
     },
     "outputs": {
-        "mask1": {
-            "name": "遮罩1"
-        },
-        "mask2": {
-            "name": "遮罩2"
-        },
-        "mask3": {
-            "name": "遮罩3"
-        },
-        "mask4": {
-            "name": "遮罩4"
-        },
-        "mask5": {
-            "name": "遮罩5"
-        }
+      "mask1": {
+        "name": "遮罩1"
+      },
+      "mask2": {
+        "name": "遮罩2"
+      },
+      "mask3": {
+        "name": "遮罩3"
+      },
+      "mask4": {
+        "name": "遮罩4"
+      },
+      "mask5": {
+        "name": "遮罩5"
+      }
     }
   },
-
   "math_Remap_data": {
     "display_name": "math_重映射",
     "inputs": {
@@ -2461,8 +2459,9 @@
     }
   },
 
-"create_Mask_color": {
-    "display_name": "创建_标记颜色",
+
+"Mask_sum_shape_sole": {
+    "display_name": "遮罩_总_形状_单图",
     "inputs": {
         "base_image": {
             "name": "基础图像"
@@ -2471,63 +2470,152 @@
             "name": "遮罩"
         },
         "ignore_threshold": {
-            "name": "忽略阈值"
+            "name": "遮罩忽略阈值"
+        },
+        "opacity": {
+            "name": "不透明度"
+        },
+        "mask_mode": {
+            "name": "遮罩模式"
+        },
+        "outline_thickness": {
+            "name": "轮廓粗细"
+        },
+        "smoothness": {
+            "name": "平滑度"
+        },
+        "expand": {
+            "name": "扩展"
+        },
+        "tapered_corners": {
+            "name": "锥形角"
+        },
+        "sum_mask_min": {
+            "name": "总遮罩_最小值"
+        },
+        "sum_mask_max": {
+            "name": "总遮罩_最大值"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "图像"
+        },
+        "1": {
+            "name": "总遮罩"
+        },
+        "2": {
+            "name": "白色1"
+        },
+        "3": {
+            "name": "黑色2"
+        },
+        "4": {
+            "name": "红色3"
+        },
+        "5": {
+            "name": "绿色4"
+        },
+        "6": {
+            "name": "蓝色5"
+        },
+        "7": {
+            "name": "黄色6"
+        },
+        "8": {
+            "name": "青色7"
+        },
+        "9": {
+            "name": "品红8"
+        }
+    }
+},
+
+
+
+
+"create_Mask_visual_tag": {
+    "display_name": "创建_遮罩_视觉标记",
+    "inputs": {
+        "base_image": {
+            "name": "基础图像"
+        },
+        "mask": {
+            "name": "遮罩"
+        },
+        "ignore_threshold": {
+            "name": "过滤小遮罩"
         },
         "opacity": {
             "name": "不透明度"
         },
         "fill": {
             "name": "填充"
+        },
+        "out_color": {
+            "name": "输出颜色"
+        },
+        "outline_thickness": {
+            "name": "轮廓粗细"
+        },
+        "extrant_to_block": {
+            "name": "扩展成框"
+        },
+        "smoothness": {
+            "name": "边缘羽化"
         }
     },
     "outputs": {
-        "image": {
+        "0": {
             "name": "图像"
+        },
+        "1": {
+            "name": "遮罩"
         }
+
     }
   },
 
-"create_Mask_location": {
+  "create_Mask_location": {
     "display_name": "创建_坐标遮罩",
     "inputs": {
-        "image": {
-            "name": "图像"
-        },
-        "color": {
-            "name": "颜色"
-        },
-        "opacity": {
-            "name": "不透明度"
-        },
-        "box2": {
-            "name": "BOX2"
-        },
-        "x": {
-            "name": "X坐标"
-        },
-        "y": {
-            "name": "Y坐标"
-        },
-        "width": {
-            "name": "宽度"
-        },
-        "height": {
-            "name": "高度"
-        }
+      "image": {
+        "name": "图像"
+      },
+      "color": {
+        "name": "颜色"
+      },
+      "opacity": {
+        "name": "不透明度"
+      },
+      "box2": {
+        "name": "BOX2"
+      },
+      "x": {
+        "name": "X坐标"
+      },
+      "y": {
+        "name": "Y坐标"
+      },
+      "width": {
+        "name": "宽度"
+      },
+      "height": {
+        "name": "高度"
+      }
     },
     "outputs": {
-        "image": {
-            "name": "图像"
-        },
-        "mask": {
-            "name": "遮罩"
-        },
-        "box2": {
-            "name": "BOX2"
-        }
+      "image": {
+        "name": "图像"
+      },
+      "mask": {
+        "name": "遮罩"
+      },
+      "box2": {
+        "name": "BOX2"
+      }
     }
-},
-  
+  },
   "list_ListMerge": {
     "display_name": "list_ListMerge",
     "inputs": {
@@ -7615,7 +7703,6 @@
       }
     }
   },
-
   "sampler_DynamicTileSplit": {
     "display_name": "采样处理_图片tile分割",
     "inputs": {
@@ -8978,7 +9065,7 @@
       },
       "positive": {
         "name": "条件"
-      } ,
+      },
       "latent": {
         "name": "latent"
       }
@@ -9008,7 +9095,6 @@
       "start_at_step": {
         "name": "开始步数"
       },
-      
       "end_at_step": {
         "name": "结束步数"
       },
@@ -9417,149 +9503,146 @@
       }
     }
   },
-
-"pre_mul_Mulcondi": {
+  "pre_mul_Mulcondi": {
     "display_name": "pre_条件分区",
     "inputs": {
-        "context": {
-            "name": "运行上下文"
-        },
-        "pos1": {
-            "name": "正条件1"
-        },
-        "pos2": {
-            "name": "正条件2"
-        },
-        "pos3": {
-            "name": "正条件3"
-        },
-        "pos4": {
-            "name": "正条件4"
-        },
-        "pos5": {
-            "name": "正条件5"
-        },
-        "mask_1": {
-            "name": "遮罩1"
-        },
-        "mask_2": {
-            "name": "遮罩2"
-        },
-        "mask_3": {
-            "name": "遮罩3"
-        },
-        "mask_4": {
-            "name": "遮罩4"
-        },
-        "mask_5": {
-            "name": "遮罩5"
-        },
-        "mask_1_strength": {
-            "name": "遮罩1强度"
-        },
-        "mask_2_strength": {
-            "name": "遮罩2强度"
-        },
-        "mask_3_strength": {
-            "name": "遮罩3强度"
-        },
-        "mask_4_strength": {
-            "name": "遮罩4强度"
-        },
-        "mask_5_strength": {
-            "name": "遮罩5强度"
-        },
-        "background": {
-            "name": "背景描述"
-        },
-        "neg": {
-            "name": "负条件"
-        }
+      "context": {
+        "name": "context"
+      },
+      "pos1": {
+        "name": "正条件1"
+      },
+      "pos2": {
+        "name": "正条件2"
+      },
+      "pos3": {
+        "name": "正条件3"
+      },
+      "pos4": {
+        "name": "正条件4"
+      },
+      "pos5": {
+        "name": "正条件5"
+      },
+      "mask_1": {
+        "name": "遮罩1"
+      },
+      "mask_2": {
+        "name": "遮罩2"
+      },
+      "mask_3": {
+        "name": "遮罩3"
+      },
+      "mask_4": {
+        "name": "遮罩4"
+      },
+      "mask_5": {
+        "name": "遮罩5"
+      },
+      "mask_1_strength": {
+        "name": "遮罩1强度"
+      },
+      "mask_2_strength": {
+        "name": "遮罩2强度"
+      },
+      "mask_3_strength": {
+        "name": "遮罩3强度"
+      },
+      "mask_4_strength": {
+        "name": "遮罩4强度"
+      },
+      "mask_5_strength": {
+        "name": "遮罩5强度"
+      },
+      "background": {
+        "name": "背景描述"
+      },
+      "neg": {
+        "name": "负条件"
+      }
     },
     "outputs": {
-        "context": {
-            "name": "运行上下文"
-        },
-        "positive": {
-            "name": "正条件"
-        },
-        "negative": {
-            "name": "负条件"
-        }
+      "context": {
+        "name": "context"
+      },
+      "positive": {
+        "name": "正条件"
+      },
+      "negative": {
+        "name": "负条件"
+      }
     }
   },
-
-"pre_Kontext_mul": {
+  "pre_Kontext_mul": {
     "display_name": "pre_Kontext分区",
     "inputs": {
-        "context": {
-            "name": "context"
-        },
-        "image": {
-            "name": "图像"
-        },
-        "mask": {
-            "name": "总遮罩"
-        },
-        "pos1": {
-            "name": "正条件1"
-        },
-        "pos2": {
-            "name": "正条件2"
-        },
-        "pos3": {
-            "name": "正条件3"
-        },
-        "pos4": {
-            "name": "正条件4"
-        },
-        "pos5": {
-            "name": "正条件5"
-        },
-        "mask1": {
-            "name": "遮罩1"
-        },
-        "mask2": {
-            "name": "遮罩2"
-        },
-        "mask3": {
-            "name": "遮罩3"
-        },
-        "mask4": {
-            "name": "遮罩4"
-        },
-        "mask5": {
-            "name": "遮罩5"
-        },
-        "prompt_weight1": {
-            "name": "提示词权重1"
-        },
-        "prompt_weight2": {
-            "name": "提示词权重2"
-        },
-        "prompt_weight3": {
-            "name": "提示词权重3"
-        },
-        "prompt_weight4": {
-            "name": "提示词权重4"
-        },
-        "prompt_weight5": {
-            "name": "提示词权重5"
-        }
+      "context": {
+        "name": "context"
+      },
+      "image": {
+        "name": "图像"
+      },
+      "mask": {
+        "name": "总遮罩"
+      },
+      "pos1": {
+        "name": "正条件1"
+      },
+      "pos2": {
+        "name": "正条件2"
+      },
+      "pos3": {
+        "name": "正条件3"
+      },
+      "pos4": {
+        "name": "正条件4"
+      },
+      "pos5": {
+        "name": "正条件5"
+      },
+      "mask1": {
+        "name": "遮罩1"
+      },
+      "mask2": {
+        "name": "遮罩2"
+      },
+      "mask3": {
+        "name": "遮罩3"
+      },
+      "mask4": {
+        "name": "遮罩4"
+      },
+      "mask5": {
+        "name": "遮罩5"
+      },
+      "prompt_weight1": {
+        "name": "提示词权重1"
+      },
+      "prompt_weight2": {
+        "name": "提示词权重2"
+      },
+      "prompt_weight3": {
+        "name": "提示词权重3"
+      },
+      "prompt_weight4": {
+        "name": "提示词权重4"
+      },
+      "prompt_weight5": {
+        "name": "提示词权重5"
+      }
     },
     "outputs": {
-        "context": {
-            "name": "运行上下文"
-        },
-        "positive": {
-            "name": "正条件"
-        },
-        "latent": {
-            "name": "潜在空间"
-        }
+      "context": {
+        "name": "context"
+      },
+      "positive": {
+        "name": "正条件"
+      },
+      "latent": {
+        "name": "潜在空间"
+      }
     }
-},
-
+  },
   "Stack_ControlNet": {
     "display_name": "Stack_ControlNet",
     "inputs": {
@@ -11625,7 +11708,7 @@
       },
       "2": {
         "name": "待完成行数"
-      }      
+      }
     }
   },
   "excel_column_diff": {
@@ -11653,10 +11736,9 @@
       },
       "2": {
         "name": "待完成列数"
-      }      
+      }
     }
   },
-
   "Image_crop_box2": {
     "display_name": "图像_裁切box2",
     "inputs": {
