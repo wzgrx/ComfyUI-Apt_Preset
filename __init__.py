@@ -208,7 +208,6 @@ NODE_CLASS_MAPPINGS= {
 "photoshop_preset_pack":photoshop_preset,
 "photoshop_preset_Unpack":Unpack_photoshop,
 "unpack_box2":unpack_box2,
-"unpack_Mask_color":unpack_Mask_color,
 
 
 #-------------view-IO-------------------
@@ -343,7 +342,7 @@ NODE_CLASS_MAPPINGS= {
 "create_Mask_lay_Y": create_Mask_lay_Y,
 "create_Mask_Rectangles": create_Mask_Rectangles,
 "create_Mask_location": create_Mask_location,         #NEW
-"create_Mask_color":create_Mask_color,      #new  
+"create_Mask_visual_tag":create_Mask_visual_tag,      #new  
 
 
 
@@ -379,7 +378,7 @@ NODE_CLASS_MAPPINGS= {
 "Mask_face_detect": Mask_face_detect,
 "Mask_splitMask":Mask_splitMask,
 "Mask_split_mulMask":Mask_split_mulMask,    #new
-
+"Mask_sum_shape_sole":Mask_sum_shape_sole, 
 
 
 #------------latent---------------------
