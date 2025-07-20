@@ -2612,6 +2612,7 @@ class XXXcreate_Mask_visual_tag:
 
 
 
+
 class create_Mask_visual_tag:
     def __init__(self):
         # 定义颜色映射（RGB格式）
@@ -2686,11 +2687,14 @@ class create_Mask_visual_tag:
         # 创建一个合并所有分割的最终遮罩
         final_mask = np.zeros_like(binary_mask)
         
+        filtered_contours = []
         for i, contour in enumerate(sorted_contours[:8]):
             area = cv2.contourArea(contour)
             if area < ignore_threshold:
                 continue
                 
+            filtered_contours.append(contour)
+            
             # 根据extrant_to_block和fill参数决定绘制方式
             if extrant_to_block:
                 x, y, w, h = cv2.boundingRect(contour)
@@ -2724,8 +2728,8 @@ class create_Mask_visual_tag:
         else:
             color_names = [out_color] * 8
         
-        # 生成彩色遮罩图像
-        for i, contour in enumerate(sorted_contours[:8]):
+        # 生成彩色遮罩图像，使用过滤后的轮廓
+        for i, contour in enumerate(filtered_contours):
             if i >= len(color_names):
                 break
                 
@@ -2773,4 +2777,9 @@ class create_Mask_visual_tag:
                 "result": (combined_image_tensor, final_mask_tensor,)}
             
         return {"ui": {"images": results},
-                "result": (combined_image_tensor, final_mask_tensor,)}    
+                "result": (combined_image_tensor, final_mask_tensor,)}
+
+
+
+
+
