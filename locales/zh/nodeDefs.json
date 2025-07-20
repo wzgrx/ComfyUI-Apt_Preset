@@ -2160,7 +2160,7 @@
         "name": "遮罩"
       },
       "mask_light": {
-        "name": "遮罩—光"
+        "name": "遮罩-光"
       },
       "bg_light": {
         "name": "背景-光"
@@ -7747,7 +7747,11 @@
     "outputs": {
       "0": {
         "name": "图像"
+      },
+      "1": {
+        "name": "图块计算"
       }
+
     }
   },
   "sampler_enhance": {
@@ -7818,86 +7822,17 @@
       "mode": {
         "name": "模式"
       },
-      "force_width": {
-        "name": "强制宽度"
-      },
-      "force_height": {
-        "name": "强制高度"
-      },
       "rescale_factor": {
         "name": "放大因子"
-      },
-      "x_min": {
-        "name": "x_min"
-      },
-      "x_max": {
-        "name": "x_max"
-      },
-      "y_min": {
-        "name": "y_min"
-      },
-      "y_max": {
-        "name": "y_max"
-      },
-      "width": {
-        "name": "宽度"
-      },
-      "height": {
-        "name": "高度"
-      },
-      "target_width": {
-        "name": "目标宽度"
-      },
-      "target_height": {
-        "name": "目标高度"
-      },
-      "preferred_x_start": {
-        "name": "preferred_x_start"
-      },
-      "preferred_x_end": {
-        "name": "preferred_x_end"
-      },
-      "preferred_y_start": {
-        "name": "preferred_y_start"
-      },
-      "preferred_y_end": {
-        "name": "preferred_y_end"
-      },
-      "min_val": {
-        "name": "min_val"
-      },
-      "max_val": {
-        "name": "max_val"
-      },
-      "max_boundary": {
-        "name": "max_boundary"
-      },
-      "padding": {
-        "name": "padding"
-      },
-      "optional_context_mask": {
-        "name": "optional_context_mask"
-      },
-      "context_expand_pixels": {
-        "name": "context_expand_pixels"
-      },
-      "context_expand_factor": {
-        "name": "context_expand_factor"
-      },
-      "invert_mask": {
-        "name": "反转遮罩"
-      },
-      "fill_mask_holes": {
-        "name": "遮罩补洞"
       },
       "rescale_algorithm": {
         "name": "重新缩放算法"
       },
-      "min_width": {
-        "name": "最小宽度"
+      "expand": {
+        "name": "遮罩扩张"
       },
-      "min_height": {
-        "name": "最小高度"
+      "smoothness": {
+        "name": "羽化"
       },
       "max_width": {
         "name": "最大宽度"
@@ -7908,7 +7843,7 @@
     },
     "outputs": {
       "0": {
-        "name": "图像"
+        "name": "裁切图"
       },
       "1": {
         "name": "遮罩"
@@ -7927,8 +7862,8 @@
       "stitch": {
         "name": "位置"
       },
-      "destination": {
-        "name": "目的地"
+      "smoothness": {
+        "name": "羽化"
       },
       "source": {
         "name": "来源"
@@ -7954,8 +7889,11 @@
     },
     "outputs": {
       "0": {
-        "name": "图像"
-      }
+        "name": "合成图"
+    },
+      "1": {
+      "name": "裁切图"
+    }     
     }
   },
   "Data_chx_Merge": {
@@ -11155,8 +11093,8 @@
       }
     }
   },
-  "Mask_combine_sum": {
-    "display_name": "遮罩_合并(总)",
+  "Mask_combine_High": {
+    "display_name": "遮罩_合并_指定高",
     "inputs": {
       "img1": {
         "name": "图像1"
@@ -11189,8 +11127,8 @@
       }
     }
   },
-  "Mask_combine_crop": {
-    "display_name": "遮罩_合并裁剪",
+  "Mask_combine_Width": {
+    "display_name": "遮罩_合并_指定宽",
     "inputs": {
       "img1": {
         "name": "图像1"
@@ -11760,5 +11698,85 @@
         "name": "裁切遮罩"
       }
     }
-  }
+  },
+
+    "basicIn_Seed": {
+        "display_name": "基础输入_种子",
+        "inputs": {
+            "seed": {
+                "name": "种子值"
+            }
+        },
+        "outputs": {
+            "seed": {
+                "name": "种子值"
+            }
+        }
+    },
+    "basicIn_float": {
+        "display_name": "基础输入_浮点数",
+        "inputs": {
+            "input": {
+                "name": "输入"
+            }
+        },
+        "outputs": {
+            "float": {
+                "name": "浮点数"
+            }
+        }
+    },
+    "basicIn_Sampler": {
+        "display_name": "基础输入_采样器",
+        "inputs": {
+            "sampler": {
+                "name": "采样器"
+            }
+        },
+        "outputs": {
+            "sampler": {
+                "name": "采样器"
+            }
+        }
+    },
+    "basicIn_Scheduler": {
+        "display_name": "基础输入_调度器",
+        "inputs": {
+            "scheduler": {
+                "name": "调度器"
+            }
+        },
+        "outputs": {
+            "scheduler": {
+                "name": "调度器"
+            }
+        }
+    },
+    "basicIn_string": {
+        "display_name": "基础输入_字符串",
+        "inputs": {
+            "input_text": {
+                "name": "输入文本"
+            }
+        },
+        "outputs": {
+            "text": {
+                "name": "文本"
+            }
+        }
+    },
+    "basicIn_int": {
+        "display_name": "基础输入_整数",
+        "inputs": {
+            "input": {
+                "name": "输入"
+            }
+        },
+        "outputs": {
+            "int": {
+                "name": "整数"
+            }
+        }
+    }
 }
+
