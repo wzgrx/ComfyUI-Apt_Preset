@@ -18,12 +18,21 @@ from torchvision.transforms import functional as TF
 from comfy_extras.nodes_mask import GrowMask
 import folder_paths
 from ultralytics import YOLO,settings
-from transparent_background import Remover
+
 from tqdm import tqdm
 from ..main_unit import *
 
 
 #endregion-------------------------------------------------------------------------------#
+
+
+try:
+    from transparent_background import Remover
+    REMOVER_AVAILABLE = True
+except ImportError:
+    Remover = None
+
+
 
 
 #region---------DetectByLabel检测遮罩--------------------------------------
@@ -741,7 +750,7 @@ class Mask_math:
 
 
 
-class Mask_combine_crop:
+class Mask_combine_Width:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -918,7 +927,7 @@ class Mask_combine_crop:
 
 
 
-class Mask_combine_sum:
+class Mask_combine_High:
     @classmethod
     def INPUT_TYPES(s):
         return {
