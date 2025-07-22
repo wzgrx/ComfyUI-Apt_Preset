@@ -31,6 +31,7 @@ sentencepiece
 protobuf
 diffusers
 openpyxl
+wget
 pyyaml>=6.0  
 watchdog>=3.0.0
 filelock>=3.12.0
