@@ -30,16 +30,16 @@ from .NodeBasic.C_promp import *
 from .NodeBasic.C_imgEffect import *
 from .NodeBasic.C_type import *
 from .NodeBasic.C_basinInput import *
-from .NodeBasic.C_test import *
+
 from .NodeCollect.mask_face import *
 from .NodeCollect.text_font2img import *
 from .NodeCollect.mask_mutil_lay import *
 from .NodeChx.sum_text_yaml import *
 
 
-#计划  sum_Ksampler 释放多类端口，kontext_prompt
+#计划  sum_Ksampler 释放多类端口
 
-
+from .NodeBasic.C_test import *
 
 #-load------------------------------------------#
 
@@ -54,7 +54,7 @@ NODE_CLASS_MAPPINGS= {
 "load_SD35": load_SD35,
 "load_GGUF": UnetLoaderGGUF2,
 
-#"Data_basic_easy": Data_basic_easy,
+
 "Data_Highway":Data_Highway,
 "Data_bus_chx":Data_bus_chx,
 "Data_basic": Data_basic,
@@ -91,8 +91,8 @@ NODE_CLASS_MAPPINGS= {
 #"basic_Ksampler_batch": basic_Ksampler_batch,
 #"chx_ksampler_Deforum_math": chx_ksampler_Deforum_math,
 
-"sampler_InpaintCrop": InpaintCrop,  #wed
-"sampler_InpaintStitch": InpaintStitch,  #wed
+"sampler_InpaintCrop": sampler_InpaintCrop,  
+"sampler_InpaintStitch": sampler_InpaintStitch,  
 "sampler_DynamicTileSplit": DynamicTileSplit, 
 "sampler_DynamicTileMerge": DynamicTileMerge,
 "sampler_enhance": sampler_enhance,
@@ -107,14 +107,14 @@ NODE_CLASS_MAPPINGS= {
 "sum_stack_Wan": sum_stack_Wan,
 "sum_stack_AD": sum_stack_AD,
 
-"pre_Kontext": pre_Kontext,   #NEW
+"pre_Kontext": pre_Kontext,   
 "pre_Kontext_mul": pre_Kontext_mul,
 
 "pre_sample_data": pre_sample_data,
 "pre_controlnet": pre_controlnet,
 "pre_controlnet_union": pre_controlnet_union,
 
-"pre_mul_Mulcondi": pre_mul_Mulcondi,    #NEW
+"pre_mul_Mulcondi": pre_mul_Mulcondi,   
 "pre_ic_light_sd15":  pre_ic_light_sd15,
 "pre_latent_light": pre_latent_light,
 "pre_Flex2": pre_Flex2,
@@ -281,7 +281,7 @@ NODE_CLASS_MAPPINGS= {
 "creat_any_batch": creat_any_batch,  #wed
 
 
-"type_AnyCast": type_AnyCast, #wed
+"type_AnyCast": type_AnyCast, #wed移除
 "type_Anyswitch": type_Anyswitch,
 "type_BasiPIPE": type_BasiPIPE,
 "type_Image_List2Batch":type_Image_List2Batch,
@@ -289,7 +289,6 @@ NODE_CLASS_MAPPINGS= {
 "type_Mask_Batch2List":type_Mask_Batch2List,
 "type_Mask_List2Batch":type_Mask_List2Batch,
 "type_text_list2batch ": type_text_list2batch ,  
-"type_text_2_UTF8": type_text_2_UTF8 ,  
 
 
 #---------------model--------
@@ -317,6 +316,11 @@ NODE_CLASS_MAPPINGS= {
 "Image_Channel_RemoveAlpha": Image_Channel_RemoveAlpha,
 
 
+
+
+
+
+
 "color_tool": color_tool,
 "color_adjust_HDR": color_adjust_HDR,
 "color_adjust_light": color_adjust_light,
@@ -341,9 +345,11 @@ NODE_CLASS_MAPPINGS= {
 "create_Mask_lay_X": create_Mask_lay_X,
 "create_Mask_lay_Y": create_Mask_lay_Y,
 "create_Mask_Rectangles": create_Mask_Rectangles,
-"create_Mask_location": create_Mask_location,         #NEW
-"create_Mask_visual_tag":create_Mask_visual_tag,      #new  
+"create_Mask_location": create_Mask_location,        
+"create_Mask_visual_tag":create_Mask_visual_tag,     
+"create_Mask_match_shape": create_Mask_match_shape,
 
+"stack_Mask2color": stack_Mask2color,
 
 
 "img_effect_Load": img_effect_Load,
@@ -366,8 +372,8 @@ NODE_CLASS_MAPPINGS= {
 
 #-----------------mask----------------------
 
-"Mask_combine_sum": Mask_combine_sum,
-"Mask_combine_crop": Mask_combine_crop,
+"Mask_combine_High": Mask_combine_High,
+"Mask_combine_Width": Mask_combine_Width,
 "Mask_math": Mask_math,
 "Mask_Detect_label": Mask_Detect_label,
 "Mask_Remove_bg": Mask_Remove_bg,
@@ -377,7 +383,7 @@ NODE_CLASS_MAPPINGS= {
 "Mask_inpaint_light": Mask_inpaint_light,
 "Mask_face_detect": Mask_face_detect,
 "Mask_splitMask":Mask_splitMask,
-"Mask_split_mulMask":Mask_split_mulMask,    #new
+"Mask_split_mulMask":Mask_split_mulMask,    
 "Mask_sum_shape_sole":Mask_sum_shape_sole, 
 
 
@@ -397,7 +403,7 @@ NODE_CLASS_MAPPINGS= {
 "excel_insert_image":excel_insert_image,
 "excel_search_data":excel_search_data,
 "excel_row_diff":excel_row_diff,
-"excel_column_diff":excel_column_diff,          #NEW
+"excel_column_diff":excel_column_diff,         
 
 "text_mul_Split":text_mul_Split,
 "text_mul_Join":text_mul_Join,
