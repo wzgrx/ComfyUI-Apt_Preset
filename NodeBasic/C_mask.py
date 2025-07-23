@@ -31,6 +31,7 @@ try:
     REMOVER_AVAILABLE = True
 except ImportError:
     Remover = None
+    REMOVER_AVAILABLE = False
 
 
 
