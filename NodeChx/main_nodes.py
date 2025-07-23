@@ -245,49 +245,6 @@ class Data_basic:
         return (context, model, positive, negative, latent, vae, clip, images, mask,)
 
 
-class Data_basic_easy:   
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            
-            "required": { 
-                
-                    },
-            "optional": {
-                "context": ("RUN_CONTEXT",),   
-                "model": ("MODEL",),
-                "clip": ("CLIP",),
-                "positive": ("CONDITIONING",),
-                "negative": ("CONDITIONING",),
-                "latent": ("LATENT",),
-                
-            },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL","CLIP", "CONDITIONING","CONDITIONING","LATENT",)
-    RETURN_NAMES = ("context", "model","clip","positive","negative","latent",)
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_load"
-
-    def sample(self, context=None,model=None,positive=None,negative=None,clip =None, latent=None):
-        
-
-        if model is None:
-            model = context.get("model")
-        if positive is None:
-            positive = context.get("positive")
-        if negative is None:
-            negative = context.get("negative")
-        if clip is None:
-            clip = context.get("clip")
-        if latent is None:
-            latent = context.get("latent")
-
-        
-        context = new_context(context,model=model,positive=positive,negative=negative,clip=clip,latent=latent,)
-        return (context, model,clip, positive, negative, latent,  )
-
-
 class Data_sampleData:  
     @classmethod
     def INPUT_TYPES(s):
@@ -367,12 +324,13 @@ class Data_presetData:
             }
         }
 
-    RETURN_TYPES = ("RUN_CONTEXT",
+    RETURN_TYPES = ("RUN_CONTEXT",                                     
+                    available_ckpt,
+                    available_unets, 
                     available_clips,
                     available_clips,
                     available_clips,  
-                    available_unets, 
-                    available_ckpt,
+                    available_clips,  
                     "STRING", 
                     "STRING", 
                     "INT",
@@ -382,12 +340,12 @@ class Data_presetData:
 
     RETURN_NAMES = (
             "context",
+            "ckpt_name",
+            "unet_name", 
             "clip1_name", 
             "clip2_name", 
             "clip3_name", 
             "clip4_name", 
-            "unet_name", 
-            "ckpt_name",
             "pos", 
             "neg",
             "width",
@@ -413,12 +371,12 @@ class Data_presetData:
 
         return (
             context,
+            ckpt_name,
+            unet_name, 
             clip1, 
             clip2, 
             clip3, 
             clip4, 
-            unet_name, 
-            ckpt_name,
             pos, 
             neg,
             width,
@@ -1741,6 +1699,7 @@ class sum_create_chx:
                 "over_vae": ("VAE",),
                 "over_positive": ("CONDITIONING",),
                 "over_negative": ("CONDITIONING",),
+                "over_latent": ("LATENT",),
                 "lora_stack": ("LORASTACK",),
                 "data":(ANY_TYPE,),
             },
@@ -1752,7 +1711,7 @@ class sum_create_chx:
     CATEGORY = "Apt_Preset/chx_load"
 
     def process_settings(self, 
-                        width, height, batch, steps, cfg, sampler, scheduler, data=None, guidance=3.5, lora_stack=None,
+                        width, height, batch, steps, cfg, sampler, scheduler, data=None, guidance=3.5, lora_stack=None,over_latent=None,
                         vae=None, over_vae=None, clip=None, model=None, over_positive=None, over_negative=None, pos="default", neg="default"):
 
         # 分辨率修正
@@ -1761,7 +1720,8 @@ class sum_create_chx:
         if latent.shape[1] != 16:
             latent = latent.repeat(1, 16 // 4, 1, 1)
 
-
+        if over_latent is not None:
+            latent = over_latent
         # 处理VAE
         if over_vae is not None:
             vae = over_vae
