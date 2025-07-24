@@ -911,7 +911,10 @@
         "name": "旋转"
       },
       "front_img_sacle": {
-        "name": "前景缩放"
+        "name": "裁切缩放"
+      },
+     "extrant_to_block": {
+        "name": "遮罩矩形化"
       },
       "invert_mask": {
         "name": "反转遮罩"
@@ -1065,11 +1068,14 @@
       }
     },
     "outputs": {
-      "image": {
+      "0": {
         "name": "图像"
       },
-      "mask": {
+      "1": {
         "name": "遮罩"
+      },
+      "2": {
+        "name": "线遮罩"
       }
     }
   },
@@ -1887,7 +1893,7 @@
     }
   },
   "lay_image_match_W_and_H": {
-    "display_name": "排版_匹配_宽和高",
+    "display_name": "lay_image_match_W_and_H",
     "inputs": {
       "count": {
         "name": "数量"
@@ -2540,6 +2546,10 @@
         "base_image": {
             "name": "基础图像"
         },
+
+        "mask_info": {
+            "name": "遮罩信息"
+        },
         "mask": {
             "name": "遮罩"
         },
@@ -2571,10 +2581,139 @@
         },
         "1": {
             "name": "遮罩"
+        },
+        "2": {
+            "name": "填充遮罩"
         }
 
     }
   },
+
+"create_Mask_match_shape": {
+    "display_name": "创建_遮罩_匹配标记",
+    "inputs": {
+        "bimg": {
+            "name": "背景图像"
+        },
+        "bmask": {
+            "name": "背景标记"
+        },
+        "b_color": {
+            "name": "背景颜色"
+        },
+
+        "edge_detection": {
+            "name": "边界检测"
+        },
+        "edge_thickness": {
+            "name": "边界厚度"
+        },
+        "edge_color": {
+            "name": "边界颜色"
+        },
+
+        "b_extrant_to_block": {
+            "name": "标记矩形化"
+        },
+        "image_output": {
+            "name": "图像输出方式"
+        },
+        "fimg": {
+            "name": "前景图像"
+        },
+        "fmask": {
+            "name": "前景遮罩"
+        },
+        "f_opacity": {
+            "name": "前景不透明度"
+        },
+        "f_scale": {
+            "name": "前景缩放"
+        },
+        "f_x_offset": {
+            "name": "前景X轴偏移"
+        },
+        "f_y_offset": {
+            "name": "前景Y轴偏移"
+        },
+        "f_rot": {
+            "name": "前景旋转"
+        },
+        "f_smoothness": {
+            "name": "前景羽化"
+        },
+        "f_extrant_to_block": {
+            "name": "前景矩形化"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "合成图像"
+        },
+        "1": {
+            "name": "合成遮罩"
+        }
+    }
+},
+
+"stack_Mask2color": {
+    "display_name": "堆叠遮罩转颜色",
+    "inputs": {
+        "mask1_color": {
+            "name": "遮罩1颜色"
+        },
+        "fill1": {
+            "name": "填充遮罩1"
+        },
+        "mask2_color": {
+            "name": "遮罩2颜色"
+        },
+        "fill2": {
+            "name": "填充遮罩2"
+        },
+        "mask3_color": {
+            "name": "遮罩3颜色"
+        },
+        "fill3": {
+            "name": "填充遮罩3"
+        },
+        "mask4_color": {
+            "name": "遮罩4颜色"
+        },
+        "fill4": {
+            "name": "填充遮罩4"
+        },
+        "mask5_color": {
+            "name": "遮罩5颜色"
+        },
+        "fill5": {
+            "name": "填充遮罩5"
+        },
+        "mask6_color": {
+            "name": "遮罩6颜色"
+        },
+        "fill6": {
+            "name": "填充遮罩6"
+        },
+        "mask7_color": {
+            "name": "遮罩7颜色"
+        },
+        "fill7": {
+            "name": "填充遮罩7"
+        },
+        "mask8_color": {
+            "name": "遮罩8颜色"
+        },
+        "fill8": {
+            "name": "填充遮罩8"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "遮罩信息"
+        }
+    }
+},
 
   "create_Mask_location": {
     "display_name": "创建_坐标遮罩",
@@ -7810,49 +7949,43 @@
       }
     }
   },
-  "sampler_InpaintCrop": {
-    "display_name": "采样处理_重绘分割",
+
+
+"sampler_InpaintCrop": {
+    "display_name": "采样处理_重绘裁剪",
     "inputs": {
-      "image": {
-        "name": "图像"
-      },
-      "mask": {
-        "name": "遮罩"
-      },
-      "mode": {
-        "name": "模式"
-      },
-      "rescale_factor": {
-        "name": "放大因子"
-      },
-      "rescale_algorithm": {
-        "name": "重新缩放算法"
-      },
-      "expand": {
-        "name": "遮罩扩张"
-      },
-      "smoothness": {
-        "name": "羽化"
-      },
-      "max_width": {
-        "name": "最大宽度"
-      },
-      "max_height": {
-        "name": "最大高度"
-      }
+        "image": {
+            "name": "图像"
+        },
+        "mask": {
+            "name": "遮罩"
+        },
+        "expand_width": {
+            "name": "裁切扩宽"
+        },
+        "expand_height": {
+            "name": "裁切扩高"
+        },
+        "rescale_factor": {
+            "name": "裁切缩放"
+        },
+        "smoothness": {
+            "name": "平滑度"
+        }
     },
     "outputs": {
-      "0": {
-        "name": "裁切图"
-      },
-      "1": {
-        "name": "遮罩"
-      },
-      "2": {
-        "name": "位置"
-      }
+        "0": {
+            "name": "裁剪图像"
+        },
+        "1": {
+            "name": "裁剪遮罩"
+        },
+        "2": {
+            "name": "位置"
+        }
     }
-  },
+},
+
   "sampler_InpaintStitch": {
     "display_name": "采样处理_重绘合并",
     "inputs": {
