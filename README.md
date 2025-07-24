@@ -38,6 +38,7 @@
 
 2025.7.18  添加节点，创建_遮罩_视角打标  create_Mask_visual_tag 
 
+2025.7.23  添加节点，创建_遮罩_匹配打标  create_Mask_match_shape
 
 Simultaneously issue commands to generate for multiple objects
 
