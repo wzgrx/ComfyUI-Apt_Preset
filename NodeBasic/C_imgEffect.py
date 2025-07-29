@@ -2552,323 +2552,6 @@ class create_Mask_visual_tag:
 
 
 
-class XXcreate_Mask_match_shape:
-    def __init__(self):
-        self.bg_colors = {
-            "black": (0, 0, 0),
-            "white": (255, 255, 255),
-            "red": (255, 0, 0),
-            "green": (0, 255, 0),
-            "blue": (0, 0, 255)
-        }
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "bimg": ("IMAGE",),
-                "bmask": ("MASK",),
-                "b_color": (["black", "white", "red", "green", "blue"], {"default": "blue"}),
-                "b_extrant_to_block": ("BOOLEAN", {"default": True}),
-
-            },
-            "optional": {
-                "fimg": ("IMAGE",),
-                "fmask": ("MASK",),
-                "f_extrant_to_block": ("BOOLEAN", {"default": True}),
-                "f_scale": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 5.0, "step": 0.1}),
-                "f_x_offset": ("INT", {"default": 0, "min": -500, "max": 500, "step": 1}),
-                "f_y_offset": ("INT", {"default": 0, "min": -500, "max": 500, "step": 1}),
-                "f_rot": ("INT", {"default": 0, "min": -180, "max": 180, "step": 1}),
-                "f_smoothness": ("INT", {"default": 1, "min": 0, "max": 150, "step": 1}),
-                "f_opacity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05}),
-                "image_output": (["Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
-            },
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
-        }
-
-    OUTPUT_NODE = True
-    RETURN_TYPES = ("IMAGE", "MASK")
-    RETURN_NAMES = ("composed_image", "final_mask")
-    FUNCTION = "compose"
-    CATEGORY = "Apt_Preset/imgEffect"
-    DESCRIPTION = """
-    前景背景合成节点：
-    - 背景根据bmask生成指定颜色的色块区域
-    - 前景为可选输入，支持根据fmask裁切后覆盖到背景上
-    - 前景默认以fmask中心对齐bmask中心
-    - 支持调整前景位置、缩放和旋转
-    - f_smoothness控制边缘羽化效果和掩码平滑度
-    """
-
-    def compose(self, bimg, bmask, b_color, b_extrant_to_block,
-                image_output, fimg=None, fmask=None, f_opacity=1.0, f_scale=1.0, 
-                f_x_offset=0, f_y_offset=0, f_rot=0, f_smoothness=1,
-                f_extrant_to_block=False, prompt=None, extra_pnginfo=None):
-        from PIL import Image, ImageFilter
-        import torch
-        import numpy as np
-        import cv2
-
-        # 辅助函数：处理PIL版本兼容性问题 - 重采样方法适配
-        def get_resample_method():
-            try:
-                # 处理旧版PIL (Pillow < 9.1.0)
-                if hasattr(Image, 'ANTIALIAS'):
-                    return Image.ANTIALIAS  # 旧版抗锯齿模式
-                # 处理过渡版本
-                elif hasattr(Image, 'Resampling') and hasattr(Image.Resampling, 'LANCZOS'):
-                    return Image.Resampling.LANCZOS
-                else:
-                    return Image.BICUBIC  # 降级为双三次插值
-            except ImportError:
-                return Image.BICUBIC
-
-        # 获取兼容的旋转重采样方法 (旧版PIL旋转不支持LANCZOS)
-        def get_rotate_resample_method():
-            try:
-                # 旋转操作在旧版PIL中推荐使用BICUBIC或BILINEAR
-                if hasattr(Image, 'Resampling'):
-                    return Image.Resampling.BICUBIC
-                else:
-                    return Image.BICUBIC
-            except:
-                return Image.BILINEAR  # 最兼容的 fallback
-
-        # 获取重采样方法
-        resample_method = get_resample_method()
-        rotate_resample = get_rotate_resample_method()
-
-        def tensor2pil(tensor):
-            if len(tensor.shape) == 4:
-                tensor = tensor[0]
-            return Image.fromarray(np.clip(255. * tensor.cpu().numpy(), 0, 255).astype(np.uint8))
-        
-        def pil2tensor(image):
-            return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
-
-        # 1. 处理背景
-        bimg_pil = tensor2pil(bimg)
-        bmask_np = bmask.cpu().numpy().squeeze() * 255
-        bmask_np = bmask_np.astype(np.uint8)
-
-        _, binary_mask = cv2.threshold(bmask_np, 1, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # 计算bmask的边界框和中心
-        b_center_x, b_center_y = bimg_pil.width // 2, bimg_pil.height // 2
-        if contours:
-            # 计算所有轮廓的中心点
-            moments = [cv2.moments(cnt) for cnt in contours]
-            contour_centers = []
-            for m in moments:
-                if m["m00"] != 0:
-                    cx = int(m["m10"] / m["m00"])
-                    cy = int(m["m01"] / m["m00"])
-                    contour_centers.append((cx, cy))
-            if contour_centers:
-                # 使用所有轮廓中心的平均值作为bmask中心
-                b_center_x = int(sum(x for x, y in contour_centers) / len(contour_centers))
-                b_center_y = int(sum(y for x, y in contour_centers) / len(contour_centers))
-
-        # 创建背景色块掩码
-        bg_color_mask = np.zeros_like(binary_mask)
-        for contour in contours[:8]:
-            if b_extrant_to_block:
-                x, y, w, h = cv2.boundingRect(contour)
-                cv2.rectangle(bg_color_mask, (x, y), (x+w, y+h), 255, thickness=cv2.FILLED)
-            else:
-                cv2.drawContours(bg_color_mask, [contour], 0, 255, thickness=cv2.FILLED)
-
-        # 应用背景颜色
-        bimg_np = np.array(bimg_pil).astype(np.float32)
-        color = np.array(self.bg_colors[b_color], dtype=np.float32)
-        mask_float = bg_color_mask.astype(np.float32) / 255.0
-        for c in range(3):
-            bimg_np[:, :, c] = mask_float * color[c] + (1 - mask_float) * bimg_np[:, :, c]
-        bimg_processed = Image.fromarray(np.clip(bimg_np, 0, 255).astype(np.uint8))
-
-        # 2. 前景处理逻辑
-        has_foreground = fimg is not None
-        final_mask_np = bg_color_mask.copy()
-        
-        if has_foreground:
-            fimg_pil = tensor2pil(fimg)
-            
-            # 处理缺失fmask的情况
-            if fmask is None:
-                fmask_np = np.ones((fimg_pil.height, fimg_pil.width), dtype=np.uint8) * 255
-                fmask_pil = Image.fromarray(fmask_np)
-            else:
-                fmask_np = fmask.cpu().numpy().squeeze() * 255
-                fmask_np = fmask_np.astype(np.uint8)
-                fmask_pil = Image.fromarray(fmask_np)
-
-            # 获取fmask的中心点
-            f_center_x, f_center_y = fimg_pil.width // 2, fimg_pil.height // 2
-            f_contours, _ = cv2.findContours(fmask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            if f_contours:
-                # 计算所有轮廓的中心点
-                f_moments = [cv2.moments(cnt) for cnt in f_contours]
-                f_contour_centers = []
-                for m in f_moments:
-                    if m["m00"] != 0:
-                        cx = int(m["m10"] / m["m00"])
-                        cy = int(m["m01"] / m["m00"])
-                        f_contour_centers.append((cx, cy))
-                if f_contour_centers:
-                    # 使用所有轮廓中心的平均值作为fmask中心
-                    f_center_x = int(sum(x for x, y in f_contour_centers) / len(f_contour_centers))
-                    f_center_y = int(sum(y for x, y in f_contour_centers) / len(f_contour_centers))
-
-            # 计算初始缩放比例
-            f_height, f_width = fmask_np.shape[:2]
-            b_height, b_width = bmask_np.shape[:2]
-            
-            # 当f_extrant_to_block为真时的特殊缩放逻辑
-            if f_extrant_to_block:
-                # 先计算使fmask的高=bmask的高的缩放比例
-                scale_h = b_height / f_height if f_height > 0 else 1.0
-                
-                # 按此比例缩放后，计算fmask的宽度
-                scaled_width = int(f_width * scale_h)
-                
-                # 如果缩放后的宽度小于bmask的宽度+2像素，则重新计算缩放比例
-                if scaled_width < (b_width + 2):
-                    # 计算使fmask的宽=bmask的宽+2像素的缩放比例
-                    scale_w = (b_width + 2) / f_width if f_width > 0 else 1.0
-                    # 使用较大的缩放比例，确保fmask的宽和高都符合要求
-                    initial_scale = max(scale_h, scale_w)
-                else:
-                    # 否则使用高度计算的缩放比例
-                    initial_scale = scale_h
-                
-                # 确保缩放比例不小于1.0，防止fmask被缩小
-                initial_scale = max(initial_scale, 1.0)
-            else:
-                # 原始缩放逻辑
-                scale_h = b_height / f_height if f_height > 0 else 1.0
-                scale_w = b_width / f_width if f_width > 0 else 1.0
-                initial_scale = max(scale_h, scale_w)
-
-            # 应用用户指定的缩放因子
-            initial_scale *= f_scale
-
-            # 缩放前景和掩码（使用兼容的重采样方法）
-            new_size = (int(fimg_pil.width * initial_scale), int(fimg_pil.height * initial_scale))
-            fimg_scaled = fimg_pil.resize(new_size, resample=resample_method)
-            fmask_scaled = fmask_pil.resize(new_size, resample=resample_method)
-
-            # 旋转处理（使用兼容的旋转重采样方法）
-            if f_rot != 0:
-                fimg_scaled = fimg_scaled.rotate(
-                    f_rot, 
-                    expand=True, 
-                    resample=rotate_resample  # 关键修改：使用兼容旋转的重采样方法
-                )
-                fmask_scaled = fmask_scaled.rotate(
-                    f_rot, 
-                    expand=True, 
-                    resample=rotate_resample  # 关键修改：使用兼容旋转的重采样方法
-                )
-
-            # 重新计算旋转后的fmask中心
-            fmask_scaled_np = np.array(fmask_scaled)
-            _, fmask_bin = cv2.threshold(fmask_scaled_np, 127, 255, cv2.THRESH_BINARY)
-            f_rot_contours, _ = cv2.findContours(fmask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            rf_center_x, rf_center_y = fmask_scaled.width // 2, fmask_scaled.height // 2
-            if f_rot_contours:
-                # 计算旋转后轮廓的中心点
-                rf_moments = [cv2.moments(cnt) for cnt in f_rot_contours]
-                rf_contour_centers = []
-                for m in rf_moments:
-                    if m["m00"] != 0:
-                        cx = int(m["m10"] / m["m00"])
-                        cy = int(m["m01"] / m["m00"])
-                        rf_contour_centers.append((cx, cy))
-                if rf_contour_centers:
-                    # 使用所有轮廓中心的平均值作为旋转后fmask中心
-                    rf_center_x = int(sum(x for x, y in rf_contour_centers) / len(rf_contour_centers))
-                    rf_center_y = int(sum(y for x, y in rf_contour_centers) / len(rf_contour_centers))
-
-            # 计算放置位置（使用轮廓中心而非边界框中心）
-            base_x = b_center_x - rf_center_x + f_x_offset
-            base_y = b_center_y - rf_center_y + f_y_offset
-
-            # 处理前景掩码轮廓
-            fmask_scaled_np = np.array(fmask_scaled)
-            _, fmask_bin = cv2.threshold(fmask_scaled_np, 127, 255, cv2.THRESH_BINARY)
-            
-            fmask_processed = np.zeros_like(fmask_bin)
-            if np.count_nonzero(fmask_bin) > 0:
-                f_contours, _ = cv2.findContours(fmask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                if f_contours:
-                    for contour in f_contours:
-                        if f_extrant_to_block:
-                            x, y, w, h = cv2.boundingRect(contour)
-                            cv2.rectangle(fmask_processed, (x, y), (x+w, y+h), 255, thickness=cv2.FILLED)
-                        else:
-                            cv2.drawContours(fmask_processed, [contour], 0, 255, thickness=1)
-            
-            # 合并原始掩码和轮廓
-            fmask_final = np.maximum(fmask_bin, fmask_processed)
-            fmask_final_pil = Image.fromarray(fmask_final)
-
-            # 创建透明层并粘贴前景
-            fg_with_alpha = Image.new('RGBA', bimg_processed.size, (0, 0, 0, 0))
-            fg_with_alpha.paste(fimg_scaled, (base_x, base_y), mask=fmask_final_pil)
-
-            # 修复边缘羽化效果
-            if f_smoothness > 0:
-                # 转换为numpy数组处理羽化
-                fg_np = np.array(fg_with_alpha)
-                alpha_channel = fg_np[:, :, 3]
-                
-                # 应用高斯模糊实现羽化
-                blurred_alpha = cv2.GaussianBlur(alpha_channel, (0, 0), sigmaX=f_smoothness)
-                
-                # 替换alpha通道
-                fg_np[:, :, 3] = blurred_alpha
-                fg_with_alpha = Image.fromarray(fg_np)
-
-            # 应用前景不透明度
-            alpha = int(f_opacity * 255)
-            alpha_channel = fg_with_alpha.split()[-1]
-            alpha_channel = Image.eval(alpha_channel, lambda x: int(x * alpha / 255))
-            fg_with_alpha.putalpha(alpha_channel)
-
-            # 合成最终图像
-            composed_pil = Image.alpha_composite(bimg_processed.convert('RGBA'), fg_with_alpha)
-            composed_pil = composed_pil.convert('RGB')
-
-            # 处理最终掩码
-            fg_mask_np = np.array(fg_with_alpha.split()[-1])
-            if f_smoothness > 0:
-                fg_mask_np = cv2.GaussianBlur(fg_mask_np, (0, 0), sigmaX=f_smoothness)
-            final_mask_np = np.maximum(bg_color_mask, fg_mask_np)
-        else:
-            # 没有前景输入时，直接使用背景处理结果
-            composed_pil = bimg_processed
-
-        # 准备输出
-        composed_np = np.array(composed_pil)
-        composed_tensor = torch.from_numpy(composed_np).float() / 255.0
-        composed_tensor = composed_tensor.unsqueeze(0)
-
-        final_mask_tensor = torch.from_numpy(final_mask_np).float() / 255.0
-        final_mask_tensor = final_mask_tensor.unsqueeze(0)
-
-
-        results = easySave(composed_tensor, 'composedPreview', image_output, prompt, extra_pnginfo)
-       
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {}, "result": (composed_tensor, final_mask_tensor)}        
-        return {"ui": {"images": results}, "result": (composed_tensor, final_mask_tensor)}
-
-
-
 
 class create_Mask_location:
     @classmethod
@@ -2974,7 +2657,6 @@ def pil2tensor(image):
 
 
 
-
 class create_Mask_match_shape: 
     def __init__(self):
         self.bg_colors = {
@@ -2997,16 +2679,17 @@ class create_Mask_match_shape:
                 "edge_detection": ("BOOLEAN", {"default": False}),
                 "edge_thickness": ("INT", {"default": 1, "min": 1, "max": 100, "step": 1}),
                 "edge_color": (["black", "white", "red", "green", "blue"], {"default": "white"}),
+                "f_smoothness": ("INT", {"default": 1, "min": 0, "max": 150, "step": 1}),
+                "f_opacity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05}),
+
             },
             "optional": {
                 "fimg": ("IMAGE",),
                 "fmask": ("MASK",),
-                "f_scale": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 5.0, "step": 0.1}),
                 "f_x_offset": ("INT", {"default": 0, "min": -500, "max": 500, "step": 1}),
                 "f_y_offset": ("INT", {"default": 0, "min": -500, "max": 500, "step": 1}),
+                "f_scale": ("FLOAT", {"default": 1.0, "min": 0.01, "max": 5.0, "step": 0.01}),
                 "f_rot": ("INT", {"default": 0, "min": -180, "max": 180, "step": 1}),
-                "f_smoothness": ("INT", {"default": 1, "min": 0, "max": 150, "step": 1}),
-                "f_opacity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05}),
                 "image_output": (["Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
             },
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
@@ -3018,16 +2701,16 @@ class create_Mask_match_shape:
     FUNCTION = "compose"
     CATEGORY = "Apt_Preset/imgEffect"
 
-    def compose(self, bimg, bmask, b_color, b_extrant_to_block, image_output, 
-                edge_detection=False, edge_thickness=1, edge_color="white",
-                fimg=None, fmask=None, f_opacity=1.0, f_scale=1.0, 
-                f_x_offset=0, f_y_offset=0, f_rot=0, f_smoothness=1,
-                f_extrant_to_block=False, prompt=None, extra_pnginfo=None):
+    def compose(self, bimg, bmask, b_color, b_extrant_to_block, f_extrant_to_block, 
+                edge_detection, edge_thickness, edge_color,
+                f_smoothness, f_opacity, image_output,
+                fimg=None, fmask=None, f_scale=1.0, f_x_offset=0, f_y_offset=0, f_rot=0,
+                prompt=None, extra_pnginfo=None):
 
         def get_resample_method():
             try:
-                if hasattr(Image, 'Resampling') and hasattr(Image.Resampling, 'LANCZOS'):
-                    return Image.Resampling.LANCZOS
+                if hasattr(Image, 'Resampling') and hasattr(Image.Resampling, 'BICUBIC'):
+                    return Image.Resampling.BICUBIC
                 else:
                     return Image.BICUBIC
             except:
@@ -3044,17 +2727,15 @@ class create_Mask_match_shape:
         def pil2tensor(image):
             return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
 
-        # 将 bimg 和 bmask 转换为 PIL 图像
+        # 处理背景
         bimg_pil = tensor2pil(bimg)
         bmask_np = bmask.cpu().numpy().squeeze() * 255
         bmask_np = bmask_np.astype(np.uint8)
         bmask_height, bmask_width = bmask_np.shape[:2]
 
-        # 提取 bmask 的轮廓
         _, binary_mask = cv2.threshold(bmask_np, 1, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # 计算背景中心点
         b_center_x, b_center_y = bimg_pil.width // 2, bimg_pil.height // 2
         if contours:
             moments = [cv2.moments(cnt) for cnt in contours]
@@ -3068,7 +2749,6 @@ class create_Mask_match_shape:
                 b_center_x = int(sum(x for x, y in contour_centers) / len(contour_centers))
                 b_center_y = int(sum(y for x, y in contour_centers) / len(contour_centers))
 
-        # 创建背景颜色遮罩
         bg_color_mask = np.zeros_like(binary_mask)
         for contour in contours[:8]:
             if b_extrant_to_block:
@@ -3077,7 +2757,6 @@ class create_Mask_match_shape:
             else:
                 cv2.drawContours(bg_color_mask, [contour], 0, 255, thickness=cv2.FILLED)
 
-        # 应用背景颜色
         bimg_np = np.array(bimg_pil).astype(np.float32)
         color = np.array(self.bg_colors[b_color], dtype=np.float32)
         mask_float = bg_color_mask.astype(np.float32) / 255.0
@@ -3085,14 +2764,14 @@ class create_Mask_match_shape:
             bimg_np[:, :, c] = mask_float * color[c] + (1 - mask_float) * bimg_np[:, :, c]
         bimg_processed = Image.fromarray(np.clip(bimg_np, 0, 255).astype(np.uint8)).convert("RGBA")
 
+        # 处理前景
         has_foreground = fimg is not None
         final_mask_np = bg_color_mask.copy()
-        edge_image = None  
+        edge_image = None
 
         if has_foreground:
             fimg_pil = tensor2pil(fimg)
             
-            # 如果 fmask 不存在，创建一个全白的 fmask
             if fmask is None:
                 fmask_np = np.ones((fimg_pil.height, fimg_pil.width), dtype=np.uint8) * 255
                 fmask_pil = Image.fromarray(fmask_np)
@@ -3101,7 +2780,6 @@ class create_Mask_match_shape:
                 fmask_np = fmask_np.astype(np.uint8)
                 fmask_pil = Image.fromarray(fmask_np)
 
-            # 获取 fmask 的原始尺寸
             f_original_height, f_original_width = fmask_np.shape[:2]
             if f_original_width == 0 or f_original_height == 0:
                 composed_tensor = pil2tensor(bimg_processed.convert("RGB"))
@@ -3109,7 +2787,6 @@ class create_Mask_match_shape:
                 final_mask_tensor = final_mask_tensor.unsqueeze(0)
                 return {"ui": {}, "result": (composed_tensor, final_mask_tensor)}
 
-            # 获取 bmask 的最大轮廓
             _, bmask_bin = cv2.threshold(bmask_np, 127, 255, cv2.THRESH_BINARY)
             b_contours, _ = cv2.findContours(bmask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if b_contours:
@@ -3121,16 +2798,15 @@ class create_Mask_match_shape:
                 b_rect_width, b_rect_height = bmask_width, bmask_height  
                 b_rect_center_x, b_rect_center_y = b_center_x, b_center_y
 
-            # 确保缩放后 fimg 和 fmask 的高度与 bmask 一致
-            target_height = bmask_height  # 👈 确保缩放目标高度与 bmask 高度一致
+            # 计算缩放比例
+            target_height = bmask_height
             original_aspect_ratio = f_original_width / f_original_height
             target_width = int(target_height * original_aspect_ratio)
 
-            # 计算缩放比例
             base_scale = target_height / f_original_height
             initial_scale = base_scale * f_scale
 
-            # 缩放 fimg 和 fmask
+            # 缩放处理
             new_size = (int(f_original_width * initial_scale), int(f_original_height * initial_scale))
             fimg_scaled = fimg_pil.resize(new_size, resample=resample_method)
             fmask_scaled = fmask_pil.resize(new_size, resample=resample_method)
@@ -3140,15 +2816,15 @@ class create_Mask_match_shape:
                 fimg_scaled = fimg_scaled.rotate(f_rot, expand=True, resample=rotate_resample)
                 fmask_scaled = fmask_scaled.rotate(f_rot, expand=True, resample=rotate_resample)
 
-            # 确保缩放后高度一致
+            # 计算放置位置
             fmask_scaled_np = np.array(fmask_scaled)
             _, fmask_bin = cv2.threshold(fmask_scaled_np, 127, 255, cv2.THRESH_BINARY)
-            f_rot_contours, _ = cv2.findContours(fmask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            f_contours, _ = cv2.findContours(fmask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             # 获取旋转后的中心点
             rf_center_x, rf_center_y = fmask_scaled.width // 2, fmask_scaled.height // 2
-            if f_rot_contours:
-                rf_moments = [cv2.moments(cnt) for cnt in f_rot_contours]
+            if f_contours:
+                rf_moments = [cv2.moments(cnt) for cnt in f_contours]
                 rf_contour_centers = []
                 for m in rf_moments:
                     if m["m00"] != 0:
@@ -3159,46 +2835,60 @@ class create_Mask_match_shape:
                     rf_center_x = int(sum(x for x, y in rf_contour_centers) / len(rf_contour_centers))
                     rf_center_y = int(sum(y for x, y in rf_contour_centers) / len(rf_contour_centers))
 
-            # 计算放置位置
+            # 计算最终放置位置
             base_x = b_rect_center_x - rf_center_x + f_x_offset
             base_y = b_rect_center_y - rf_center_y + f_y_offset
 
-            # 处理 fmask
-            fmask_scaled_np = np.array(fmask_scaled)
-            _, fmask_bin = cv2.threshold(fmask_scaled_np, 127, 255, cv2.THRESH_BINARY)
-            f_contours, _ = cv2.findContours(fmask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
+            # 处理前景遮罩并生成边缘检测用的轮廓
             fmask_processed = np.zeros_like(fmask_bin)
+            edge_contours = []  # 存储用于边缘检测的轮廓
+            
             if np.count_nonzero(fmask_bin) > 0:
                 f_contours, _ = cv2.findContours(fmask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 if f_contours:
                     for contour in f_contours:
                         if f_extrant_to_block:
+                            # 生成矩形边界并用于边缘检测
                             x, y, w, h = cv2.boundingRect(contour)
+                            rect_contour = np.array([
+                                [[x, y]],
+                                [[x+w, y]],
+                                [[x+w, y+h]],
+                                [[x, y+h]]
+                            ], dtype=np.int32)
+                            edge_contours.append(rect_contour)
                             cv2.rectangle(fmask_processed, (x, y), (x + w, y + h), 255, thickness=cv2.FILLED)
                         else:
+                            # 保持原始轮廓形状用于边缘检测
+                            edge_contours.append(contour)
                             cv2.drawContours(fmask_processed, [contour], 0, 255, thickness=1)
             
             fmask_final = np.maximum(fmask_bin, fmask_processed)
             fmask_final_pil = Image.fromarray(fmask_final)
 
-            # 边缘检测
-            if edge_detection and len(f_contours) > 0:
+            # 边缘检测（使用与遮罩相同的轮廓数据）
+            if edge_detection and len(edge_contours) > 0:
                 edge_img = Image.new('RGBA', fimg_scaled.size, (0, 0, 0, 0))
+                edge_mask = Image.new('L', fimg_scaled.size, 0)
                 draw = ImageDraw.Draw(edge_img)
+                draw_mask = ImageDraw.Draw(edge_mask)
                 edge_color_rgb = self.bg_colors.get(edge_color, (255, 255, 255))
-                for contour in f_contours:
+                
+                # 使用与遮罩相同的轮廓数据生成边缘
+                for contour in edge_contours:
                     points = [(p[0][0], p[0][1]) for p in contour]
                     if len(points) >= 2:
                         draw.line(points, fill=(*edge_color_rgb, 255), width=edge_thickness)
-                if f_rot != 0:
-                    edge_img = edge_img.rotate(f_rot, expand=True, resample=rotate_resample)
-                edge_image = edge_img  
+                        draw_mask.line(points, fill=255, width=edge_thickness)
+                
+                edge_image = edge_img
+                edge_mask_image = edge_mask
 
             # 合成前景图像
             fg_with_alpha = Image.new('RGBA', bimg_processed.size, (0, 0, 0, 0))
             fg_with_alpha.paste(fimg_scaled, (base_x, base_y), mask=fmask_final_pil)
 
+            # 添加边缘（如果有）
             if edge_image is not None:
                 fg_with_alpha.paste(edge_image, (base_x, base_y), mask=edge_image.split()[-1])
 
@@ -3226,7 +2916,7 @@ class create_Mask_match_shape:
                 fg_mask_np = cv2.GaussianBlur(fg_mask_np, (0, 0), sigmaX=f_smoothness)
             final_mask_np = np.maximum(bg_color_mask, fg_mask_np)
         else:
-            # 如果没有前景图像，只处理边缘
+            # 如果没有前景，处理背景边缘
             if edge_detection and len(contours) > 0:
                 edge_img = Image.new('RGBA', bimg_processed.size, (0, 0, 0, 0))
                 draw = ImageDraw.Draw(edge_img)
@@ -3250,3 +2940,6 @@ class create_Mask_match_shape:
         if image_output in ("Hide", "Hide/Save"):
             return {"ui": {}, "result": (composed_tensor, final_mask_tensor)}        
         return {"ui": {"images": results}, "result": (composed_tensor, final_mask_tensor)}
+
+
+
