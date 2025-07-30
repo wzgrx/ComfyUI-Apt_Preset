@@ -2803,8 +2803,8 @@
     }
   },
 
-"lay_imgCanvasNode": {
-    "display_name": "lay_imgCanvasNode",
+"lay_imgCanvas": {
+    "display_name": "lay_imgCanvas",
     "inputs": {
         "back_image": {
             "name": "背景图像"
