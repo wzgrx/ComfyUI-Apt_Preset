@@ -462,6 +462,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 
 "chx_ksampler_tile": "chx_ksampler_tile(sole)",   
 "chx_Ksampler_inpaint": "chx_Ksampler_inpaint(sole)",
-
+"lay_imgCanvas":"排版_图层对齐",
 
 }
