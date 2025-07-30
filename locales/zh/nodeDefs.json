@@ -2804,7 +2804,7 @@
   },
 
 "lay_imgCanvasNode": {
-    "display_name": "排版_图像画布",
+    "display_name": "lay_imgCanvasNode",
     "inputs": {
         "back_image": {
             "name": "背景图像"
