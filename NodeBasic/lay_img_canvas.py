@@ -88,7 +88,7 @@ class lay_imgCanvasNode:
     RETURN_TYPES = ("IMAGE", "MASK")
     RETURN_NAMES = ("image", "mask")
     FUNCTION = "process"
-    CATEGORY = "image/process"
+    CATEGORY = "Apt_Preset/imgEffect"
     @classmethod
     def INPUT_TYPES(s):
         return {
