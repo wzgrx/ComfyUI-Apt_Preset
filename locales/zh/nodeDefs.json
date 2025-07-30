@@ -2830,7 +2830,7 @@
 },
 
 
-  "stack_Mask2color": {
+"stack_Mask2colo": {
     "display_name": "堆_遮罩信息",
     "inputs": {
         "1_mask_color": {
@@ -2877,6 +2877,53 @@
     }
 },
 
+
+"stack_Mask2color": {
+    "display_name": "堆叠_遮罩信息",
+    "inputs": {
+        "mask1_color": {
+            "name": "1遮罩颜色"
+        },
+        "fill1": {
+            "name": "1填充"
+        },
+        "outline_thickness1": {
+            "name": "1轮廓厚度"
+        },
+        "extrant_to_block1": {
+            "name": "1矩形化"
+        },
+        "mask2_color": {
+            "name": "2遮罩颜色"
+        },
+        "fill2": {
+            "name": "2填充"
+        },
+        "outline_thickness2": {
+            "name": "2轮廓厚度"
+        },
+        "extrant_to_block2": {
+            "name": "2矩形化"
+        },
+        "mask3_color": {
+            "name": "3遮罩颜色"
+        },
+        "fill3": {
+            "name": "3填充"
+        },
+        "outline_thickness3": {
+            "name": "3轮廓厚度"
+        },
+        "extrant_to_block3": {
+            "name": "3矩形化"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "遮罩信息"
+        }
+    }
+},
 
   "list_ListMerge": {
     "display_name": "list_ListMerge",
