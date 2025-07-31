@@ -1118,23 +1118,19 @@ class text_CSV_load:
 
 
 
+ 
 class excel_Prompter:
+    # 获取当前脚本所在目录
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    EXCEL_DIR = os.path.join(BASE_DIR, "excel")
-    MAX_INPUTS = 15
-
-    def __init__(self):
-        self.excel_data = {}
-
-    @staticmethod
-    def extract_number(filename: str) -> int:
-        """从文件名提取开头数字，用于排序"""
-        match = re.match(r'^\d+', filename)
-        return int(match.group(0)) if match else 0
+    EXCEL_DIR = os.path.join(BASE_DIR, "excel")  # Excel文件存放目录
 
     @staticmethod
     def load_excel(excel_path: str) -> dict:
-        """加载Excel文件，返回{ID: [正向提示, 负向提示]}格式"""
+        """加载指定Excel文件，返回{ID: [正向提示, 负向提示]}格式"""
+        if not os.path.exists(excel_path):
+            print(f"Excel文件不存在: {excel_path}")
+            return {"文件不存在": ["", ""]}
+            
         try:
             workbook = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
             sheet = workbook.active
@@ -1142,105 +1138,204 @@ class excel_Prompter:
             id_col = headers.index('ID') if 'ID' in headers else 0
             pos_col = headers.index('Positive') if 'Positive' in headers else 1
             neg_col = headers.index('Negative') if 'Negative' in headers else 2
-            return {row[id_col]: [str(row[pos_col] or ''), str(row[neg_col] or '')] 
-                    for row in sheet.iter_rows(min_row=2, values_only=True) if row[id_col]}
+            
+            data = {}
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                if row[id_col]:  # 确保ID存在
+                    pos_val = str(row[pos_col] or '')
+                    neg_val = str(row[neg_col] or '')
+                    data[row[id_col]] = [pos_val, neg_val]
+            
+            workbook.close()
+            return data if data else {"无有效数据": ["", ""]}
+            
         except Exception as e:
             print(f"加载Excel失败: {excel_path} - {e}")
             return {"加载失败": ["", ""]}
 
-    @classmethod
-    def get_excel_files(cls) -> dict:
-        """获取并排序Excel文件，限制最多加载MAX_INPUTS个"""
-        if not os.path.exists(cls.EXCEL_DIR):
-            print("Excel目录不存在")
-            return {}
+    @staticmethod
+    def split_with_quotes(s):
+        """处理带引号的字符串分割，保留引号内的内容"""
+        pattern = r'"([^"]*)"|\s*([^,]+)'
+        matches = re.finditer(pattern, s)
+        return [match.group(1) or match.group(2).strip() for match in matches if match.group(1) or match.group(2).strip()]
+
+    def single_replace(self, text, target, replacement):
+        """执行单个目标替换，支持带空格的标识符"""
+        if not target or not replacement:
+            return text
             
-        files = [f for f in os.listdir(cls.EXCEL_DIR) if f.endswith('.xlsx')]
+        target_clean = target.strip('"').strip()
+        replacement_clean = replacement.strip('"').strip()
         
-        if not files:
-            print("目录中没有.xlsx文件")
-            return {}
+        # 对于带空格的目标使用精确匹配，否则使用单词边界匹配
+        if ' ' in target_clean:
+            pattern = re.escape(target_clean)
+        else:
+            pattern = r'\b' + re.escape(target_clean) + r'\b'
+        
+        return re.sub(pattern, replacement_clean, text)
+    
+    def multi_replace(self, text, multi_targets, multi_replacements):
+        """执行多个目标替换，支持@分隔的多个替换"""
+        if not multi_targets or not multi_replacements:
+            return text
             
-        files.sort(key=lambda x: (cls.extract_number(x), x))
+        targets = multi_targets.split('@')
+        replacements = multi_replacements.split('@')
         
-        result = {}
-        for f in files[:cls.MAX_INPUTS]:
-            file_path = os.path.join(cls.EXCEL_DIR, f)
-            file_data = cls.load_excel(file_path)
-            result[f.replace('.xlsx', '')] = file_data
+        # 确保两个列表长度一致
+        if len(targets) != len(replacements):
+            # 如果长度不一致，以较短的为准
+            min_len = min(len(targets), len(replacements))
+            targets = targets[:min_len]
+            replacements = replacements[:min_len]
+        
+        result = text
+        for target, replacement in zip(targets, replacements):
+            result = self.single_replace(result, target.strip(), replacement.strip())
         
         return result
 
     @classmethod
-    def INPUT_TYPES(cls) -> dict:
-        """定义节点输入类型，为每个Excel文件创建下拉选项"""
-        # 在每次调用INPUT_TYPES时都重新加载数据
-        excel_data = cls.get_excel_files()
-        
-        inputs = {"required": {"subject": ("STRING", {"multiline": True})}}
-        
-        if not excel_data:
-            # 如果没有Excel文件，提供默认选项
-            for i in range(cls.MAX_INPUTS):
-                inputs["required"][f"input_{i+1}"] = (["未找到Excel文件"],)
-        else:
-            # 为每个Excel文件创建一个下拉菜单
-            file_types = list(excel_data.keys())
-            for i in range(cls.MAX_INPUTS):
-                if i < len(file_types):
-                    file_type = file_types[i]
-                    options = list(excel_data[file_type].keys())
-                    if options:
-                        inputs["required"][f"input_{i+1}"] = (options,)
-                    else:
-                        inputs["required"][f"input_{i+1}"] = (["无数据"],)
-                else:
-                    inputs["required"][f"input_{i+1}"] = (["无数据"],)
-            
-        return inputs
+    def INPUT_TYPES(cls):
+        # 直接为每个Excel文件创建类属性并加载数据
+        cls.人工建筑 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "人工建筑.xlsx"))
+        cls.光线 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "光线.xlsx"))
+        cls.影视摄影 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "影视摄影.xlsx"))
+        cls.材质 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "材质.xlsx"))
+        cls.自定义 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "自定义.xlsx"))
+        cls.自然场景 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "自然场景.xlsx"))
+        cls.自然现象 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "自然现象.xlsx"))
+        cls.视觉镜头 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "视觉镜头.xlsx"))
+        cls.起手式 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "起手式.xlsx"))
+        cls.风格 = cls.load_excel(os.path.join(cls.EXCEL_DIR, "风格.xlsx"))
+
+        # 定义输入类型，包含2个固定替换和1个自定义替换
+        return {
+            "required": {
+                "起手式": (list(cls.起手式.keys()),),
+                "风格": (list(cls.风格.keys()),),
+                "光线": (list(cls.光线.keys()),),
+                "材质": (list(cls.材质.keys()),),
+                "人工建筑": (list(cls.人工建筑.keys()),),
+                "自然场景": (list(cls.自然场景.keys()),),
+                "自然现象": (list(cls.自然现象.keys()),),
+                "视觉镜头": (list(cls.视觉镜头.keys()),),
+                "影视摄影": (list(cls.影视摄影.keys()),),
+                "自定义": (list(cls.自定义.keys()),),
+                # 固定替换1: 替换{prompt}
+                "replace_prompt": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "label": "替换 {prompt}"
+                }),
+                # 固定替换2: 替换{object}
+                "replace_object": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "label": "替换 {object}"
+                }),
+            },
+            "optional": {
+                # 自定义替换
+                "custom_targets": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "label": "自定义目标标识符(多个用@分隔)"
+                }),
+                "custom_replacements": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "label": "自定义替换内容(多个用@分隔)"
+                })
+            }
+        }
 
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("pos", "neg")
     FUNCTION = "execute"
     CATEGORY = "Apt_Preset/prompt"
 
-    def execute(self, **kwargs) -> tuple:
-        """组合所有选中的正负向提示词"""
-        # 在执行时加载数据（如果尚未加载）
-        if not self.excel_data:
-            self.excel_data = self.get_excel_files()
-        
-        subject = kwargs.pop("subject", "")
-        pos_prompt = ""
-        neg_prompt = ""
-        
-        # 处理输入参数
-        for param_name, param_value in kwargs.items():
-            # 跳过提示信息等非输入参数
-            if param_value in ["未找到Excel文件", "无数据", "加载失败"]:
-                continue
-                
-            # 在所有数据中查找匹配的ID
-            found = False
-            for file_type, data in self.excel_data.items():
-                if param_value in data:
-                    pos_prompt += data[param_value][0] + " "
-                    neg_prompt += data[param_value][1] + " "
-                    found = True
-                    break
+    def execute(self, 人工建筑, 光线, 影视摄影, 材质, 自定义, 自然场景, 自然现象, 视觉镜头, 起手式, 风格, 
+                replace_prompt="", replace_object="", custom_targets="", custom_replacements=""):
+        # 组合所有正向和负向提示词
+        positive_prompt = ""
+        negative_prompt = ""
+
+        # 直接使用类属性和参数组合提示词
+        if 人工建筑 in self.人工建筑:
+            positive_prompt += self.人工建筑[人工建筑][0] + " "
+            negative_prompt += self.人工建筑[人工建筑][1] + " "
             
-            if not found and param_value not in ["请选择", "未找到Excel文件", "无数据", "加载失败"]:
-                print(f"未找到ID: {param_value}")
-        
-        pos = pos_prompt.strip()
-        neg = neg_prompt.strip()
-        
-        if "{prompt}" in pos:
-            pos = pos.replace("{prompt}", subject)
-        elif subject:
-            pos = f"{subject} {pos}"
+        if 光线 in self.光线:
+            positive_prompt += self.光线[光线][0] + " "
+            negative_prompt += self.光线[光线][1] + " "
             
+        if 影视摄影 in self.影视摄影:
+            positive_prompt += self.影视摄影[影视摄影][0] + " "
+            negative_prompt += self.影视摄影[影视摄影][1] + " "
+            
+        if 材质 in self.材质:
+            positive_prompt += self.材质[材质][0] + " "
+            negative_prompt += self.材质[材质][1] + " "
+            
+        if 自定义 in self.自定义:
+            positive_prompt += self.自定义[自定义][0] + " "
+            negative_prompt += self.自定义[自定义][1] + " "
+            
+        if 自然场景 in self.自然场景:
+            positive_prompt += self.自然场景[自然场景][0] + " "
+            negative_prompt += self.自然场景[自然场景][1] + " "
+            
+        if 自然现象 in self.自然现象:
+            positive_prompt += self.自然现象[自然现象][0] + " "
+            negative_prompt += self.自然现象[自然现象][1] + " "
+            
+        if 视觉镜头 in self.视觉镜头:
+            positive_prompt += self.视觉镜头[视觉镜头][0] + " "
+            negative_prompt += self.视觉镜头[视觉镜头][1] + " "
+            
+        if 起手式 in self.起手式:
+            positive_prompt += self.起手式[起手式][0] + " "
+            negative_prompt += self.起手式[起手式][1] + " "
+            
+        if 风格 in self.风格:
+            positive_prompt += self.风格[风格][0] + " "
+            negative_prompt += self.风格[风格][1] + " "
+
+        pos = positive_prompt.strip()
+        neg = negative_prompt.strip()
+
+        # 执行固定替换1: 替换{prompt}
+        if replace_prompt is not None:
+            pos = self.single_replace(pos, "{prompt}", replace_prompt)
+            
+        # 执行固定替换2: 替换{object}
+        if replace_object is not None:
+            pos = self.single_replace(pos, "{object}", replace_object)
+            
+        # 执行自定义替换
+        if custom_targets and custom_replacements:
+            pos = self.multi_replace(pos, custom_targets, custom_replacements)
+        
         return (pos, neg)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
