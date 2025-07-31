@@ -1,61 +1,38 @@
 
-
-
-#region-----------导入与全局函数-------------------------------------------------
-# 内置库
-import os
-import sys
-import glob
-import csv
-import json
-import math
-from telnetlib import OUTMRK
-import re
-#from turtle import width
-
-
-
-# 第三方库
+#region------------------导入库----------------------------------------------------#
 import numpy as np
 import torch
-import toml
-import aiohttp
-from aiohttp import web
-from PIL import Image, ImageFilter
-from tqdm import tqdm
-
-import nodes
-# 本地库
-import comfy
-import folder_paths
-import node_helpers
-import latent_preview
-from server import PromptServer
-from nodes import common_ksampler, CLIPTextEncode, ControlNetLoader, LoadImage, ControlNetApplyAdvanced, VAEDecode, VAEEncode, DualCLIPLoader, CLIPLoader,ConditioningConcat, ConditioningAverage, InpaintModelConditioning, LoraLoader, CheckpointLoaderSimple, ImageScale,VAEDecodeTiled,VAELoader
+import os
+import comfy.utils
 from comfy.cli_args import args
-from comfy.cldm.control_types import UNION_CONTROLNET_TYPES
-from typing import Optional, Tuple, Dict, Any, Union, cast
-from comfy.comfy_types.node_typing import IO
-from comfy_extras.nodes_custom_sampler import RandomNoise,  BasicScheduler, KSamplerSelect, SamplerCustomAdvanced, BasicGuider
-from comfy_extras.nodes_sd3 import TripleCLIPLoader
-
-from comfy_extras.nodes_differential_diffusion import DifferentialDiffusion
-from comfy_extras.nodes_controlnet import SetUnionControlNetType
+import comfy.samplers
+import json
+import csv
+import re
+import math
+from comfy_extras.chainner_models import model_loading
+import folder_paths
+from comfy import model_management
 from math import ceil
-from nodes import CLIPSetLastLayer, CheckpointLoaderSimple, UNETLoader
-from comfy_extras.nodes_hidream import QuadrupleCLIPLoader
-from comfy_extras.nodes_hooks import PairConditioningSetProperties
-from comfy.utils import load_torch_file as comfy_load_torch_file
-
-from .load_GGUF.nodes import  UnetLoaderGGUF2
-
-from ..main_unit import *
-
-
-
-
-
-
+import torchvision.transforms.functional as TF
+from typing import cast
+import numbers
+from io import BytesIO
+import matplotlib.pyplot as plt
+from typing import Any, Callable, Mapping
+import logging
+from PIL import Image, ImageChops, ImageFilter
+from nodes import PreviewImage, SaveImage
+import numpy.typing as npt
+from PIL import Image, ImageDraw,  ImageFilter,  ImageChops, ImageDraw, ImageFont
+import hashlib
+import torch.nn.functional as F
+from scipy.fft import fft
+from dataclasses import dataclass
+from comfy.utils import ProgressBar
+from comfy.utils import common_upscale
+import node_helpers
+from enum import Enum
 #---------------------安全导入------
 try:
     import cv2
@@ -66,3595 +43,2419 @@ except ImportError:
 
 
 
-
-
-#region---------------注册和检测gguf----------------------------------------
-
-def update_folder_names_and_paths(key, targets=[]):
-    base = folder_paths.folder_names_and_paths.get(key, ([], {}))
-    base = base[0] if isinstance(base[0], (list, set, tuple)) else []
-    target = next((x for x in targets if x in folder_paths.folder_names_and_paths), targets[0])
-    orig, _ = folder_paths.folder_names_and_paths.get(target, ([], {}))
-    folder_paths.folder_names_and_paths[key] = (orig or base, {".gguf"})
-    if base and base != orig:
-        logging.warning(f"Unknown file list already present on key {key}: {base}")
-update_folder_names_and_paths("unet_gguf", ["diffusion_models", "unet"])
-update_folder_names_and_paths("clip_gguf", ["text_encoders", "clip"])
+#endregion------------------导入库----------------------------------------------------#
 
 
 
-
-def check_UnetLoaderGGUF2_installed():
-    if UnetLoaderGGUF2 is None:
-        raise RuntimeError(" Please install the plugin ComfyUI-GGUF first")
+#region-------------------路径、数据------------------------------------------------------------------------------#
 
 
+MAX_RESOLUTION=10240
 
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
+class AnyType(str):
+    def __eq__(self, _) -> bool:
+        return True
+    def __ne__(self, __value: object) -> bool:
+        return False
+ANY_TYPE = AnyType("*")
+any_type = AnyType("*")
+anyType = AnyType("*")
+anytype = AnyType("*")
 
-#endregion---------------注册gguf----------------------------------------
+MAX_RESOLUTION = 88888
+CLIP_TYPE = ["sdxl", "sd3", "flux", "hunyuan_video", "stable_diffusion", "stable_audio", "mochi", "ltxv", "pixart", "cosmos", "lumina2", "wan"]
 
-
-
-
-#region------------------------preset---------------------------------#
-
-
-# 获取当前文件所在目录的上一级目录
-parent_directory = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-
-# 插入上一级目录下的 comfy 到 sys.path
-sys.path.insert(0, os.path.join(parent_directory, "comfy"))
-
-routes = PromptServer.instance.routes
-@routes.post('/Apt_Preset_path')
-async def my_function(request):
-    the_data = await request.post()
-    sum_load_adv.handle_my_message(the_data)
-    return web.json_response({})
-
-# 使用上一级目录作为基础路径
-my_directory_path = parent_directory
-presets_directory_path = os.path.join(my_directory_path, "presets")
-
-
-preset_list = []
-tmp_list = []
-tmp_list += glob.glob(f"{presets_directory_path}/**/*.toml", recursive=True)
-for l in tmp_list:
-    preset_list.append(os.path.relpath(l, presets_directory_path))
-
-if len(preset_list) > 1: preset_list.sort()
 
 
 available_ckpt = folder_paths.get_filename_list("checkpoints")
 available_unets = list(set(folder_paths.get_filename_list("unet") + folder_paths.get_filename_list("unet_gguf")))
 available_clips = list(set(folder_paths.get_filename_list("text_encoders") + folder_paths.get_filename_list("clip_gguf")))
-
-CLIP_TYPE = ["sdxl", "sd3", "flux", "hunyuan_video", "stable_diffusion", "stable_audio", "mochi", "ltxv", "pixart", "cosmos", "lumina2", "wan"]
-
-
-
-
-
-def getNewTomlnameExt(tomlname, folderpath, savetype):
-
-    tomlnameExt = tomlname + ".toml"
-    
-    if savetype == "new save":
-
-        filename_list = []
-        tmp_list = []
-        tmp_list += glob.glob(f"{folderpath}/**/*.toml", recursive=True)
-        for l in tmp_list:
-            filename_list.append(os.path.relpath(l, folderpath))
-        
-        duplication_flag = False
-        for f in filename_list:
-            if tomlnameExt == f:
-                duplication_flag = True
-                
-        if duplication_flag:
-            count = 1
-            while duplication_flag:
-                new_tomlnameExt = f"{tomlname}_{count}.toml"
-                if not new_tomlnameExt in filename_list:
-                    tomlnameExt = new_tomlnameExt
-                    duplication_flag = False
-                count += 1
-                
-    return tomlnameExt
-
-
-#endregion------------------------preset---------------------------------#
-
-#endregion
-
-
-#region-----------基础节点context------------------------------------------------------------------------------#
+available_loras = folder_paths.get_filename_list("loras")
+available_vaes = folder_paths.get_filename_list("vae")
+available_embeddings = folder_paths.get_filename_list("embeddings")
+available_style_models = folder_paths.get_filename_list("style_models")
+available_clip_visions = folder_paths.get_filename_list("clip_vision")
+available_controlnet=folder_paths.get_filename_list("controlnet")
+available_samplers = comfy.samplers.KSampler.SAMPLERS
+available_schedulers = comfy.samplers.KSampler.SCHEDULERS
 
 
 
-class Data_chx_Merge:
-    @classmethod
-    def INPUT_TYPES(cls): 
-        return {
-            "required": {  },
-            "optional": {
-            "context": ("RUN_CONTEXT",),  
-                "chx1": ("RUN_CONTEXT",),
-                "chx2": ("RUN_CONTEXT",),
-            },
-        }
-
-    RETURN_TYPES = "RUN_CONTEXT",
-    RETURN_NAMES = "context",
-    CATEGORY = "Apt_Preset/chx_load"
-    FUNCTION = "merge"
-    
-
-    def get_return_tuple(self, ctx):
-        return get_orig_context_return_tuple(ctx)
-
-    def merge(self, context=None, chx1=None, chx2=None):
-        ctxs = [context, chx1, chx2]  
-        ctx = merge_new_context(*ctxs)
-        return self.get_return_tuple(ctx)
-
-
-class Data_basic:   
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            
-            "required": {  "context": ("RUN_CONTEXT",),   
-                
-                    },
-            "optional": {
-
-                "model": ("MODEL",),
-                "positive": ("CONDITIONING",),
-                "negative": ("CONDITIONING",),
-                "latent": ("LATENT",),
-                "vae": ("VAE",),
-                "clip": ("CLIP",),
-                "images": ("IMAGE",),
-                "mask": ("MASK",), 
-            },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "CONDITIONING","CONDITIONING","LATENT","VAE","CLIP","IMAGE","MASK",)
-    RETURN_NAMES = ("context", "model","positive","negative","latent","vae","clip","images","mask",)
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_load"
-
-    def sample(self, context=None,model=None,positive=None,negative=None,latent=None,vae =None,clip =None,images =None, mask =None,):
-        
-
-        if model is None:
-            model = context.get("model")
-        if positive is None:
-            positive = context.get("positive")
-        if negative is None:
-            negative = context.get("negative")
-        if vae is None:
-            vae = context.get("vae")
-        if clip is None:
-            clip = context.get("clip")
-        
-        if latent is None:
-            latent = context.get("latent")
-        if images is None:
-            images = context.get("images")
-        if mask is None:
-            mask = context.get("mask")
-        
-        context = new_context(context,model=model,positive=positive,negative=negative,latent=latent,vae=vae,clip=clip,images=images,mask=mask,)
-        return (context, model, positive, negative, latent, vae, clip, images, mask,)
-
-
-class Data_sampleData:  
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            
-            "optional": {  "context": ("RUN_CONTEXT",),   },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","INT","FLOAT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS)
-    RETURN_NAMES = ("context","steps","cfg","sampler","scheduler" )
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_load"
-
-    def sample(self, context, ):
-        
-        steps=context.get("steps",None)
-        cfg=context.get("cfg",None) 
-        sampler=context.get("sampler",None) 
-        scheduler=context.get("scheduler",None) 
-        
-        return (context,steps,cfg,sampler,scheduler )
 
 
 
-class Data_select:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": { "context": ("RUN_CONTEXT",),           
-                        },
-        
-            "optional": {
-                "type": (["model", "clip", "positive", "negative", "vae", "latent", "images", "mask",
-                        "clip1", 
-                        "clip2", 
-                        "clip3", 
-                        "clip4",
-                        "unet_name", 
-                        "ckpt_name",
-                        "pos", 
-                        "neg",
-                        "width",
-                        "height",
-                        "batch",
-                        "data",
-                        "data1",
-                        "data2",
-                        "data3",
-                        "data4",
-                        "data5",
-                        "data6",
-                        "data7",
-                        "data8",
-                        "data9",
-                        ], {}),
-            },
-        }
-
-    RETURN_TYPES = (ANY_TYPE,)
-    RETURN_NAMES = ("data",)
-    FUNCTION = "pipeout"
-
-    CATEGORY = "Apt_Preset/chx_load"
-
-    def pipeout(self, type, context=None):
-
-        out = context[type]
-        return (out,)
+def load_upscale_model(model_name):
+    model_path = folder_paths.get_full_path("upscale_models", model_name)
+    sd = comfy.utils.load_torch_file(model_path, safe_load=True)
+    if "module.layers.0.residual_group.blocks.0.norm1.weight" in sd:
+        sd = comfy.utils.state_dict_prefix_replace(sd, {"module.":""})
+    out = model_loading.load_state_dict(sd).eval()
+    return out
 
 
-class Data_presetData:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "optional": {
-                "context": ("RUN_CONTEXT",),
-            }
-        }
 
-    RETURN_TYPES = ("RUN_CONTEXT",                                     
-                    available_ckpt,
-                    available_unets, 
-                    available_clips,
-                    available_clips,
-                    available_clips,  
-                    available_clips,  
-                    "STRING", 
-                    "STRING", 
-                    "INT",
-                    "INT",
-                    "INT",
-                    )
 
-    RETURN_NAMES = (
-            "context",
-            "ckpt_name",
-            "unet_name", 
-            "clip1_name", 
-            "clip2_name", 
-            "clip3_name", 
-            "clip4_name", 
-            "pos", 
-            "neg",
-            "width",
-            "height",
-            "batch",
-                    )
+#endregion-----------路径、数据------------------------------------------------------------------------------#
 
-    CATEGORY = "Apt_Preset/chx_load"
-    FUNCTION = "convert"
 
-    def convert(self, context=None):
-        ckpt_name = context.get("ckpt_name", None)
-        unet_name = context.get("unet_name", None)
-        clip1 = context.get("clip1", None)
-        clip2 = context.get("clip2", None)
-        clip3 = context.get("clip3", None)
-        clip4 = context.get("clip3", None)
-        pos = context.get("pos", None)
-        neg = context.get("neg", None)
-        width = context.get("width", None)
-        height = context.get("height", None)
-        batch = context.get("batch", None)
 
-        return (
-            context,
-            ckpt_name,
-            unet_name, 
-            clip1, 
-            clip2, 
-            clip3, 
-            clip4, 
-            pos, 
-            neg,
-            width,
-            height,
-            batch
+#region-------------------context全局定义------------------------------------------------------------------------------#
+
+
+
+
+_all_contextput_output_data = {
+    "context": ("context", "RUN_CONTEXT", "context"),
+    "model": ("model", "MODEL", "model"),
+    "positive": ("positive", "CONDITIONING", "positive"),
+    "negative": ("negative", "CONDITIONING", "negative"),
+    "latent": ("latent", "LATENT", "latent"),
+    "vae": ("vae", "VAE", "vae"),
+    "clip": ("clip","CLIP", "clip"),
+    "images": ("images", "IMAGE", "images"),
+    "mask": ("mask", "MASK", "mask"),
+    "guidance": ("guidance", "FLOAT", "guidance"),
+    "steps": ("steps", "INT", "steps"),
+    "cfg": ("cfg", "FLOAT", "cfg"),
+    "sampler": ("sampler", available_samplers, "sampler"),
+    "scheduler": ("scheduler", available_schedulers, "scheduler"),
+
+    "clip1": ("clip1", available_clips, "clip1"),
+    "clip2": ("clip2", available_clips, "clip2"),
+    "clip3": ("clip3", available_clips, "clip3"),
+    "clip4": ("clip4", available_clips, "clip3"),
+    "unet_name": ("unet_name", available_unets, "unet_name"),
+    "ckpt_name": ("ckpt_name", available_ckpt, "ckpt_name"),
+    "pos": ("pos", "STRING", "pos"),
+    "neg": ("neg", "STRING", "neg"),
+    "width": ("width", "INT","width" ),
+    "height": ("height", "INT","height"),
+    "batch": ("batch", "INT","batch"),
+    "data": ("data", ANY_TYPE, "data"),
+    "data1": ("data1", ANY_TYPE, "data1"),
+    "data2": ("data2", ANY_TYPE, "data2"),
+    "data3": ("data3", ANY_TYPE, "data3"),
+    "data4": ("data4", ANY_TYPE, "data4"),
+    "data5": ("data5", ANY_TYPE, "data5"),
+    "data6": ("data6", ANY_TYPE, "data6"),
+    "data7": ("data7", ANY_TYPE, "data7"),
+    "data8": ("data8", ANY_TYPE, "data8"),
+
+}
+
+force_input_types = ["INT", "STRING", "FLOAT"]
+force_input_names = ["sampler", "scheduler","clip1", "clip2", "clip3","clip4", "unet_name", "ckpt_name"]
+
+
+def _create_context_data(input_list=None):
+    if input_list is None:
+        input_list = _all_contextput_output_data.keys()
+    list_ctx_return_types = []
+    list_ctx_return_names = []
+    ctx_optional_inputs = {}
+    for inp in input_list:
+        data = _all_contextput_output_data[inp]
+        list_ctx_return_types.append(data[1])
+        list_ctx_return_names.append(data[2])
+        ctx_optional_inputs[data[0]] = tuple([data[1]] + (
+            [{"forceInput": True}] if data[1] in force_input_types or data[0] in force_input_names else []
+        ))
+    ctx_return_types = tuple(list_ctx_return_types)
+    ctx_return_names = tuple(list_ctx_return_names)
+    return (ctx_optional_inputs, ctx_return_types, ctx_return_names)
+
+ALL_CTX_OPTIONAL_INPUTS, ALL_CTX_RETURN_TYPES, ALL_CTX_RETURN_NAMES = _create_context_data()
+
+
+
+_original_ctx_inputs_list = ["context", "model", "positive", "negative", "latent", "vae", "clip", "images", "mask",]
+ORIG_CTX_OPTIONAL_INPUTS, ORIG_CTX_RETURN_TYPES, ORIG_CTX_RETURN_NAMES = _create_context_data(_original_ctx_inputs_list)
+
+
+_load_ctx_inputs_list = ["context", "clip1", "clip2", "clip3","clip4", "ckpt_name","unet_name", "pos","neg" ,"width", "height", "batch"]
+LOAD_CTX_OPTIONAL_INPUTS, LOAD_CTX_RETURN_TYPES, LOAD_CTX_RETURN_NAMES = _create_context_data(_load_ctx_inputs_list)
+
+
+
+def new_context(context, **kwargs):
+    context = context if context is not None else None
+    new_ctx = {}
+    for key in _all_contextput_output_data:
+        if key == "context":
+            continue
+        v = kwargs[key] if key in kwargs else None
+        new_ctx[key] = v if v is not None else (
+            context[key] if context is not None and key in context else None
         )
+    return new_ctx
 
 
-class Data_bus_chx:   
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            
-            "optional": {
-                "context": ("RUN_CONTEXT",),   
-                "data1": ( ANY_TYPE, ),
-                "data2": ( ANY_TYPE, ),
-                "data3": ( ANY_TYPE, ),
-                "data4": ( ANY_TYPE, ),
-                "data5": ( ANY_TYPE, ),
-                "data6": ( ANY_TYPE, ),
-                "data7": ( ANY_TYPE, ),
-                "data8": ( ANY_TYPE, ),
-            },
-        }
+def merge_new_context(*args):
+    new_ctx = {}
+    for key in _all_contextput_output_data:
+        if key == "base_ctx":
+            continue
+        v = None
+        for ctx in reversed(args):
+            v = ctx[key] if not is_context_empty(ctx) and key in ctx else None
+            if v is not None:
+                break
+        new_ctx[key] = v
+    return new_ctx
 
 
-    RETURN_TYPES = ("RUN_CONTEXT",ANY_TYPE,ANY_TYPE,ANY_TYPE,ANY_TYPE,ANY_TYPE,ANY_TYPE,ANY_TYPE,ANY_TYPE,)
-    RETURN_NAMES = ("context", "data1","data2","data3","data4","data5","data6","data7","data8",)
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_load"
+def get_context_return_tuple(ctx, inputs_list=None):
+    if inputs_list is None:
+        inputs_list = _all_contextput_output_data.keys()
+    tup_list = [ctx]
+    for key in inputs_list:
+        if key == "context":
+            continue
+        tup_list.append(ctx[key] if ctx is not None and key in ctx else None)
+    return tuple(tup_list)
 
-    def sample(self, context=None, data1=None, data2=None, data3=None, data4=None, data5=None, data6=None, data7=None, data8=None):
-        # 先检查 context 是否为 None
-        if context is None:
-            # 如果 context 为 None，可以创建一个新的上下文或者根据需求处理
-            # 这里假设 new_context 可以在没有输入的情况下创建一个默认的上下文
-            context = {}  # 或者使用其他方式初始化一个新的 context
 
-        if data1 is None:
-            data1 = context.get("data1")
-        if data2 is None:
-            data2 = context.get("data2")
-        if data3 is None:
-            data3 = context.get("data3")
-        if data4 is None:
-            data4 = context.get("data4")
-        if data5 is None:
-            data5 = context.get("data5")
-        if data6 is None:
-            data6 = context.get("data6")
-        if data7 is None:
-            data7 = context.get("data7")
-        if data8 is None:
-            data8 = context.get("data8")
+def get_orig_context_return_tuple(ctx):
+    return get_context_return_tuple(ctx, _original_ctx_inputs_list)
 
-        context = new_context(context, data1=data1, data2=data2, data3=data3, data4=data4, data5=data5, data6=data6, data7=data7, data8=data8)
+def get_load_context_return_tuple(ctx):
+    return get_context_return_tuple(ctx, _load_ctx_inputs_list)
 
-        return (context, data1,data2,data3,data4,data5,data6,data7,data8,)
+
+
+def is_context_empty(ctx):
+    return not ctx or all(v is None for v in ctx.values())
+
+
 
 #endregion
 
 
-#region-----------加载器load-----------------------------------------------------------------------------------#
+
+# region-----------------缓动函数------------------------------------------------------
+def easeInBack(t):
+    s = 1.70158
+    return t * t * ((s + 1) * t - s)
+
+def easeInOutSinSquared(t):
+    if t < 0.5:
+        return 0.5 * (1 - math.cos(t * 2 * math.pi))
+    else:
+        return 0.5 * (1 + math.cos((t - 0.5) * 2 * math.pi))
+
+def easeOutBack(t):
+    s = 1.70158
+    return ((t - 1) * t * ((s + 1) * t + s)) + 1
+
+def easeInOutBack(t):
+    s = 1.70158 * 1.525
+    if t < 0.5:
+        return (t * t * (t * (s + 1) - s)) * 2
+    return ((t - 2) * t * ((s + 1) * t + s) + 2) * 2
+
+# Elastic easing functions
+def easeInElastic(t):
+    if t == 0:
+        return 0
+    if t == 1:
+        return 1
+    p = 0.3
+    s = p / 4
+    return -(math.pow(2, 10 * (t - 1)) * math.sin((t - 1 - s) * (2 * math.pi) / p))
+
+def easeOutElastic(t):
+    if t == 0:
+        return 0
+    if t == 1:
+        return 1
+    p = 0.3
+    s = p / 4
+    return math.pow(2, -10 * t) * math.sin((t - s) * (2 * math.pi) / p) + 1
+
+def easeInOutElastic(t):
+    if t == 0:
+        return 0
+    if t == 1:
+        return 1
+    p = 0.3 * 1.5
+    s = p / 4
+    t = t * 2
+    if t < 1:
+        return -0.5 * (
+            math.pow(2, 10 * (t - 1)) * math.sin((t - 1 - s) * (2 * math.pi) / p)
+        )
+    return (
+        0.5 * math.pow(2, -10 * (t - 1)) * math.sin((t - 1 - s) * (2 * math.pi) / p)
+        + 1
+    )
+
+# Bounce easing functions
+def easeInBounce(t):
+    return 1 - easeOutBounce(1 - t)
+
+def easeOutBounce(t):
+    if t < (1 / 2.75):
+        return 7.5625 * t * t
+    elif t < (2 / 2.75):
+        t -= 1.5 / 2.75
+        return 7.5625 * t * t + 0.75
+    elif t < (2.5 / 2.75):
+        t -= 2.25 / 2.75
+        return 7.5625 * t * t + 0.9375
+    else:
+        t -= 2.625 / 2.75
+        return 7.5625 * t * t + 0.984375
+
+def easeInOutBounce(t):
+    if t < 0.5:
+        return easeInBounce(t * 2) * 0.5
+    return easeOutBounce(t * 2 - 1) * 0.5 + 0.5
+
+# Quart easing functions
+def easeInQuart(t):
+    return t * t * t * t
+
+def easeOutQuart(t):
+    t -= 1
+    return -(t**2 * t * t - 1)
+
+def easeInOutQuart(t):
+    t *= 2
+    if t < 1:
+        return 0.5 * t * t * t * t
+    t -= 2
+    return -0.5 * (t**2 * t * t - 2)
+
+# Cubic easing functions
+def easeInCubic(t):
+    return t * t * t
+
+def easeOutCubic(t):
+    t -= 1
+    return t**2 * t + 1
+
+def easeInOutCubic(t):
+    t *= 2
+    if t < 1:
+        return 0.5 * t * t * t
+    t -= 2
+    return 0.5 * (t**2 * t + 2)
+
+# Circ easing functions
+def easeInCirc(t):
+    return -(math.sqrt(1 - t * t) - 1)
+
+def easeOutCirc(t):
+    t -= 1
+    return math.sqrt(1 - t**2)
+
+def easeInOutCirc(t):
+    t *= 2
+    if t < 1:
+        return -0.5 * (math.sqrt(1 - t**2) - 1)
+    t -= 2
+    return 0.5 * (math.sqrt(1 - t**2) + 1)
+
+# Sine easing functions
+def easeInSine(t):
+    return -math.cos(t * (math.pi / 2)) + 1
+
+def easeOutSine(t):
+    return math.sin(t * (math.pi / 2))
+
+def easeInOutSine(t):
+    return -0.5 * (math.cos(math.pi * t) - 1)
+
+def easeLinear(t):
+    return t
+
+easing_functions = {
+    "Linear": easeLinear,
+    "Sine_In": easeInSine,
+    "Sine_Out": easeOutSine,
+    "Sine_InOut": easeInOutSine,
+    "Sin_Squared": easeInOutSinSquared,
+    "Quart_In": easeInQuart,
+    "Quart_Out": easeOutQuart,
+    "Quart_InOut": easeInOutQuart,
+    "Cubic_In": easeInCubic,
+    "Cubic_Out": easeOutCubic,
+    "Cubic_InOut": easeInOutCubic,
+    "Circ_In": easeInCirc,
+    "Circ_Out": easeOutCirc,
+    "Circ_InOut": easeInOutCirc,
+    "Back_In": easeInBack,
+    "Back_Out": easeOutBack,
+    "Back_InOut": easeInOutBack,
+    "Elastic_In": easeInElastic,
+    "Elastic_Out": easeOutElastic,
+    "Elastic_InOut": easeInOutElastic,
+    "Bounce_In": easeInBounce,
+    "Bounce_Out": easeOutBounce,
+    "Bounce_InOut": easeInOutBounce,
+}
+
+EASING_TYPES = list(easing_functions.keys())
+
+def apply_easing(value, easing_type):
+    function_ease = easing_functions.get(easing_type)
+    if function_ease:
+        return function_ease(value)
+    
+    raise ValueError(f"Unknown easing type: {easing_type}")
 
 
 
-def safe_load_torch_file(path, device="cpu"):
-    """兼容 PyTorch 2.6 的加载方式，先检测再降低安全等级"""
+# endregion---------------插值算法------------------------
+
+
+
+#region  ----------------math 算法-------------------------------------------------------------#
+
+
+DEFAULT_FLOAT = ("FLOAT", {"default": 1.0, "min": 0.0, "max": 9999.0, "step": 0.001,})
+
+FLOAT_UNARY_OPERATIONS: Mapping[str, Callable[[float], float]] = {
+    "Neg": lambda a: -a,
+    "Inc": lambda a: a + 1,
+    "Dec": lambda a: a - 1,
+    "Abs": lambda a: abs(a),
+    "Sqr": lambda a: a * a,
+    "Cube": lambda a: a * a * a,
+    "Sqrt": lambda a: math.sqrt(a),
+    "Exp": lambda a: math.exp(a),
+    "Ln": lambda a: math.log(a),
+    "Log10": lambda a: math.log10(a),
+    "Log2": lambda a: math.log2(a),
+    "Sin": lambda a: math.sin(a),
+    "Cos": lambda a: math.cos(a),
+    "Tan": lambda a: math.tan(a),
+    "Asin": lambda a: math.asin(a),
+    "Acos": lambda a: math.acos(a),
+    "Atan": lambda a: math.atan(a),
+    "Sinh": lambda a: math.sinh(a),
+    "Cosh": lambda a: math.cosh(a),
+    "Tanh": lambda a: math.tanh(a),
+    "Asinh": lambda a: math.asinh(a),
+    "Acosh": lambda a: math.acosh(a),
+    "Atanh": lambda a: math.atanh(a),
+    "Round": lambda a: round(a),
+    "Floor": lambda a: math.floor(a),
+    "Ceil": lambda a: math.ceil(a),
+    "Trunc": lambda a: math.trunc(a),
+    "Erf": lambda a: math.erf(a),
+    "Erfc": lambda a: math.erfc(a),
+    "Gamma": lambda a: math.gamma(a),
+    "Radians": lambda a: math.radians(a),
+    "Degrees": lambda a: math.degrees(a),
+}
+
+FLOAT_UNARY_CONDITIONS: Mapping[str, Callable[[float], bool]] = {
+    "IsZero": lambda a: a == 0.0000,
+    "IsPositive": lambda a: a > 0.000,
+    "IsNegative": lambda a: a < 0.000,
+    "IsNonZero": lambda a: a != 0.000,
+    "IsPositiveInfinity": lambda a: math.isinf(a) and a > 0.000,
+    "IsNegativeInfinity": lambda a: math.isinf(a) and a < 0.000,
+    "IsNaN": lambda a: math.isnan(a),
+    "IsFinite": lambda a: math.isfinite(a),
+    "IsInfinite": lambda a: math.isinf(a),
+    "IsEven": lambda a: a % 2 == 0.000,
+    "IsOdd": lambda a: a % 2 != 0.000,
+}
+
+FLOAT_BINARY_OPERATIONS: Mapping[str, Callable[[float, float], float]] = {
+    "Add": lambda a, b: a + b,
+    "Sub": lambda a, b: a - b,
+    "Mul": lambda a, b: a * b,
+    "Div": lambda a, b: a / b,
+    "Ceil": lambda a, b: math.ceil(a / b),
+    "Mod": lambda a, b: a % b,
+    "Pow": lambda a, b: a**b,
+    "FloorDiv": lambda a, b: a // b,
+    "Max": lambda a, b: max(a, b),
+    "Min": lambda a, b: min(a, b),
+    "Log": lambda a, b: math.log(a, b),
+    "Atan2": lambda a, b: math.atan2(a, b),
+}
+
+FLOAT_BINARY_CONDITIONS: Mapping[str, Callable[[float, float], bool]] = {
+    "Eq": lambda a, b: a == b,
+    "Neq": lambda a, b: a != b,
+    "Gt": lambda a, b: a > b,
+    "Gte": lambda a, b: a >= b,
+    "Lt": lambda a, b: a < b,
+    "Lte": lambda a, b: a <= b,
+}
+
+
+DEFAULT_INT = ("INT", {"default": 0})
+
+INT_UNARY_OPERATIONS: Mapping[str, Callable[[int], int]] = {
+    "Abs": lambda a: abs(a),
+    "Neg": lambda a: -a,
+    "Inc": lambda a: a + 1,
+    "Dec": lambda a: a - 1,
+    "Sqr": lambda a: a * a,
+    "Cube": lambda a: a * a * a,
+    "Not": lambda a: ~a,
+    "Factorial": lambda a: math.factorial(a),
+}
+
+INT_UNARY_CONDITIONS: Mapping[str, Callable[[int], bool]] = {
+    "IsZero": lambda a: a == 0,
+    "IsNonZero": lambda a: a != 0,
+    "IsPositive": lambda a: a > 0,
+    "IsNegative": lambda a: a < 0,
+    "IsEven": lambda a: a % 2 == 0,
+    "IsOdd": lambda a: a % 2 == 1,
+}
+
+INT_BINARY_OPERATIONS: Mapping[str, Callable[[int, int], int]] = {
+    "Add": lambda a, b: a + b,
+    "Sub": lambda a, b: a - b,
+    "Mul": lambda a, b: a * b,
+    "Div": lambda a, b: a // b,
+    "Ceil": lambda a, b: math.ceil(a / b),
+    "Mod": lambda a, b: a % b,
+    "Pow": lambda a, b: a**b,
+    "And": lambda a, b: a & b,
+    "Nand": lambda a, b: ~a & b,
+    "Or": lambda a, b: a | b,
+    "Nor": lambda a, b: ~a & b,
+    "Xor": lambda a, b: a ^ b,
+    "Xnor": lambda a, b: ~a ^ b,
+    "Shl": lambda a, b: a << b,
+    "Shr": lambda a, b: a >> b,
+    "Max": lambda a, b: max(a, b),
+    "Min": lambda a, b: min(a, b),
+}
+
+INT_BINARY_CONDITIONS: Mapping[str, Callable[[int, int], bool]] = {
+    "Eq": lambda a, b: a == b,
+    "Neq": lambda a, b: a != b,
+    "Gt": lambda a, b: a > b,
+    "Lt": lambda a, b: a < b,
+    "Geq": lambda a, b: a >= b,
+    "Leq": lambda a, b: a <= b,
+}
+
+# endregion-------------------------math 算法--------------------------------------------------#
+
+
+
+#region------------------调度数据-AD--sch prompt  def----------------------------------------------------#
+
+def adapt_to_batch(value, frame):    # 适应批处理数据处理，value对应当前的帧数
+    if not hasattr(value, '__iter__'):
+        value = [value]
+    if frame < len(value):
+        value = value[:frame]
+    elif frame > len(value):
+        last_value = value[-1]
+        value = value + [last_value] * (frame - len(value))
+    return value
+
+
+
+
+DefaultPromp = """0: a girl @Sine_In@
+7: a boy
+15: a dog
+"""
+
+
+
+DefaultValue = """0:0.5 @Sine_In@
+30:1
+60:0.5
+90:1
+120:0.5
+"""
+
+
+
+def lerp_tensors(tensor_from: torch.Tensor, tensor_to: torch.Tensor, weight: float):
+    return tensor_from * (1.0 - weight) + tensor_to * weight
+
+
+@dataclass
+class PromptKeyframe:
+    index: int
+    prompt: str
+    interp_method: str = "linear"
+
+
+class ValueKeyframe:
+    def __init__(self, index, value, interp_method):
+        self.index = index
+        self.value = value
+        self.interp_method = interp_method
+
+
+def parse_prompt_schedule(text: str, easing_type="Linear"):
+    keyframes = []
+    lines = text.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line or ':' not in line:
+            continue
+        idx_part, prompt_part = line.split(':', 1)
+        idx = int(idx_part.strip())
+        prompt = prompt_part.strip()
+
+        interp_method = easing_type
+        match = re.search(r'@([a-zA-Z0-9_ ]+)@', prompt)
+        if match:
+            custom_ease = match.group(1).strip()
+            if custom_ease in easing_functions:
+                interp_method = custom_ease
+            prompt = re.sub(r'\s*@([a-zA-Z0-9_ ]+)@\s*', ' ', prompt).strip()  # 移除标签
+
+        if not prompt:
+            continue
+        keyframes.append(PromptKeyframe(index=idx, prompt=prompt, interp_method=interp_method))
+
+    return sorted(keyframes, key=lambda x: x.index)
+
+
+def build_conditioning(keyframes, clip, max_length, f_text="", b_text=""):
+    if len(keyframes) == 0:
+        raise ValueError("No valid keyframes found.")
+
+    if max_length <= 0:
+        max_length = keyframes[-1].index + 1
+
+    conds = [None] * max_length
+    pooleds = [None] * max_length
+
+    prev_idx, prev_cond, prev_pooled = None, None, None
+
+    pbar = ProgressBar(max_length)
+
+    all_weights = [None] * max_length  # 存储所有帧的权重用于绘图
+
+    for i, kf in enumerate(keyframes):
+        curr_idx, curr_prompt, curr_method = kf.index, kf.prompt, kf.interp_method
+        if curr_idx >= max_length:
+            break
+
+        # 添加前后缀
+        prefix = f"{f_text}, " if f_text else ""
+        suffix = f", {b_text}" if b_text else ""
+        full_prompt = f"{prefix}{curr_prompt}{suffix}".strip()
+
+        # tokenize and encode prompt
+        tokens = clip.tokenize(full_prompt)
+        cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)
+        conds[curr_idx] = cond
+        pooleds[curr_idx] = pooled
+        pbar.update(1)
+
+        # 插值逻辑：当前帧和上一帧之间
+        if prev_idx is not None and prev_idx < curr_idx:
+            diff_len = curr_idx - prev_idx
+            weights = torch.linspace(0, 1, diff_len + 1)[1:-1]
+            easing_weights = [apply_easing(w.item(), curr_method) for w in weights]
+
+            print(f"Frame {prev_idx} to {curr_idx}, method: {curr_method}")
+            print("Raw weights:     ", [round(w.item(), 3) for w in weights])
+            print("Easing weights:  ", [round(w, 3) for w in easing_weights])
+
+            for j, w in enumerate(easing_weights):
+                idx = prev_idx + j + 1
+                if idx >= max_length:
+                    break
+                conds[idx] = lerp_tensors(prev_cond, cond, w)
+                pooleds[idx] = pooleds[idx - 1]
+                all_weights[idx] = w  # 记录当前帧的权重
+
+        # 更新 prev 变量
+        prev_idx, prev_cond, prev_pooled = curr_idx, cond, pooled
+        all_weights[curr_idx] = 1.0  # 当前帧权重设为1
+
+    # 填充开头和结尾缺失帧
+    first_valid = next((i for i in range(max_length) if conds[i] is not None), None)
+    last_valid = None
+    for i in range(max_length):
+        if conds[i] is not None:
+            last_valid = i
+        elif last_valid is not None:
+            conds[i] = conds[last_valid]
+            pooleds[i] = pooleds[last_valid]
+            all_weights[i] = all_weights[last_valid]
+
+    if first_valid is not None:
+        for i in range(first_valid):
+            conds[i] = conds[first_valid]
+            pooleds[i] = pooleds[first_valid]
+            all_weights[i] = all_weights[first_valid]
+
+    final_cond = torch.cat(conds, dim=0)
+    final_pooled_dict = {"pooled_output": torch.cat(pooleds, dim=0)}
+
+    return [[final_cond, final_pooled_dict]]
+
+
+def generate_frame_weight_curve_image(keyframes, max_length):
+    current_weights = [None] * max_length  # 当前帧影响权重
+    previous_weights = [None] * max_length  # 上一帧影响权重
+
+    prev_idx = None
+
+    for kf in keyframes:
+        curr_idx = kf.index
+        if prev_idx is not None and prev_idx < curr_idx:
+            diff_len = curr_idx - prev_idx
+            weights = torch.linspace(0, 1, diff_len + 1)[1:-1]
+            easing_weights = [apply_easing(w.item(), kf.interp_method) for w in weights]
+
+            for j, w in enumerate(easing_weights):
+                idx = prev_idx + j + 1
+                if idx >= max_length:
+                    break
+                current_weights[idx] = w           # 当前帧权重 (curr)
+                previous_weights[idx] = 1.0 - w    # 上一帧权重 (prev)
+
+        prev_idx = curr_idx
+        current_weights[curr_idx] = 1.0
+        previous_weights[curr_idx] = 0.0
+
+    # 补全缺失帧（保持连续性）
+    def fill_weights(weights_list):
+        last_valid = None
+        for i in range(len(weights_list)):
+            if weights_list[i] is not None:
+                last_valid = i
+            elif last_valid is not None:
+                weights_list[i] = weights_list[last_valid]
+
+    fill_weights(current_weights)
+    fill_weights(previous_weights)
+
+    # 如果开头没有值，则复制第一个有效值
+    first_valid = next((i for i, w in enumerate(current_weights) if w is not None), None)
+    if first_valid is not None:
+        for i in range(first_valid):
+            current_weights[i] = current_weights[first_valid]
+            previous_weights[i] = previous_weights[first_valid]
+
+    # 转换为浮点数
+    y_current = [w if w is not None else 0.0 for w in current_weights]
+    y_previous = [w if w is not None else 0.0 for w in previous_weights]
+
+    # 绘图
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(len(y_previous)), y_previous, marker='x', linestyle='--', color='blue', markersize=2, label='Prev Frame Weight')
+    plt.plot(range(len(y_current)), y_current, marker='o', linestyle='-', color='green', markersize=2, label='Curr Frame Weight')
+    plt.title("Interpolation Weights per Frame")
+    plt.xlabel("Frame Index")
+    plt.ylabel("Weight")
+    plt.grid(True)
+    plt.legend()
+
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+    plt.close()
+    buffer.seek(0)
+    image = Image.open(buffer)
+    return pil2tensor(image)
+
+
+def generate_value_curve_image_with_data(values_seq, max_length, frame_methods=None):
+    y = [v if v is not None else np.nan for v in values_seq]
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(len(y)), y, marker='o', linestyle='-', markersize=3, label="Value Curve")
+
+    # 如果有插值区间信息，则绘制缓动标记
+    if frame_methods:
+        for start, end, method in frame_methods:
+            plt.axvspan(start, end, alpha=0.1, color='gray', label=f"{method} Interpolation" if start == 0 else "")
+
+    plt.title("Interpolated Value Curve per Frame")
+    plt.xlabel("Frame Index")
+    plt.ylabel("Value")
+    plt.grid(True)
+    plt.legend(loc="upper left")
+
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+    plt.close()
+    buffer.seek(0)
+    image = Image.open(buffer)
+    return pil2tensor(image)
+
+
+
+#endregion---------------调度数据----------------------------------------------------#
+
+
+
+#region------------------风格处理----------------------------------------------------#
+def style_list():   # 读取风格csv文件
+    current_dir = os.path.dirname(__file__)
+    csv_dir = os.path.join(current_dir, "csv")
+    file_path = os.path.join(csv_dir, "styles.csv")
+    with open(file_path, mode="r", encoding="utf-8") as file:
+        reader = csv.reader(file)
+        data_list = [row for row in reader]
+    my_path = os.path.join(csv_dir, "my_styles.csv")
+    if os.path.exists(my_path):
+        with open(my_path, mode="r", encoding="utf-8") as file:
+            reader = csv.reader(file)
+            my_data_list = [row for row in reader]
+        data_list = my_data_list + data_list
+    
+    card_list = []
+    for i in data_list:
+        card_list += [i[0]]
+    return (card_list, data_list)
+
+
+
+
+def add_style_to_subject(style, positive, negative):
+    if style != "None":
+        style_info = style_list()
+        style_index = style_info[0].index(style)
+        style_text = style_info[1][style_index][1]
+
+        if "{prompt}" in style_text:
+            positive = style_text.replace("{prompt}", positive)
+        else:
+            positive += f", {style_text}"
+
+        if len(style_info[1][style_index]) > 2:
+            negative += f", {style_info[1][style_index][2]}"
+
+    return positive, negative
+
+#endregion------------------风格处理----------------------------------------------------#
+
+
+
+
+#region------------------类型转换----------------------------------------------------#  
+
+
+
+
+
+def to_numpy(image: torch.Tensor) -> npt.NDArray[np.uint8]:
+    np_array = np.clip(255.0 * image.cpu().numpy(), 0, 255).astype(np.uint8)
+    return np_array
+
+
+
+
+
+def try_cast(x, dst_type: str): #按值的类型返回
+    result = x
+    if dst_type == "STRING":
+        result = str(x)
+    elif dst_type == "INT":
+        result = int(x)
+    elif dst_type == "FLOAT" or dst_type == "NUMBER":
+        result = float(x)
+    elif dst_type == "BOOLEAN":
+        if isinstance(x, numbers.Number):
+            if x > 0:
+                result = True
+            else:
+                result = False
+        elif isinstance(x, str):
+            try:
+                x = float(x)
+                if x > 0:
+                    result = True
+                else:
+                    result = False
+            except:
+                result = bool(x)
+        else:
+            result = bool(x)
+    return result
+
+
+def pil2tensor(image):  #多维度的图像也可以
+    np_image = np.array(image).astype(np.float32) / 255.0
+    if np_image.ndim == 2:
+        np_image = np_image[None, None, ...]
+    elif np_image.ndim == 3:
+        np_image = np_image[None, ...]
+    return torch.from_numpy(np_image)
+
+
+def tensor2pil(image):
+    return Image.fromarray(np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
+
+
+def tensor_to_pillow(image: torch.Tensor) -> Image.Image:
+    return Image.fromarray(np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
+
+
+def pillow_to_tensor(image: Image.Image) -> torch.Tensor:
+    return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
+
+
+
+
+def list_pil2tensor(images: Image.Image | list[Image.Image]) -> torch.Tensor:
+    def single_pil2tensor(image: Image.Image) -> torch.Tensor:
+        np_image = np.array(image).astype(np.float32) / 255.0
+        if np_image.ndim == 2:  # Grayscale
+            return torch.from_numpy(np_image).unsqueeze(0)  # (1, H, W)
+        else:  # RGB or RGBA
+            return torch.from_numpy(np_image).unsqueeze(0)  # (1, H, W, C)
+    if isinstance(images, Image.Image):
+        return single_pil2tensor(images)
+    else:
+        return torch.cat([single_pil2tensor(img) for img in images], dim=0)
+
+
+def list_tensor2pil(tensor: torch.Tensor) -> list[Image.Image]: 
+    def single_tensor2pil(t: torch.Tensor) -> Image.Image:
+        np_array = to_numpy(t)
+        if np_array.ndim == 2:  # (H, W) for masks
+            return Image.fromarray(np_array, mode="L")
+        elif np_array.ndim == 3:  # (H, W, C) for RGB/RGBA
+            if np_array.shape[2] == 1:  # 处理 [H, W, 1] 形状的张量
+                return Image.fromarray(np_array.squeeze(-1), mode="L")
+            elif np_array.shape[2] == 3:
+                return Image.fromarray(np_array, mode="RGB")
+            elif np_array.shape[2] == 4:
+                return Image.fromarray(np_array, mode="RGBA")
+        raise ValueError(f"Invalid tensor shape: {t.shape}")
+    return handle_batch(tensor, single_tensor2pil)
+
+
+def handle_batch(       #输入张量进行批量处理，将指定的转换函数应用到张量的每个元素上，并返回处理结果的列表
+    tensor: torch.Tensor,
+    func: Callable[[torch.Tensor], Image.Image | npt.NDArray[np.uint8]],
+) -> list[Image.Image] | list[npt.NDArray[np.uint8]]:
+    """Handles batch processing for a given tensor and conversion function."""
+    return [func(tensor[i]) for i in range(tensor.shape[0])]
+
+
+
+
+
+
+#endregion------------------类型转换----------------------------------------------------#
+
+
+
+#region------------------图像处理----------------------------------------------------#
+
+
+def latentrepeat(samples, amount):
     try:
-        return comfy_load_torch_file(path, device=device)
+        # 复制原始样本字典，避免修改原始数据
+        s = samples.copy()
+        s_in = samples["samples"]
+
+        # 动态生成重复维度
+        num_dims = s_in.dim()
+        if num_dims < 4:
+            raise ValueError(f"输入张量的维度为 {num_dims}，期望至少为 4 维。")
+        repeat_dims = (amount,) + (1,) * (num_dims - 1)
+        s["samples"] = s_in.repeat(repeat_dims)
+
+        # 处理 noise_mask
+        if "noise_mask" in samples and samples["noise_mask"].shape[0] > 1:
+            masks = samples["noise_mask"]
+            if masks.shape[0] < s_in.shape[0]:
+                repeat_factor = math.ceil(s_in.shape[0] / masks.shape[0])
+                masks = masks.repeat(repeat_factor, 1, 1, 1)[:s_in.shape[0]]
+            # 动态生成 noise_mask 的重复维度
+            mask_num_dims = masks.dim()
+            if mask_num_dims < 4:
+                raise ValueError(f"noise_mask 张量的维度为 {mask_num_dims}，期望至少为 4 维。")
+            mask_repeat_dims = (amount,) + (1,) * (mask_num_dims - 1)
+            s["noise_mask"] = masks.repeat(mask_repeat_dims)
+
+        # 处理 batch_index
+        if "batch_index" in s:
+            offset = max(s["batch_index"]) - min(s["batch_index"]) + 1
+            additional_indices = [x + (i * offset) for i in range(1, amount) for x in s["batch_index"]]
+            s["batch_index"] += additional_indices
+
+        return (s,)
     except Exception as e:
-        logger.warning(f"Failed with weights_only=True: {e}")
-        logger.info("Retrying with weights_only=False (unsafe)")
-        return torch.load(path, map_location=device, weights_only=False)
+        print(f"在 latentrepeat 函数中发生错误: {str(e)}")
+        return (samples,)  # 发生错误时返回原始样本
 
 
-
-class sum_load_adv:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "optional":{
-                "preset": (["None"] + preset_list, {"default": "None"}),
-                "ckpt_name": (["None"] + available_ckpt,),
-                "unet_name": (["None"] + available_unets,),
-                "unet_Weight_Dtype": (["None", "default", "fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e5m2"],),
-                "clip_type": (["None"] + CLIP_TYPE,),
-                "clip1": (["None"] + available_clips,),
-                "clip2": (["None"] + available_clips,),
-                "guidance": ("FLOAT", {"default": 3.5, "min": 0.0, "max": 100.0, "step": 0.1}),
-                "clip3": (["None"] + available_clips,),
-                "clip4": (["None"] + available_clips,),
-                "vae": (["None"] + available_vaes,),
-                "lora": (["None"] + available_loras,),
-                "lora_strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "width": ("INT", {"default": 512, "min": 8, "max": 16384}),
-                "height": ("INT", {"default": 512, "min": 8, "max": 16384}),
-                "steps": ("INT", {"default": 20, "min": 1, "max": 999999}),
-                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.5, "round": 0.01}),
-                "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-                "pos": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "a girl"}),
-                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "worst quality, low quality"}),
-                "over_model": ("MODEL",),
-                "over_clip": ("CLIP",),
-                "lora_stack": ("LORASTACK",),
-            },
-            "hidden": {
-                "node_id": "UNIQUE_ID"
-            }
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "PDATA")
-    RETURN_NAMES = ("context", "model", "preset_save")
-    FUNCTION = "process_settings"
-    CATEGORY = "Apt_Preset/chx_load"
-
-    def process_settings(self,
-                        node_id,
-                        lora_strength,
-                        width, height, steps, cfg, sampler, scheduler,
-                        unet_Weight_Dtype, guidance, clip_type=None, device="default",
-                        vae=None, lora=None, unet_name=None, ckpt_name=None,
-                        clip1=None, clip2=None, clip3=None, clip4=None,
-                        pos="default", neg="default", over_model=None, over_clip=None, lora_stack=None, preset=[]):
-
-        if preset != "None":
-            pass
-
-        # 构建参数记录
-        parameters_data = [{
-            "run_Mode": None,
-            "ckpt_name": ckpt_name,
-            "clipnum": -2,
-            "unet_name": unet_name,
-            "unet_Weight_Dtype": unet_Weight_Dtype,
-            "clip_type": clip_type,
-            "clip1": clip1,
-            "clip2": clip2,
-            "guidance": guidance,
-            "clip3": clip3,
-            "clip4": clip4,
-            "vae": vae,
-            "lora": lora,
-            "lora_strength": lora_strength,
-            "width": width,
-            "height": height,
-            "batch": 1,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "positive": pos,
-            "negative": neg,
-        }]
-
-        # 分辨率修正
-        width, height = width - (width % 8), height - (height % 8)
-        latent = torch.zeros([1, 4, height // 8, width // 8])
-        if latent.shape[1] != 16:
-            latent = latent.repeat(1, 16 // 4, 1, 1)
-
-        # 加载模型
-        model = None
-        clip = over_clip
-        vae2 = None
-
-        if over_model is not None:
-            model = over_model
-        elif ckpt_name != "None" and unet_name == "None":
-            model, clip, vae2 = CheckpointLoaderSimple().load_checkpoint(ckpt_name)
-        elif unet_name != "None" and ckpt_name == "None":
-            if unet_name.endswith(".gguf"):
-                from .load_GGUF.nodes import UnetLoaderGGUF2
-                if UnetLoaderGGUF2 is None:
-                    raise RuntimeError("Please install ComfyUI-GGUF plugin.")
-                result = UnetLoaderGGUF2().load_unet(unet_name, dequant_dtype=None, patch_dtype=None, patch_on_device=None)
-                model = result[0]
-            else:
-                model = UNETLoader().load_unet(unet_name, unet_Weight_Dtype)[0]
-        elif ckpt_name != "None" and unet_name != "None":
-            raise ValueError("ckpt_name and unet_name cannot be entered at the same time. Please enter only one of them.")
-
-        # 加载 CLIP
-        if over_clip is not None:
-            clip = over_clip
-        elif clip1 == "None" and clip2 == "None" and clip3 == "None" and clip4 == "None":
-            pass
-        elif clip1 != "None" and clip2 == "None" and clip3 == "None" and clip4 == "None":
-            if clip1.endswith(".gguf"):
-                from .load_GGUF.nodes import CLIPLoaderGGUF2
-                clip = CLIPLoaderGGUF2().load_clip(clip1, clip_type)[0]
-            else:
-                clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
-        elif clip1 != "None" and clip2 != "None" and clip3 == "None" and clip4 == "None":
-            if clip1.endswith(".gguf"):
-                from .load_GGUF.nodes import DualCLIPLoaderGGUF2
-                clip = DualCLIPLoaderGGUF2().load_clip(clip1, clip2, clip_type)[0]
-            else:
-                clip = DualCLIPLoader().load_clip(clip1, clip2, clip_type, device)[0]
-        elif clip1 != "None" and clip2 != "None" and clip3 != "None" and clip4 == "None":
-            if clip1.endswith(".gguf"):
-                from .load_GGUF.nodes import TripleCLIPLoaderGGUF2
-                clip = TripleCLIPLoaderGGUF2().load_clip(clip1, clip2, clip3, clip_type="sd3")[0]
-            else:
-                clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3)[0]
-        elif clip1 != "None" and clip2 != "None" and clip3 != "None" and clip4 != "None":
-            if clip1.endswith(".gguf"):
-                from .load_GGUF.nodes import QuadrupleCLIPLoaderGGUF2
-                clip = QuadrupleCLIPLoaderGGUF2().load_clip(clip1, clip2, clip3, clip4, clip_type="stable_diffusion")[0]
-            else:
-                clip = QuadrupleCLIPLoader().load_clip(clip1, clip2, clip3, clip4)[0]
-
-        # 应用 LoRA
-        if lora_stack is not None:
-            model, clip = apply_lora_stack(model, clip, lora_stack)
-        if lora != "None" and lora_strength != 0:
-            model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)
-
-        # 编码提示词
-        if clip is not None:
-            (positive,) = CLIPTextEncode().encode(clip, pos)
-            (negative,) = CLIPTextEncode().encode(clip, neg)
-        else:
-            positive = None
-            negative = None
-
-        # 处理 guidance
-        if clip1 != "None" and clip2 != "None" and clip3 == "None" and clip4 == "None":
-            positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-        # 处理 VAE
-        if isinstance(vae, str) and vae != "None":
-            vae = VAELoader().load_vae(vae)[0]
-        elif vae2 is not None:
-            vae = vae2
-
-        # 构造 context
-        context = new_context(None, **{
-            "model": model,
-            "positive": positive,
-            "negative": negative,
-            "latent": {"samples": latent},
-            "vae": vae,
-            "clip": clip,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "guidance": guidance,
-
-            "clip1": clip1,
-            "clip2": clip2,
-            "clip3": clip3,
-            "clip4": clip4,
-            "unet_name": unet_name,
-            "ckpt_name": ckpt_name,
-            "pos": pos,
-            "neg": neg,
-            "width": width,
-            "height": height,
-            "batch": 1,
-        })
-
-        return (context, model, parameters_data)
-
-    @classmethod
-    def handle_my_message(cls, d):
-        """从 Web 接收 preset 文件并发送到前端"""
-        preset_path = os.path.join(presets_directory_path, d['message'])
-        if not os.path.exists(preset_path):
-            logger.error(f"Preset file not found: {preset_path}")
-            return
-        with open(preset_path, 'r', encoding='utf-8') as f:
-            preset_data = toml.load(f)
-        PromptServer.instance.send_sync("my.custom.message", {"message": preset_data, "node": d['node_id']})
-
-
-
-
-class sum_load_only_model():
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "optional":{
-                "ckpt_name": (["None"] + available_ckpt,),
-                "unet_name": (["None"] + available_unets,),
-                "unet_Weight_Dtype": (["None", "default", "fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e5m2"],),
-                "clip_type": (["None"] + CLIP_TYPE,),
-                "clip1": (["None"] + available_clips,),
-                "clip2": (["None"] + available_clips,),
-                "clip3": (["None"] + available_clips,),
-                "clip4": (["None"] + available_clips,),
-                "vae": (["None"] + available_vaes,),
-                "lora": (["None"] + available_loras,),
-                "lora_strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-
-                "over_model": ("MODEL",),
-                "over_clip": ("CLIP",),
-                "over_vae": ("VAE",),
-            },
-        }
-
-    RETURN_TYPES = ("MODEL","CLIP","VAE" )
-    RETURN_NAMES = ("model","clip","vae")
-    FUNCTION = "process_settings"
-    CATEGORY = "Apt_Preset/chx_load"
-
-
-    def process_settings(self,
-                        lora_strength,
-                        unet_Weight_Dtype, clip_type=None, device="default",
-                        vae=None, lora=None, unet_name=None, ckpt_name=None,
-                        clip1=None, clip2=None, clip3=None, clip4=None,
-                        pos="default", neg="default", over_model=None, over_clip=None, over_vae=None, ):
-
-
-        # 加载模型
-        model = None
-        clip = over_clip
-        vae2 = None
-
-        if over_model is not None:
-            model = over_model
-        elif ckpt_name != "None" and unet_name == "None":
-            model, clip, vae2 = CheckpointLoaderSimple().load_checkpoint(ckpt_name)
-        elif unet_name != "None" and ckpt_name == "None":
-            if unet_name.endswith(".gguf"):
-                from .load_GGUF.nodes import UnetLoaderGGUF2
-                if UnetLoaderGGUF2 is None:
-                    raise RuntimeError("Please install ComfyUI-GGUF plugin.")
-                result = UnetLoaderGGUF2().load_unet(unet_name, dequant_dtype=None, patch_dtype=None, patch_on_device=None)
-                model = result[0]
-            else:
-                model = UNETLoader().load_unet(unet_name, unet_Weight_Dtype)[0]
-        elif ckpt_name != "None" and unet_name != "None":
-            raise ValueError("ckpt_name and unet_name cannot be entered at the same time. Please enter only one of them.")
-
-        # 加载 CLIP
-        if over_clip is not None:
-            clip = over_clip
-        elif clip1 == "None" and clip2 == "None" and clip3 == "None" and clip4 == "None":
-            pass
-        elif clip1 != "None" and clip2 == "None" and clip3 == "None" and clip4 == "None":
-            if clip1.endswith(".gguf"):
-                from .load_GGUF.nodes import CLIPLoaderGGUF2
-                clip = CLIPLoaderGGUF2().load_clip(clip1, clip_type)[0]
-            else:
-                clip = CLIPLoader().load_clip(clip1, clip_type, device)[0]
-        elif clip1 != "None" and clip2 != "None" and clip3 == "None" and clip4 == "None":
-            if clip1.endswith(".gguf"):
-                from .load_GGUF.nodes import DualCLIPLoaderGGUF2
-                clip = DualCLIPLoaderGGUF2().load_clip(clip1, clip2, clip_type)[0]
-            else:
-                clip = DualCLIPLoader().load_clip(clip1, clip2, clip_type, device)[0]
-        elif clip1 != "None" and clip2 != "None" and clip3 != "None" and clip4 == "None":
-            if clip1.endswith(".gguf"):
-                from .load_GGUF.nodes import TripleCLIPLoaderGGUF2
-                clip = TripleCLIPLoaderGGUF2().load_clip(clip1, clip2, clip3, clip_type="sd3")[0]
-            else:
-                clip = TripleCLIPLoader().load_clip(clip1, clip2, clip3)[0]
-        elif clip1 != "None" and clip2 != "None" and clip3 != "None" and clip4 != "None":
-            if clip1.endswith(".gguf"):
-                from .load_GGUF.nodes import QuadrupleCLIPLoaderGGUF2
-                clip = QuadrupleCLIPLoaderGGUF2().load_clip(clip1, clip2, clip3, clip4, clip_type="stable_diffusion")[0]
-            else:
-                clip = QuadrupleCLIPLoader().load_clip(clip1, clip2, clip3, clip4)[0]
-
-        if lora != "None" and lora_strength != 0:
-            model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)
-
-        if isinstance(vae, str) and vae != "None":
-            vae = VAELoader().load_vae(vae)[0]
-        elif vae2 is not None:
-            vae = vae2
-
-        if over_vae is not None:
-            vae = over_vae
-
-        return (model,clip,vae )
-
-
-
-
-
-
-
-
-class load_basic:
-    @classmethod
-    def INPUT_TYPES(cls):
-
-
-        return {
-            "required": {
-                "preset": (preset_list, ),
-                "ckpt_name": (["None"] + available_ckpt,),  
-                "clipnum": ("INT", {"default": 0, "min": -24, "max": 1}),
-                "vae": (["None"] + available_vaes, ),
-                "lora": (["None"] + available_loras, ),
-                "lora_strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "width": ("INT", {"default": 512, "min": 8, "max": 16384}),
-                "height": ("INT", {"default": 512, "min": 8, "max": 16384}),
-                "batch": ("INT", {"default": 1, "min": 1, "max": 999999}),
-                "steps": ("INT", {"default": 20, "min": 1, "max": 999999}),
-                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.5, "round": 0.01}),
-                "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-
-                "pos": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "a girl"}), 
-                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
-            },
-            
-            "optional": { 
-                        },
-
-            "hidden": { 
-                "node_id": "UNIQUE_ID",
-            },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "PDATA", )
-    RETURN_NAMES = ("context","model", "preset_save", )
-    FUNCTION = "process_settings"
-    CATEGORY = "Apt_Preset/chx_load"
-
-
-    def process_settings(self, node_id,  lora_strength, clipnum, 
-                        width, height, batch, steps, cfg, sampler, scheduler,  device="default", 
-                        vae=None, lora=None, ckpt_name=None,  pos="default", neg="default", preset=[]):
-        
-        # 非编码后的数据
-        parameters_data = []
-        parameters_data.append({
-            "run_Mode": "basic",
-            "ckpt_name": ckpt_name,
-            "clipnum": clipnum,
-            "unet_name": None,
-            "unet_Weight_Dtype": None,
-            "clip_type": None,
-            "clip1": None,
-            "clip2": None,
-            "guidance": None,
-            "clip3": None,
-            "clip4": None,
-            "vae": vae,  
-            "lora": lora,
-            "lora_strength": lora_strength,
-            "width": width,
-            "height": height,
-            "batch": batch,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "positive": pos,
-            "negative": neg,
-            
-        })
-        
-
-        width, height = width - (width % 8), height - (height % 8)
-        latent = torch.zeros([batch, 4, height // 8, width // 8])
-        if latent.shape[1] != 16:  # Check if the latent has 16 channels
-            latent = latent.repeat(1, 16 // 4, 1, 1)  
-
-
-        model_path = folder_paths.get_full_path("checkpoints", ckpt_name)
-        out = comfy.sd.load_checkpoint_guess_config(model_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
-        model = out[0]
-        vae = out[2]
-        clip = out[1].clone()
-        if clip is not None:
-            clip.clip_layer(clipnum)
-
-        if isinstance(vae, str) and vae != "None":
-            vae_path = folder_paths.get_full_path("vae", vae)
-            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-
-        if lora != "None" and lora_strength != 0:
-            model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
-
-        (positive,) = CLIPTextEncode().encode(clip, pos)
-        (negative,) = CLIPTextEncode().encode(clip, neg)
-
-        context = {
-            "model": model,
-            "positive": positive,
-            "negative": negative,
-            "latent": {"samples": latent},      
-            "vae": vae,
-            "clip": clip,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "guidance": None, 
-            "clip1": None,  
-            "clip2": None,  
-            "clip3": None, 
-            "clip4": None, 
-            "unet_name": None, 
-            "ckpt_name": None,
-            "pos": pos, 
-            "neg": neg, 
-            "width": width,
-            "height": height,
-            "batch": batch,
-        }
-        return (context, model, parameters_data, )
-
-    def handle_my_message(d):
-        
-        preset_data = ""
-        preset_path = os.path.join(presets_directory_path, d['message'])
-        with open(preset_path, 'r', encoding='utf-8') as f:    
-            preset_data = toml.load(f)
-        PromptServer.instance.send_sync("my.custom.message", {"message":preset_data, "node":d['node_id']})
-
-
-class load_FLUX:
-    @classmethod
-    def INPUT_TYPES(cls):
-
-        return {
-            "required": {
-                "preset": (preset_list, ),
-                "unet_name": (available_unets, ), 
-                "unet_Weight_Dtype": ( ["fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e5m2"], ),
-
-                "clip_type": (["flux", "sdxl", "sd3", "hunyuan_video"], ),  # Flux
-                "clip1": (available_clips,{"default": "clip_l.safetensors"} ),  
-                "clip2": (available_clips, {"default": "t5xxl_fp8_e4m3fn.safetensors"} ), 
-                "guidance": ("FLOAT", {"default": 3.5, "min": 0.0, "max": 100.0, "step": 0.1}),
-
-                "vae": (available_vaes,{"default": "ae.safetensors"} ),
-                "lora": (["None"] + available_loras, ),
-                "lora_strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "width": ("INT", {"default": 1024, "min": 8, "max": 16384}),
-                "height": ("INT", {"default": 1024, "min": 8, "max": 16384}),
-                "batch": ("INT", {"default": 1, "min": 1, "max": 999999}),
-                "steps": ("INT", {"default": 20, "min": 1, "max": 999999}),
-                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.5, "round": 0.01}),
-                "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-
-                "pos": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "a girl"}), 
-                #"neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
-            },
-            
-            "optional": { 
-                        },
-            
-            
-            "hidden": { 
-                "node_id": "UNIQUE_ID",
-            },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "PDATA", )
-    RETURN_NAMES = ("context","model", "preset_save", )
-    FUNCTION = "process_settings"
-    CATEGORY = "Apt_Preset/chx_load"
-
-
-    def process_settings(self, node_id, lora_strength, 
-                        width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, guidance, clip_type=None,device="default", 
-                        vae=None, lora=None, unet_name=None, clip1=None, 
-                        clip2=None, pos="default", neg="", preset=[]):
-        
-        neg="worst quality, low quality"
-        # 非编码后的数据
-        parameters_data = []
-        parameters_data.append({
-            "run_Mode": "FLUX",
-            "ckpt_name": None,
-            "clipnum": None,
-            "unet_name": unet_name,
-            "unet_Weight_Dtype": unet_Weight_Dtype,
-            "clip_type": clip_type,
-            "clip1": clip1,
-            "clip2": clip2,
-            "guidance": guidance,
-            "clip3": None,
-            "clip4": None,
-            "vae": vae,  
-            "lora": lora,
-            "lora_strength": lora_strength,
-            "width": width,
-            "height": height,
-            "batch": batch,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "positive": pos,
-            "negative": neg,
-            
-        })
-        
-        
-        model_options = {}
-        if unet_Weight_Dtype == "fp8_e4m3fn":
-            model_options["dtype"] = torch.float8_e4m3fn
-        elif unet_Weight_Dtype == "fp8_e4m3fn_fast":
-            model_options["dtype"] = torch.float8_e4m3fn
-            model_options["fp8_optimizations"] = True
-        elif unet_Weight_Dtype == "fp8_e5m2":
-            model_options["dtype"] = torch.float8_e5m2
-
-
-        width, height = width - (width % 8), height - (height % 8)
-        latent = torch.zeros([batch, 4, height // 8, width // 8])
-        if latent.shape[1] != 16:  # Check if the latent has 16 channels
-            latent = latent.repeat(1, 16 // 4, 1, 1)  
-
-        if isinstance(vae, str) and vae!= "None":
-            vae_path = folder_paths.get_full_path("vae", vae)
-            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-
-        if unet_name!= "None":
-            if unet_name.endswith(".gguf"):
-                check_UnetLoaderGGUF2_installed()
-                loader = UnetLoaderGGUF2()  # 创建实例
-                result = loader.load_unet(unet_name, dequant_dtype=None, patch_dtype=None, patch_on_device=None)
-                model = result[0]
-            else:
-                model=UNETLoader().load_unet(unet_name, unet_Weight_Dtype)[0]
-
-
-
-        if clip1 != None and clip2 != None:
-            clip =DualCLIPLoader().load_clip( clip1, clip2, clip_type, device)[0]
-
-        if lora != "None" and lora_strength != 0:
-            model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
-
-        (positive,) = CLIPTextEncode().encode(clip, pos)
-        (negative,) = CLIPTextEncode().encode(clip, neg)
-        
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-
-        context = {
-            "model": model,
-            "positive": positive,
-            "negative": negative,
-            "latent": {"samples": latent},      
-            "vae": vae,
-            "clip": clip,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "guidance": guidance,
-
-            "clip1": clip1, 
-            "clip2": clip2, 
-            "clip3": None, 
-            "clip4": None,
-            "unet_name": unet_name, 
-            "ckpt_name": None, 
-            "pos": pos, 
-            "neg": neg, 
-            "width": width,
-            "height": height,
-            "batch": batch,
-        }
-        return (context, model, parameters_data, )
-
-    def handle_my_message(d):
-        
-        preset_data = ""
-        preset_path = os.path.join(presets_directory_path, d['message'])
-        with open(preset_path, 'r', encoding='utf-8') as f:    
-            preset_data = toml.load(f)
-        PromptServer.instance.send_sync("my.custom.message", {"message":preset_data, "node":d['node_id']})
-
-
-
-class load_SD35:
-    @classmethod
-    def INPUT_TYPES(cls):
-
-        return {
-            "required": {
-                "preset": (preset_list, ),
-                "unet_name": (["None"] + available_unets, ), # Flux &SD3.5
-                "unet_Weight_Dtype": ( ["fp8_e4m3fn", "fp8_e4m3fn_fast", "fp8_e5m2"], ),
-                "clip1": (available_clips, {"default": "clip_l.safetensors"} ),  
-                "clip2": (available_clips, {"default": "clip_g.safetensors"} ), 
-                "clip3": (available_clips, {"default": "t5xxl_fp8_e4m3fn.safetensors"} ), 
-
-                "vae": (available_vaes,{"default": "SD3.5vae.safetensors"} ),
-                "lora": (["None"] + available_loras, ),
-                "lora_strength": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "width": ("INT", {"default": 1024, "min": 8, "max": 16384}),
-                "height": ("INT", {"default": 1024, "min": 8, "max": 16384}),
-                "batch": ("INT", {"default": 1, "min": 1, "max": 999999}),
-                "steps": ("INT", {"default": 20, "min": 1, "max": 999999}),
-                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.5, "round": 0.01}),
-                "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-
-                "pos": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "a girl"}), 
-                #"neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
-            },
-            
-            "optional": { 
-                        },
-            
-            
-            "hidden": { 
-                "node_id": "UNIQUE_ID",
-            },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "PDATA", )
-    RETURN_NAMES = ("context","model", "preset_save", )
-    FUNCTION = "process_settings"
-    CATEGORY = "Apt_Preset/chx_load"
-
-
-    def process_settings(self, node_id, lora_strength, 
-                        width, height, batch, steps, cfg, sampler, scheduler, unet_Weight_Dtype, device="default", 
-                        vae=None, lora=None, clip1=None, unet_name=None,
-                        clip2=None, clip3=None, pos="default", neg="", preset=[]):
-        
-        neg="worst quality, low quality"
-        # 非编码后的数据
-        parameters_data = []
-        parameters_data.append({
-            "run_Mode": "SD3.5",
-            "ckpt_name": None,
-            "clipnum": None,
-            "unet_name": unet_name,
-            "unet_Weight_Dtype": unet_Weight_Dtype,
-            "clip_type": None,
-            "clip1": clip1,
-            "clip2": clip2,
-            "guidance": None,
-            "clip3": clip3,
-            "clip4": None,
-            "vae": vae,  
-            "lora": lora,
-            "lora_strength": lora_strength,
-            "width": width,
-            "height": height,
-            "batch": batch,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "positive": pos,
-            "negative": neg,
-            
-        })
-        
-        
-        model_options = {}
-        if unet_Weight_Dtype == "fp8_e4m3fn":
-            model_options["dtype"] = torch.float8_e4m3fn
-        elif unet_Weight_Dtype == "fp8_e4m3fn_fast":
-            model_options["dtype"] = torch.float8_e4m3fn
-            model_options["fp8_optimizations"] = True
-        elif unet_Weight_Dtype == "fp8_e5m2":
-            model_options["dtype"] = torch.float8_e5m2
-
-        width, height = width - (width % 8), height - (height % 8)
-        latent = torch.zeros([batch, 4, height // 8, width // 8])
-        if latent.shape[1] != 16:  # Check if the latent has 16 channels
-            latent = latent.repeat(1, 16 // 4, 1, 1)  
-
-        if vae!= "None":
-            vae_path = folder_paths.get_full_path("vae", vae)
-            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-
-        if unet_name!= "None":
-            if unet_name.endswith(".gguf"):
-                check_UnetLoaderGGUF2_installed()
-                loader = UnetLoaderGGUF2()  # 创建实例
-                result = loader.load_unet(unet_name, dequant_dtype=None, patch_dtype=None, patch_on_device=None)
-                model = result[0]
-            else:
-                model=UNETLoader().load_unet(unet_name, unet_Weight_Dtype)[0]
-
-        if clip1 != None and clip2 != None and clip3 != None:
-            clip=TripleCLIPLoader().load_clip(clip1, clip2, clip3,)[0]
-
-        if lora != "None" and lora_strength != 0:
-            model, clip = LoraLoader().load_lora(model, clip, lora, lora_strength, lora_strength)  
-
-        (positive,) = CLIPTextEncode().encode(clip, pos)
-        (negative,) = CLIPTextEncode().encode(clip, neg)
-        
-
-        context = {
-            "model": model,
-            "positive": positive,
-            "negative": negative,
-            "latent": {"samples": latent},      
-            "vae": vae,
-            "clip": clip,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "guidance": None,
-            "clip1": clip1, 
-            "clip2": clip2, 
-            "clip3": clip3, 
-            "clip4": None,
-            "unet_name": unet_name, 
-            "ckpt_name": None,
-            "pos": pos, 
-            "neg": neg, 
-            "width": width,
-            "height": height,
-            "batch": batch,
-        }
-        return (context, model, parameters_data, )
-
-    def handle_my_message(d):
-        
-        preset_data = ""
-        preset_path = os.path.join(presets_directory_path, d['message'])
-        with open(preset_path, 'r', encoding='utf-8') as f:    
-            preset_data = toml.load(f)
-        PromptServer.instance.send_sync("my.custom.message", {"message":preset_data, "node":d['node_id']})
-
-
-
-class Data_preset_save:
-    @classmethod
-    def INPUT_TYPES(s):
-        savetype_list = ["new save", "overwrite save"]
-        return {
-            "required": {
-                "param": ("PDATA", ),
-                "tomlname": ("STRING", {"default": "new_preset"}),
-                "savetype": (savetype_list,),
-            },
-        }
-    RETURN_TYPES = ()
-    OUTPUT_NODE = True
-    FUNCTION = "saveparam"
-    CATEGORY = "Apt_Preset/chx_load"
-
-    def saveparam(self, param, tomlname, savetype):
-        # 初始化 tomltext 为一个空字符串
-        tomltext = ""
-
-        def fix_path(path):
-            if isinstance(path, str):
-                return path.replace("\\", "\\\\")
-            return path
-
-        tomltext += f"run_Mode = \"{param[0]['run_Mode']}\"\n"
-        tomltext += f"ckpt_name = \"{fix_path(param[0]['ckpt_name'])}\"\n"
-        tomltext += f"clipnum = \"{param[0]['clipnum']}\"\n"
-        
-        tomltext += f"unet_name = \"{fix_path(param[0]['unet_name'])}\"\n"
-        tomltext += f"unet_Weight_Dtype = \"{param[0]['unet_Weight_Dtype']}\"\n"
-
-        tomltext += f"clip_type = \"{param[0]['clip_type']}\"\n"
-        tomltext += f"clip1 = \"{fix_path(param[0]['clip1'])}\"\n"
-        tomltext += f"clip2 = \"{fix_path(param[0]['clip2'])}\"\n"
-        tomltext += f"guidance = \"{param[0]['guidance']}\"\n"
-
-        tomltext += f"clip3 = \"{fix_path(param[0]['clip3'])}\"\n"
-        tomltext += f"clip4 = \"{fix_path(param[0]['clip4'])}\"\n"
-        tomltext += f"vae = \"{fix_path(param[0]['vae'])}\"\n"
-        tomltext += f"lora = \"{fix_path(param[0]['lora'])}\"\n"
-        tomltext += f"lora_strength = \"{param[0]['lora_strength']}\"\n"
-        
-        tomltext += f"width = \"{param[0]['width']}\"\n"
-        tomltext += f"height = \"{param[0]['height']}\"\n"
-        tomltext += f"batch = \"{param[0]['batch']}\"\n"
-
-        tomltext += f"steps = \"{param[0]['steps']}\"\n"
-        tomltext += f"cfg = \"{param[0]['cfg']}\"\n"
-        tomltext += f"sampler = \"{param[0]['sampler']}\"\n"
-        tomltext += f"scheduler = \"{param[0]['scheduler']}\"\n"
-
-        tomltext += f"positive = \"{param[0]['positive']}\"\n"
-        tomltext += f"negative= \"{param[0]['negative']}\"\n"
-
-
-
-        tomlnameExt = getNewTomlnameExt(tomlname, presets_directory_path, savetype)
-
-        check_folder_path = os.path.dirname(f"{presets_directory_path}/{tomlnameExt}")
-        os.makedirs(check_folder_path, exist_ok=True)
-
-        with open(f"{presets_directory_path}/{tomlnameExt}", mode='w', encoding='utf-8') as f:
-            f.write(tomltext)
-
-        return ()
-
-
-
-class pre_controlnet:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {"context": ("RUN_CONTEXT",),
-            },
-            "optional": {
-                "image1": ("IMAGE",),
-                "controlnet1": (['None'] + folder_paths.get_filename_list("controlnet"),),
-                "strength1": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01}),
-                
-                "image2": ("IMAGE",),
-                "controlnet2": (['None'] + folder_paths.get_filename_list("controlnet"),),
-                "strength2": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01}),
-                
-                "image3": ("IMAGE",),
-                "controlnet3": (['None'] + folder_paths.get_filename_list("controlnet"),),
-                "strength3": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 10.0, "step": 0.01}),
-                
-            },
-
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING", "CONDITIONING",)
-    RETURN_NAMES = ("context","positive", "negative",)
-    CATEGORY = "Apt_Preset/chx_tool"
-    FUNCTION = "load_controlnet"
-
-    def load_controlnet(self, 
-                        strength1, 
-                        strength2,
-                        strength3,  
-                        context=None, 
-                        controlnet1=None, controlnet2=None, controlnet3=None,
-                        image1=None, image2=None, image3=None, vae=None,):
-
-
-        positive = context.get("positive", [])
-        negative = context.get("negative", [])
-        vae = context.get("vae", None)
-
-        if controlnet1 != "None" and image1 is not None:
-            controlnet_path = folder_paths.get_full_path("controlnet", controlnet1)
-            controlnet1 = comfy.controlnet.load_controlnet(controlnet_path)
-            conditioning = ControlNetApplyAdvanced().apply_controlnet( positive, negative, controlnet1, image1, strength1, 0, 1, vae, extra_concat=[])
-            positive = conditioning[0]
-            negative = conditioning[1]
-
-        if controlnet2 != "None" and image2 is not None:
-            controlnet_path = folder_paths.get_full_path("controlnet", controlnet2)
-            controlnet2 = comfy.controlnet.load_controlnet(controlnet_path)
-            conditioning = ControlNetApplyAdvanced().apply_controlnet( positive, negative, controlnet2, image2, strength2, 0, 1, vae, extra_concat=[])
-            positive = conditioning[0]
-            negative = conditioning[1]
-
-        if controlnet3 != "None" and image3 is not None:
-            controlnet_path = folder_paths.get_full_path("controlnet", controlnet3)
-            controlnet3 = comfy.controlnet.load_controlnet(controlnet_path)
-            conditioning = ControlNetApplyAdvanced().apply_controlnet( positive, negative, controlnet3, image3, strength3, 0, 1, vae, extra_concat=[])
-            positive = conditioning[0]
-            negative = conditioning[1]
-
-        context = new_context(context, positive=positive, negative=negative)
-        return (context, positive, negative, )
-
-
-
-class sum_lora:
-    @classmethod
-    def INPUT_TYPES(cls):  
-        return {
-            "required": {
-                "lora_01": (['None'] + folder_paths.get_filename_list("loras"), ),
-                "strength_01":("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "lora_02": (['None'] + folder_paths.get_filename_list("loras"), ),
-                "strength_02":("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "lora_03": (['None'] + folder_paths.get_filename_list("loras"), ),
-                "strength_03":("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-            },
-            "optional": {
-                "context": ("RUN_CONTEXT",),
-                "model": ("MODEL",),
-                "clip": ("CLIP",),
-                "pos": ("STRING", {"default": "", "multiline": True}),
-                "neg": ("STRING", {"default": "", "multiline": False}),
-                "style": (["None"] + style_list()[0],{"default": "None"}),
-            }
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT", "CONDITIONING", "CONDITIONING", )
-    RETURN_NAMES = ("context",  "positive", "negative",)
-    CATEGORY = "Apt_Preset/chx_tool"
-    FUNCTION = "load_lora"
-
-    def load_lora(self, style, lora_01, strength_01, lora_02, strength_02, lora_03, strength_03, context=None, clip=None, model=None,  pos="", neg=""):
-
-        if model is None:
-            model=  context.get("model",None)
-        
-        if clip is None:
-            clip=  context.get("clip",None)
-
-        positive = context.get("positive")
-        negative = context.get("negative") 
-
-        if style != "None":
-            pos += f"{pos}, {style_list()[1][style_list()[0].index(style)][1]}"
-            neg += f"{neg}, {style_list()[1][style_list()[0].index(style)][2]}" if len(style_list()[1][style_list()[0].index(style)]) > 2 else ""
-
-        if lora_01!= "None" and strength_01!= 0:
-            model, clip = LoraLoader().load_lora(model, clip, lora_01, strength_01, strength_01)
-        if lora_02!= "None" and strength_02!= 0:
-            model, clip = LoraLoader().load_lora(model, clip, lora_02, strength_02, strength_02)
-        if lora_03!= "None" and strength_03!= 0:
-            model, clip = LoraLoader().load_lora(model, clip, lora_03, strength_03, strength_03)
-
-        if pos != None and pos != '':          
-            positive, = CLIPTextEncode().encode(clip, pos)
-        if neg!= None and pos != '':  
-            negative, = CLIPTextEncode().encode(clip, neg)
-            
-        context = new_context(context, model=model, clip=clip, positive=positive, negative=negative, )
-        return (context, positive, negative,)
-
-
-
-class sum_editor:
-
-    ratio_sizes, ratio_dict = read_ratios()
-    def __init__(self):
-        pass
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-            },
-            "optional": {
-                "model": ("MODEL",),
-                "clip": ("CLIP",),
-                "positive": ("CONDITIONING",),
-                "negative": ("CONDITIONING",),
-                "vae": ("VAE",), 
-                "latent": ("LATENT",),
-                "image": ("IMAGE",),
-                
-                "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == None"}),
-                "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == None"}),
-                "sampler": (['None'] + comfy.samplers.KSampler.SAMPLERS, {"default": "None"}),  
-                "scheduler": (['None'] + comfy.samplers.KSampler.SCHEDULERS, {"default": "None"}), 
-                
-                "pos": ("STRING", {"default": "", "multiline": True}),
-                "neg": ("STRING", {"default": "", "multiline": False}),
-                "guidance": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step": 0.01}),
-                "style": (["None"] + style_list()[0], {"default": "None"}),
-                "batch_size": ("INT", {"default": 1, "min": 1, "max": 300, }),
-                "ratio_selected": (['None'] + s.ratio_sizes, {"default": "None"}),
-
-            }
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT", "VAE","CLIP",  "IMAGE",)
-    RETURN_NAMES = ("context", "model","positive", "negative", "latent", "vae","clip", "image", )
-    FUNCTION = "text"
-    CATEGORY = "Apt_Preset/chx_load"
-
-
-
-    def generate(self, ratio_selected, batch_size=1):
-        width = self.ratio_dict[ratio_selected]["width"]
-        height = self.ratio_dict[ratio_selected]["height"]
-        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
-        return ({"samples": latent}, )
-
-    def text(self, context=None, model=None, clip=None, positive=None, negative=None, pos="", neg="", image=None, vae=None, latent=None, steps=None, cfg=None, sampler=None, scheduler=None, style=None, batch_size=1, ratio_selected=None, guidance=0 ):
-
-        width = context.get("width")
-        height = context.get("height")       
-        if ratio_selected and ratio_selected != "None" and ratio_selected in self.ratio_dict:
-            try:
-                width = self.ratio_dict[ratio_selected]["width"]
-                height = self.ratio_dict[ratio_selected]["height"]
-            except KeyError as e:
-                print(f"[ERROR] Invalid ratio selected: {e}")
-                width = context.get("width", 512)
-                height = context.get("height", 512)
-        else:
-            if width is None or height is None:
-                width = 512
-                height = 512       
-
-        if model is None:
-            model = context.get("model")
-        if clip is None:
-            clip = context.get("clip")
-        if vae is None:
-            vae= context.get("vae")
-        if steps == 0:
-            steps = context.get("steps")
-        if cfg == 0.0:
-            cfg = context.get("cfg")
-        if sampler == "None":
-            sampler = context.get("sampler")
-        if scheduler == "None":
-            scheduler = context.get("scheduler")
-
-        if guidance == 0.0:
-            guidance = context.get("guidance",3.5)
-        
-        #latent选项-------------------
-        if latent is None:
-            latent = context.get("latent")
-            
-        if image is None:
-            image = context.get("images")
-
-        if image is not None:
-            image = image
-            latent = VAEEncode().encode(vae, image)[0]
-            
-        latent = latentrepeat(latent, batch_size)[0]   # latent批次
-        if ratio_selected != "None":
-            latent = self.generate(ratio_selected, batch_size)[0]    
-        
-        pos, neg = add_style_to_subject(style, pos, neg)  # 风格
-
-        if pos is not None and pos!= "":
-            positive, = CLIPTextEncode().encode(clip, pos)
-        else:
-            positive = context.get("positive")
-
-        if neg is not None and neg!= "":
-            negative, = CLIPTextEncode().encode(clip, neg)
-        else:
-            negative = context.get("negative")
-        
-        guidance = context.get("guidance",3.5)
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-        context = new_context(context, model=model , latent=latent , clip=clip, vae=vae, positive=positive, negative=negative, images=image,steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler,guidance=guidance, pos=pos, neg=neg, width=width, height=height, batch=batch_size )
-        
-        return (context, model, positive, negative, latent, vae, clip,  image, )
-
-
-
-class sum_latent:
+def read_ratios():           # 读取ratios.json文件,生成图像的尺寸
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    p = os.path.join(current_dir, 'web')
+    file_path = os.path.join(p, 'ratios.json')
     
-    ratio_sizes, ratio_dict = read_ratios()
-    def __init__(self):
-        pass
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            
-            "required": {  "context": ("RUN_CONTEXT",),   },
-            
-            "optional":  {
-                "latent": ("LATENT", ),
-                "pixels": ("IMAGE", ),
-                "mask": ("MASK", ),
-                "noise_mask": ("BOOLEAN", {"default": True, }),
-                "diff_difusion": ("BOOLEAN", {"default": True}), 
-                "smoothness":("INT", {"default": 1,  "min":0, "max": 150, "step": 1,"display": "slider"}),
-                "ratio_selected": (['None'] + s.ratio_sizes, {"default": "None"}),
-                "batch_size": ("INT", {"default": 1, "min": 1, "max": 300, })
-                
-            }
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","LATENT","MASK"  )
-    RETURN_NAMES = ("context","latent","mask"  )
-    FUNCTION = "process"
-    CATEGORY = "Apt_Preset/chx_tool"
-
-    def generate(self, ratio_selected, batch_size=1):
-        width = self.ratio_dict[ratio_selected]["width"]
-        height = self.ratio_dict[ratio_selected]["height"]
-        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
-        return ({"samples": latent}, )
-
-
-    def process(self, noise_mask, ratio_selected, smoothness=1, batch_size=1, context=None, latent=None, pixels=None, mask=None, diff_difusion=True):
-
-        model = context.get("model")
-        if diff_difusion:
-            model = DifferentialDiffusion().apply(model)[0]
-
-        if latent is not None and pixels is not None:
-            raise ValueError("Only one of 'latent', 'pixels' should be provided.")
-        if latent is not None:
-            latent = latentrepeat(latent, batch_size)[0]
-            context = new_context(context, model=model,latent=latent)
-            return (context, latent, None)
-        if latent is None and pixels is None and ratio_selected == "None":
-            latent = context.get("latent", None)
-            latent = latentrepeat(latent, batch_size)[0]
-            context = new_context(context, model=model,latent=latent)
-            return (context, latent, None)
-
-        vae = context.get("vae")
-        positive = context.get("positive", None)
-        negative = context.get("negative", None)
-
-
-        if ratio_selected != "None":
-           latent = self.generate(ratio_selected, batch_size)[0]
-
-        if pixels is not None:
-            if mask is not None:
-                if torch.all(mask == 0):
-                    latent = VAEEncode().encode(vae, pixels)[0]
-                else:
-                    mask = tensor2pil(mask)
-                    if not isinstance(mask, Image.Image):
-                        raise TypeError("mask is not a valid PIL Image object")
-                    feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
-                    mask = pil2tensor(feathered_image)
-                    positive, negative, latent = InpaintModelConditioning().encode(positive, negative, pixels, vae, mask, noise_mask)
-            else:
-                latent = VAEEncode().encode(vae, pixels)[0]
-            latent = latentrepeat(latent, batch_size)[0]
-        context = new_context(context, model=model, positive=positive, negative=negative, latent=latent)
-
-        return (context, latent, mask)
-
-
+    # 显式指定使用 utf-8 编码打开文件
+    with open(file_path, 'r', encoding='utf-8') as file:
+        data = json.load(file)
     
-class sum_text:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-            },
-
-            "optional": {
-                "positive": ("STRING", {"default": "", "multiline": True, }),
-                "negative": ("STRING", {"default": "", "multiline": False,}),
-
-                "target": ("STRING", {"multiline": False,"default": ""}),
-                "replace": ("STRING", {"multiline": False,"default": ""}),
-
-                "pos1": ("STRING", {"default": "", "multiline": False, }),
-                "neg1":  ("STRING", {"default": "", "multiline": False, }),
-                "style": (["None"] + style_list()[0], {"default": "None"}),
-            },
-        }
-
-
-    RETURN_TYPES = ("RUN_CONTEXT","STRING", )
-    RETURN_NAMES = ("context", "pos", )
-    FUNCTION = 'process_settings'
-    CATEGORY = "Apt_Preset/chx_load"
-
-    def process_settings(self, context, style="default", positive="", negative="",target="", replace="",pos1="", neg1="" ,):
-        
-        if pos1 is not None and pos1 != "":
-            positive = positive + "," + pos1
-        if neg1 is not None and neg1 != "":
-            negative = negative + "," + neg1
-            
-
-        if isinstance(positive, tuple):
-            positive = ", ".join(str(x) for x in positive if x is not None)
-        elif not isinstance(positive, str):
-            positive = str(positive)
-        if isinstance(negative, tuple):
-            negative = ", ".join(str(x) for x in negative if x is not None)
-        elif not isinstance(negative, str):
-            positive = str(positive)
-        positive, negative = add_style_to_subject(style, positive, negative)
-
-        if target is not None and target!= "":
-            positive = replace_text(positive, target, replace)
-
-        pos=positive  #更新纯文本
-        neg = negative  #更新纯文本
-
-        clip = context.get("clip", None)
-
-        if positive != None and positive != "":       
-            (positive,) = CLIPTextEncode().encode(clip, positive)   
-        else:
-            positive = context.get("positive")
-        if negative != None and negative != "":
-            (negative,) = CLIPTextEncode().encode(clip, negative)
-        else:
-            negative = context.get("negative") 
-
-        context = new_context(context, positive=positive, negative=negative, pos=pos, neg=neg, )
-
-        return (context, pos)
-
-
-
-
-
-class sum_create_chx:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "vae": (["None"] + available_vaes, ),
-                "width": ("INT", {"default": 512, "min": 8, "max": 16384}),
-                "height": ("INT", {"default": 512, "min": 8, "max": 16384}),
-                "batch": ("INT", {"default": 1, "min": 1, "max": 999999}),
-                "steps": ("INT", {"default": 20, "min": 1, "max": 999999}),
-                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.5, "round": 0.01}),
-                "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-                "guidance": ("FLOAT", {"default": 3.5, "min": 0.0, "max": 100.0, "step": 0.1}),
-                "pos": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "a girl"}), 
-                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": " worst quality, low quality"}),
-            },
-            
-            "optional": { 
-                "model": ("MODEL",),
-                "clip": ("CLIP",),  
-                "over_vae": ("VAE",),
-                "over_positive": ("CONDITIONING",),
-                "over_negative": ("CONDITIONING",),
-                "over_latent": ("LATENT",),
-                "lora_stack": ("LORASTACK",),
-                "data":(ANY_TYPE,),
-            },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT", "VAE", "CLIP", "ANY_TYPE")
-    RETURN_NAMES = ("context", "model", "positive", "negative", "latent", "vae", "clip", "data")
-    FUNCTION = "process_settings"
-    CATEGORY = "Apt_Preset/chx_load"
-
-    def process_settings(self, 
-                        width, height, batch, steps, cfg, sampler, scheduler, data=None, guidance=3.5, lora_stack=None,over_latent=None,
-                        vae=None, over_vae=None, clip=None, model=None, over_positive=None, over_negative=None, pos="default", neg="default"):
-
-        # 分辨率修正
-        width, height = width - (width % 8), height - (height % 8)
-        latent = torch.zeros([1, 4, height // 8, width // 8])
-        if latent.shape[1] != 16:
-            latent = latent.repeat(1, 16 // 4, 1, 1)
-
-        if over_latent is not None:
-            latent = over_latent
-        # 处理VAE
-        if over_vae is not None:
-            vae = over_vae
-        elif over_vae is None and vae != "None":
-            vae_path = folder_paths.get_full_path("vae", vae)
-            vae = comfy.sd.VAE(comfy.utils.load_torch_file(vae_path))
-
-        # 初始化条件为None
-        positive = None
-        negative = None
-        
-        # 处理LoRA和文本编码
-        if clip is not None:
-            # 如果提供了clip，可以处理文本条件
-            # 只有当model和clip都提供时，才应用LoRA
-            if model is not None and lora_stack is not None:
-                model, clip = apply_lora_stack(model, clip, lora_stack)
-                
-            # 处理条件
-            positive, = CLIPTextEncode().encode(clip, pos)
-            negative, = CLIPTextEncode().encode(clip, neg)
-
-
-
-        # 覆盖条件（如果提供）
-        if over_positive:
-            positive = over_positive
-            if negative is None:
-                negative = condi_zero_out(over_positive)[0]
-                
-        if over_negative:
-            negative = over_negative
-
-
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-        # 确保latent格式正确
-        latent_dict = {"samples": latent}
-
-        # 创建上下文
-        context = {
-            "model": model,
-            "positive": positive,
-            "negative": negative,
-            "latent": latent_dict,  # 使用正确格式的latent
-            "vae": vae,
-            "clip": clip,
-            "steps": steps,
-            "cfg": cfg,
-            "sampler": sampler,
-            "scheduler": scheduler,
-            "guidance": guidance,
-            "clip1": None,
-            "clip2": None,
-            "clip3": None,
-            "clip4": None,
-            "unet_name": None,
-            "ckpt_name": None,
-            "pos": pos, 
-            "neg": neg, 
-            "width": width,
-            "height": height,
-            "batch": batch,
-            "data": data,
-        }
-
-        return (context, model, positive, negative, latent_dict, vae, clip, data)  # 返回正确格式的latent
-
-#endregion---------加载器-----------------------------------------------------------------------------------#
-
-
-#region-----------采样器---------------------------------------------------------------------------------------#
-
-class basic_Ksampler_full:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-
-                "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == None"}),
-                "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == None"}),
-                "sampler": (['None'] + comfy.samplers.KSampler.SAMPLERS, {"default": "None"}),  
-                "scheduler": (['None'] + comfy.samplers.KSampler.SCHEDULERS, {"default": "None"}), 
-
-                "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
-            },
-            
-            "optional": {
-                "model": ("MODEL",),
-                "positive": ("CONDITIONING",),
-                "negative": ("CONDITIONING",),
-                "latent": ("LATENT",),
-                "vae": ("VAE",),
-                "clip": ("CLIP",),
-                "image": ("IMAGE",),
-                
-            },
-            
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
-
-        }
-        
-        
-    OUTPUT_NODE = True
-    RETURN_TYPES = ("RUN_CONTEXT","IMAGE", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT","VAE","CLIP", )
-    RETURN_NAMES = ("context", "image", "model","positive", "negative",  "latent", "vae", "clip", )
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-
-    def sample(self,  seed, denoise, context=None, clip=None, model=None,vae=None, positive=None, negative=None, latent=None,steps=None, cfg=None, sampler=None, scheduler=None, image=None, prompt=None, image_output=None, extra_pnginfo=None, ):
-
-
-        if steps == 0:
-            steps = context.get("steps")
-        if cfg == 0.0:
-            cfg = context.get("cfg")
-        if sampler == "None":
-            sampler = context.get("sampler")
-        if scheduler == "None":
-            scheduler = context.get("scheduler")
-
-
-
-        if positive is None:
-            positive = context.get("positive" )
-        if negative is None:
-            negative = context.get("negative" )
-        if vae is None:
-            vae= context.get("vae")
-        if model is None:
-            model= context.get("model")
-        if clip is None:
-            clip= context.get("clip")
-
-
-        if image is not None:
-            latent = VAEEncode().encode(vae, image)[0]
-        else:
-            latent = latent or context.get("latent")
-
-        guidance = context.get("guidance",None)
-        if guidance is None:
-            guidance = 3.5  # 默认值
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-
-        latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
-                positive, 
-                negative, 
-                latent, 
-                denoise=denoise
-                )[0]
-        
-        
-        if image_output == "None":
-            context = new_context(context, model=model, positive=positive, negative=negative,  clip=clip, latent=latent, images=None, vae=vae,steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler, )
-            return(context, None, model, positive, negative, latent, vae, clip)
-
-
-        output_image = VAEDecode().decode(vae, latent)[0]
-        context = new_context(context, model=model, positive=positive, negative=negative,  clip=clip, latent=latent, images=output_image, vae=vae,
-            steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler, )
-
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {},
-                "result": (context, output_image, model, positive, negative, latent, vae, clip)}
-            
-        return {"ui": {"images": results},
-                "result": (context, output_image, model, positive, negative, latent, vae, clip)}
-
-
-class basic_Ksampler_mid:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
-            },
-            
-            "optional": {
-                "model": ("MODEL",),
-                "positive": ("CONDITIONING",),
-                "negative": ("CONDITIONING",),
-                "latent": ("LATENT",),
-                "vae": ("VAE",),
-                "clip": ("CLIP",),
-                "image": ("IMAGE",),
-                
-            },
-            
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
-
-        }
-        
-        
-    OUTPUT_NODE = True
-    RETURN_TYPES = ("RUN_CONTEXT","IMAGE", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT","VAE","CLIP", )
-    RETURN_NAMES = ("context", "image", "model","positive", "negative",  "latent", "vae", "clip", )
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-
-    def sample(self,  seed, denoise, context=None, clip=None, model=None,vae=None, positive=None, negative=None, latent=None, image=None, prompt=None, image_output=None, extra_pnginfo=None, ):
-
-
-        steps = context.get("steps")
-        cfg = context.get("cfg")
-        sampler = context.get("sampler")
-        scheduler = context.get("scheduler")
-
-
-        if positive is None:
-            positive = context.get("positive" )
-        if negative is None:
-            negative = context.get("negative" )
-        if vae is None:
-            vae= context.get("vae")
-        if model is None:
-            model= context.get("model")
-        if clip is None:
-            clip= context.get("clip")
-
-
-        if image is not None:
-            latent = VAEEncode().encode(vae, image)[0]
-        else:
-            latent = latent or context.get("latent")
-
-        guidance = context.get("guidance",None)
-        if guidance is None:
-            guidance = 3.5  # 默认值
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-
-        latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
-                positive, 
-                negative, 
-                latent, 
-                denoise=denoise
-                )[0]
-        
-        
-        if image_output == "None":
-            context = new_context(context, model=model, positive=positive, negative=negative,  clip=clip, latent=latent, images=None, vae=vae,steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler, )
-            return(context, None, model, positive, negative, latent, vae, clip)
-
-
-        output_image = VAEDecode().decode(vae, latent)[0]
-        context = new_context(context, model=model, positive=positive, negative=negative,  clip=clip, latent=latent, images=output_image, vae=vae,
-            steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler, )
-
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {},
-                "result": (context, output_image, model, positive, negative, latent, vae, clip)}
-            
-        return {"ui": {"images": results},
-                "result": (context, output_image, model, positive, negative, latent, vae, clip)}
-
-
-class basic_Ksampler_simple:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
-                
-                
-            },
-            
-            "optional": {
-                "image": ("IMAGE",),
-            },
-            
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT",  "IMAGE", )
-    RETURN_NAMES = ("context",  "image", )
-    OUTPUT_NODE = True
-    FUNCTION = "run"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-
-    def run(self,context, seed, denoise, image=None,  prompt=None, image_output=None, extra_pnginfo=None,):
-        vae = context.get("vae",None)
-        steps = context.get("steps",None)
-        cfg = context.get("cfg",None)
-        sampler = context.get("sampler",None)
-        scheduler = context.get("scheduler",None)
-
-        positive = context.get("positive",None)
-        negative = context.get("negative",None)
-        model = context.get("model",None)
-        latent = context.get("latent",None)
-
-        guidance = context.get("guidance",None)
-        if guidance is None:
-            guidance = 3.5  # 默认值
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-        if image is not None:
-            latent = VAEEncode().encode(vae, image)[0]
-
-        latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
-                positive, 
-                negative, 
-                latent, 
-                denoise=denoise
-                )[0]
-
-        if image_output == "None":
-            context = new_context(context, latent=latent, images=None,  )
-            return(context, None)
-
-
-        output_image = VAEDecode().decode(vae, latent)[0]
-        context = new_context(context, latent=latent, images=output_image,  )
-        
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {},
-                "result": (context, output_image,)}
-            
-        return {"ui": {"images": results},
-                "result": (context, output_image,)}
-
-
-class basic_Ksampler_custom:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-            },
-            
-            "optional":
-                    {
-                    "model": ("MODEL", ),
-                    "positive": ("CONDITIONING", ),
-                    "negative": ("CONDITIONING", ),
-                    "noise": ("NOISE", ),
-                    "guider": ("GUIDER", ),
-                    "sampler": ("SAMPLER", ),
-                    "sigmas": ("SIGMAS", ),
-                    "latent": ("LATENT", ),
-                    "image": ("IMAGE", ),
-                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                    "image_output": (["None","Hide", "Preview", "Save", "Hide/Save"], {"default": "None", "tooltip": "  output_image will take up CPU resources "}),
-                    
-                    },
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
-            
-                }
-    OUTPUT_NODE = True
-    RETURN_TYPES = ("RUN_CONTEXT","IMAGE", "MODEL","CONDITIONING","CONDITIONING","LATENT", "VAE", )
-    RETURN_NAMES = ("context","image", "model","positive","negative","latent", "vae",  )
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-    def sample(self, context,model=None,image=None,positive=None, negative=None, latent=None, noise=None, sampler=None, guider=None, sigmas=None, seed=1, denoise=1, prompt=None, image_output=None, extra_pnginfo=None,):
-        
-        vae=context.get("vae")
-        steps = context.get("steps")
-        cfg = context.get("cfg")
-        scheduler = context.get("scheduler")
-        
-        if model is None:
-            model=context.get("model")
-            
-        if positive is None:
-            positive = context.get("positive",None)
-            
-        if negative is None:    
-            negative = context.get("negative",None)
-            
-        if sampler is None:
-            sampler_name = context.get("sampler",None)
-            sampler = KSamplerSelect().get_sampler(sampler_name)[0]  
-            
-        if noise is None:
-            noise = RandomNoise().get_noise(seed)[0] 
-
-        guidance = context.get("guidance",None)
-        if guidance is None:
-            guidance = 3.5  # 默认值
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-        if guider is None:
-            guider = BasicGuider().get_guider(model, positive)[0] 
-
-        if sigmas is None:
-            sigmas = BasicScheduler().get_sigmas(model, scheduler, steps, denoise)[0]
-            
-        if  latent is None:
-            latent = context.get("latent")
-
-
-        if image is not None:
-            latent = VAEEncode().encode(vae, image)[0]
-        
-        out= SamplerCustomAdvanced().sample( noise, guider, sampler, sigmas, latent)
-        latent= out[0]
-        
-        if image_output == "None":
-            context = new_context(context, images=None, latent=latent, model=model, positive=positive, negative=negative,  )
-            return(context, model, positive, negative, latent, vae, None, ) 
-            
-        output_image = VAEDecode().decode(vae, latent)[0]  
-        #latent = VAEEncode().encode(vae, output_image)[0]
-        context = new_context(context, images=output_image, latent=latent, model=model, positive=positive, negative=negative,  )   
-        
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {},
-                "result": (context,output_image, model, positive, negative, latent, vae, )}
-            
-        return {"ui": {"images": results},
-                "result": (context,output_image, model, positive, negative, latent, vae,)}
-
-
-class basic_Ksampler_adv:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required":
-                    {
-                    "context": ("RUN_CONTEXT",),
-                    "add_noise": (["enable", "disable"], ),
-                    "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "steps": ("INT", {"default": 20, "min": 0, "max": 10000,"tooltip": "  0  == None"}),
-                    "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
-                    "end_at_step": ("INT", {"default": 1000, "min": 0, "max": 10000}),
-                    "return_with_leftover_noise": (["disable", "enable"], ),
-                    "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Hide"}),
-                    },
-                "optional": {
-                    "latent": ("LATENT", ),
-                    },
-                
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
-                
-                }
-
-    RETURN_TYPES = ("RUN_CONTEXT","IMAGE")
-    RETURN_NAMES = ("context ", "image")
-    OUTPUT_NODE = True
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-    def sample(self, context, add_noise, steps, noise_seed, start_at_step,end_at_step, return_with_leftover_noise, denoise=1.0, 
-                pos="", neg="", latent=None, prompt=None, image_output=None, extra_pnginfo=None, ):
-        force_full_denoise = True
-        if return_with_leftover_noise == "enable":
-            force_full_denoise = False
-        disable_noise = False
-        if add_noise == "disable":
-            disable_noise = True
-
-        model = context.get("model", None)  
-        vae = context.get("vae", None)
-        cfg = context.get("cfg", 8.0)  
-        sampler_name = context.get("sampler", None) 
-        scheduler = context.get("scheduler", None) 
-        latent = latent or context.get("latent", None)
-
-
-        positive = context.get("positive", None)
-        negative = context.get("negative", None)
-
-        guidance = context.get("guidance",None)
-        if guidance is None:
-            guidance = 3.5  # 默认值
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-
-        latent = common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, 
-                                positive, negative, latent, denoise=denoise, 
-                                disable_noise=disable_noise, 
-                                start_step=start_at_step, 
-                                last_step=end_at_step,
-                                force_full_denoise=force_full_denoise)[0]      
-        
-        
-        if image_output =="None":
-            context = new_context(context, latent=latent,images=None)
-
-            return (context, None,)
-        
-        output_image = VAEDecode().decode(vae, latent)[0]
-        context = new_context(context, latent=latent, images=output_image)  
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {},
-                "result": (context, output_image,)}
-            
-        return {"ui": {"images": results},
-                "result": (context, output_image,)}
-
-
-class chx_Ksampler_mix:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required":
-                    {
-                    "context": ("RUN_CONTEXT",),
-                    "add_noise": (["enable", "disable"], ),
-                    "noise_seed": ("INT", {"default": 3, "min": 0, "max": 0xffffffffffffffff}),
-                    
-                    "start_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
-                    "mid_denoise": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01,"tooltip": "percentage of denoising at mid step"}),
-                    "steps": ("INT", {"default": 20, "min": 0, "max": 10000}),
-                    "return_with_leftover_noise": (["disable", "enable"], ),
-                    
-                    },
-                    
-                "optional": {
-                    "latent": ("LATENT", ),
-                    "pos1": ("STRING", {"default": "a dog ", "multiline": True}),
-                    "pos2": ("STRING", {"default": "a girl ", "multiline": True}),
-                    "neg": ("STRING", {"default": "blur, blurry,", "multiline": False}),
-                    "mix_method": (["None","combine", "concat", "average"],),
-
-                    },
-                
-                }
-
-    RETURN_TYPES = ("RUN_CONTEXT","IMAGE")
-    RETURN_NAMES = ("context ", "image")
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-    def sample(self, context, add_noise, noise_seed,  start_step,  steps,  return_with_leftover_noise, denoise=1.0, mid_denoise =0.3,
-                pos1="", pos2="", neg="", latent=None, mix_method=None ):
-        force_full_denoise = True
-        if return_with_leftover_noise == "enable":
-            force_full_denoise = False
-        disable_noise = False
-        if add_noise == "disable":
-            disable_noise = True
-
-        model = context.get("model", None)  
-        vae = context.get("vae", None)
-        cfg = context.get("cfg", 8.0)  
-        sampler_name = context.get("sampler", None) 
-        scheduler = context.get("scheduler", None) 
-        clip = context.get("clip", None)
-        latent = latent or context.get("latent", None)
-        
-        mix_step = math.ceil(steps * mid_denoise) 
-
-        positive1 = CLIPTextEncode().encode(clip, pos1)[0]
-        positive2 = CLIPTextEncode().encode(clip, pos2)[0]
-        negative = CLIPTextEncode().encode(clip, neg)[0]
-
-        latent1 = common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, positive1, negative, latent, denoise=denoise, disable_noise=disable_noise, start_step=start_step, last_step=mix_step, force_full_denoise=force_full_denoise)[0]
-
-
-        if mix_method == "combine":
-            if isinstance(positive1, torch.Tensor) and isinstance(positive2, torch.Tensor):
-                if positive1.shape != positive2.shape:
-                    positive2 = torch.nn.functional.interpolate(positive2, size=positive1.shape[2:])
-                positive2 = positive2 + positive1
-
-        elif mix_method == "concat":
-            positive2 = ConditioningConcat().concat(positive1, positive2)[0]
-
-        elif mix_method == "average":
-            positive2 = ConditioningAverage().addWeighted(positive1, positive2, 0.5,)[0]
-        
-        
-        latent2 = common_ksampler(model, noise_seed, steps, cfg, sampler_name, scheduler, positive2, negative, latent1, denoise=denoise, disable_noise=disable_noise, start_step=mix_step, last_step=steps, force_full_denoise=force_full_denoise)[0]
-
-        output_image = VAEDecode().decode(vae, latent2)[0]
-        
-        context = new_context(context, latent=latent2, images=output_image, positive=positive2,negative=negative,)  
-        
-        return (context ,output_image )
-
-
-class chx_Ksampler_texture:
-    def __init__(self):
-        pass
-
-    @classmethod
-
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "tileX": ("INT", {"default": 1, "min": 0, "max": 2}),
-                "tileY": ("INT", {"default": 1, "min": 0, "max": 2}),
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("image",)
-    
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-
-    def apply_asymmetric_tiling(self, model, tileX, tileY):
-        for layer in [layer for layer in model.modules() if isinstance(layer, torch.nn.Conv2d)]:
-            layer.padding_modeX = 'circular' if tileX else 'constant'
-            layer.padding_modeY = 'circular' if tileY else 'constant'
-            layer.paddingX = (layer._reversed_padding_repeated_twice[0], layer._reversed_padding_repeated_twice[1], 0, 0)
-            layer.paddingY = (0, 0, layer._reversed_padding_repeated_twice[2], layer._reversed_padding_repeated_twice[3])
-            print(layer.paddingX, layer.paddingY)
-
-    def __hijackConv2DMethods(self, model, tileX: bool, tileY: bool):
-        for layer in [l for l in model.modules() if isinstance(l, torch.nn.Conv2d)]:
-            layer.padding_modeX = 'circular' if tileX else 'constant'
-            layer.padding_modeY = 'circular' if tileY else 'constant'
-            layer.paddingX = (layer._reversed_padding_repeated_twice[0], layer._reversed_padding_repeated_twice[1], 0, 0)
-            layer.paddingY = (0, 0, layer._reversed_padding_repeated_twice[2], layer._reversed_padding_repeated_twice[3])
-            
-            def make_bound_method(method, current_layer):
-                def bound_method(self, *args, **kwargs):  # Add 'self' here
-                    return method(current_layer, *args, **kwargs)
-                return bound_method
-                
-            bound_method = make_bound_method(self.__replacementConv2DConvForward, layer)
-            layer._conv_forward = bound_method.__get__(layer, type(layer))
-
-    def __replacementConv2DConvForward(self, layer, input: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]):
-        working = torch.nn.functional.pad(input, layer.paddingX, mode=layer.padding_modeX)
-        working = torch.nn.functional.pad(working, layer.paddingY, mode=layer.padding_modeY)
-        return torch.nn.functional.conv2d(working, weight, bias, layer.stride, (0, 0), layer.dilation, layer.groups)
-
-    def __restoreConv2DMethods(self, model):
-        for layer in [l for l in model.modules() if isinstance(l, torch.nn.Conv2d)]:
-            layer._conv_forward = torch.nn.Conv2d._conv_forward.__get__(layer, torch.nn.Conv2d)
-    
-    
-    def sample(self, context,  seed, tileX, tileY,  denoise=1.0):
-
-        
-        vae = context.get("vae")
-        steps = context.get("steps")
-        cfg = context.get("cfg")
-        sampler_name = context.get("sampler")
-        scheduler = context.get("scheduler")
-
-        positive = context.get("positive")
-        negative = context.get("negative")
-        model = context.get("model")
-        latent_image = context.get("latent") 
-        
-        self.__hijackConv2DMethods(model.model, tileX == 1, tileY == 1)
-        result = nodes.common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise)[0]
-        self.__restoreConv2DMethods(model.model)
-
-        
-        for layer in [layer for layer in vae.first_stage_model.modules() if isinstance(layer, torch.nn.Conv2d)]:
-            layer.padding_mode = 'circular'
-
-        out_image = vae.decode(result["samples"])
-
-        return (out_image,)  
-
-
-
-class chx_Ksampler_refine:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "upscale_model": (folder_paths.get_filename_list("upscale_models"), {"default": "RealESRGAN_x2.pth"}),
-                "upscale_method": (["lanczos", "nearest-exact", "bicubic"],),
-                "Add_img_scale": ("FLOAT", {"default": 1, "min": 0.01, "max": 16.0, "step": 0.01}),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "denoise": ("FLOAT", {"default": 0.3, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
-                
-                
-            },
-            
-            "optional": {
-                "image": ("IMAGE",),
-            },
-            
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
-        }
-
-
-    RETURN_TYPES = ("RUN_CONTEXT",  "IMAGE", )
-    RETURN_NAMES = ("context",  "image", )
-    OUTPUT_NODE = True
-    FUNCTION = "run"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-    def run(self,context, seed, denoise, upscale_model,upscale_method, image=None,  prompt=None, image_output=None, extra_pnginfo=None,Add_img_scale=1):
-
-
-        vae = context.get("vae",None)
-        steps = context.get("steps",None)
-        cfg = context.get("cfg",None)
-        sampler = context.get("sampler",None)
-        scheduler = context.get("scheduler",None)
-
-        positive = context.get("positive",None)
-        negative = context.get("negative",None)
-        model = context.get("model",None)
-        latent = context.get("latent",None) 
-
-        if image is not None:
-            latent = VAEEncode().encode(vae, image)[0]
-
-
-        guidance = context.get("guidance",None)
-        if guidance is None:
-            guidance = 3.5  # 默认值
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-
-        latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
-                positive, 
-                negative, 
-                latent, 
-                denoise=denoise
-                )[0]
-
-        if image_output == "None":
-            context = new_context(context, latent=latent, images=None, )
-            return(context, None)
-
-
-        output_image = VAEDecode().decode(vae, latent)[0]
-        
-        
-        upimage = image_upscale(output_image, upscale_method, Add_img_scale)[0]
-        up_model = load_upscale_model(upscale_model)
-        output_image = upscale_with_model(up_model, upimage )
-        
-        context = new_context(context, latent=latent, images=output_image,  )
-        
-        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {},
-                "result": (context, output_image,)}
-            
-        return {"ui": {"images": results},
-                "result": (context, output_image,)}
-
-
-
-#endregion-----------采样器--------------------------------------------------------------------------------#
-
-
-#region-----------tool--------------------------------------------------------------------------------------#--
-
-
-
-class chx_controlnet:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": { "context": ("RUN_CONTEXT",),},
-            "optional": {
-                "control_net": ("CONTROL_NET",),
-                "image": ("IMAGE",),
-                "controlNet": (['None'] + folder_paths.get_filename_list("controlnet"),),
-                "strength": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 10.0, "step": 0.01}),
-            }
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING", "CONDITIONING",)
-    RETURN_NAMES = ("context","positive", "negative",)
-    CATEGORY = "Apt_Preset/chx_tool"
-    FUNCTION = "load_controlnet"
-
-    def load_controlnet(self,  
-                        strength,control_net=None,
-                        context=None, controlNet=None, 
-                        image=None,  extra_concat=[]):
-
-        positive = context.get("positive", [])
-        negative = context.get("negative", [])
-        vae = context.get("vae", None)
-
-        if control_net is not None:
-                out=ControlNetApplyAdvanced().apply_controlnet(positive, negative, control_net, image, strength, 0, 1, vae, extra_concat)
-                positive=out[0]
-                negative=out[1]
-
-        if control_net is None:
-            if controlNet == "None" or image is None:
-                return (context,)
-            if controlNet != "None" and strength != 0 and image is not None:
-                control_net = ControlNetLoader().load_controlnet(controlNet)[0]
-                out=ControlNetApplyAdvanced().apply_controlnet(positive, negative, control_net, image, strength, 0, 1, vae, extra_concat)
-                positive=out[0]
-                negative=out[1]
-
-
-        context = new_context(context, positive=positive, negative=negative)
-        return (context, )
-
-
-
-class pre_controlnet_union:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {},
-            "optional": {
-                "context": ("RUN_CONTEXT",),
-                "image1": ("IMAGE",),
-                "image2": ("IMAGE",),
-                "image3": ("IMAGE",),
-                "controlNet": (['None'] + folder_paths.get_filename_list("controlnet"),),
-                "strength1": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "type1": (["None"] + list(UNION_CONTROLNET_TYPES.keys()),),
-                "strength2": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "type2": (["None"] + list(UNION_CONTROLNET_TYPES.keys()),),
-                "strength3": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "type3": (["None"] + list(UNION_CONTROLNET_TYPES.keys()),)
-            }
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING","CONDITIONING", )
-    RETURN_NAMES = ("context", "positive", "negative",  )
-    CATEGORY = "Apt_Preset/chx_tool"
-    FUNCTION = "load_controlnet"
-
-    def load_controlnet(self,  strength1, strength2, strength3, context=None, image1=None, image2=None, image3=None,
-                        controlNet=None, type1=None,type2=None, type3=None,
-                        extra_concat=[]):
-
-        positive = context.get("positive", [])
-        negative = context.get("negative", [])
-        vae = context.get("vae", None)
-        if controlNet == "None" :
-            return (context, )
-        control_net = ControlNetLoader().load_controlnet(controlNet)[0]
-
-
-        if type1!= "None" and strength1 != 0 and image1 is not None:
-            control_net = SetUnionControlNetType().set_controlnet_type( control_net, type1)[0]
-            out = ControlNetApplyAdvanced().apply_controlnet(positive, negative, control_net, image1, strength1, 0, 1, vae, extra_concat)
-
-
-        if type2!= "None" and strength2 != 0 and image2 is not None:
-            control_net = SetUnionControlNetType().set_controlnet_type( control_net, type2)[0]
-            out = ControlNetApplyAdvanced().apply_controlnet(positive, negative, control_net, image2, strength2, 0, 1, vae, extra_concat)
-
-
-        if type3!= "None" and strength3 != 0 and image3 is not None:
-            control_net = SetUnionControlNetType().set_controlnet_type( control_net, type3)[0]
-            out = ControlNetApplyAdvanced().apply_controlnet(positive, negative, control_net, image3, strength3, 0, 1, vae, extra_concat)
-
-        positive = out[0]
-        negative = out[1]
-
-        context = new_context(context, positive=positive, negative=negative)
-        return (context, positive, negative, )
-
-
-class XXpre_mul_Mulcondi:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "optional": {
-                "context": ("RUN_CONTEXT",),
-                "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "mask_1": ("MASK", ),
-                "mask_2": ("MASK", ),
-                "mask_3": ("MASK", ),
-                "mask_4": ("MASK", ),
-                "mask_5": ("MASK", ),
-                "mask_1_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_2_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_3_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_4_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_5_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "background": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "background is sea"}),
-                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True,"default": "Poor quality" }),
-            }
-        }
-        
-    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING", "CONDITIONING", )
-    RETURN_NAMES = ("context","positive", "negative",)
-
-    FUNCTION = "Mutil_Clip"
-    CATEGORY = "Apt_Preset/chx_tool"
-
-    def Mutil_Clip (self, pos1, pos2, pos3, pos4, pos5, background, neg,  mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength, mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None, context=None):
-        set_cond_area = "default"
-        clip = context.get("clip")
-        positive_1, = CLIPTextEncode().encode(clip, pos1)
-        positive_2, = CLIPTextEncode().encode(clip, pos2)
-        positive_3, = CLIPTextEncode().encode(clip, pos3)
-        positive_4, = CLIPTextEncode().encode(clip, pos4)
-        positive_5, = CLIPTextEncode().encode(clip, pos5)
-        negative, = CLIPTextEncode().encode(clip, neg)
-
-        c = []
-        set_area_to_bounds = False
-        if set_cond_area != "default":
-            set_area_to_bounds = True
-        valid_masks = []
-        if mask_1 is not None and len(mask_1.shape) < 3:  
-            mask_1 = mask_1.unsqueeze(0)
-        if mask_2 is not None and len(mask_2.shape) < 3:  
-            mask_2 = mask_2.unsqueeze(0)
-        if mask_3 is not None and len(mask_3.shape) < 3:  
-            mask_3 = mask_3.unsqueeze(0)
-        if mask_4 is not None and len(mask_4.shape) < 3:  
-            mask_4 = mask_4.unsqueeze(0)
-        if mask_5 is not None and len(mask_5.shape) < 3:  
-            mask_5 = mask_5.unsqueeze(0)
-
-        if mask_1 is not None:
-            for t in positive_1:
-                append_helper(t, mask_1, c, set_area_to_bounds, mask_1_strength)
-        if mask_2 is not None:
-            for t in positive_2:
-                append_helper(t, mask_2, c, set_area_to_bounds, mask_2_strength)
-        if mask_3 is not None:
-            for t in positive_3:
-                append_helper(t, mask_3, c, set_area_to_bounds, mask_3_strength)
-        if mask_4 is not None:
-            for t in positive_4:
-                append_helper(t, mask_4, c, set_area_to_bounds, mask_4_strength)
-        if mask_5 is not None:
-            for t in positive_5:
-                append_helper(t, mask_5, c, set_area_to_bounds, mask_5_strength)
-
-        if valid_masks:
-            total_mask = sum(valid_masks)
-            mask_6 = 1 - total_mask
-        else:
-            mask_6 = None
-            # 修正：background 是字符串，应该先编码
-            background_cond, = CLIPTextEncode().encode(clip, background)
-            for t in background_cond:
-                append_helper(t, mask_6, c, set_area_to_bounds, 1)
-
-        context = new_context(context, positive=c, negative=negative, clip=clip)
-
-        return (context, c, negative)
-
-
-
-class pre_mul_Mulcondi:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "optional": {
-                "context": ("RUN_CONTEXT",),
-                "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "mask_1": ("MASK", ),
-                "mask_2": ("MASK", ),
-                "mask_3": ("MASK", ),
-                "mask_4": ("MASK", ),
-                "mask_5": ("MASK", ),
-                "mask_1_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_2_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_3_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_4_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_5_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "background": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "background is sea"}),
-                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True,"default": "Poor quality" }),
-            }
-        }
-        
-    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING", "CONDITIONING", )
-    RETURN_NAMES = ("context","positive", "negative",)
-
-    FUNCTION = "Mutil_Clip"
-    CATEGORY = "Apt_Preset/chx_tool"
-
-    def Mutil_Clip (self, pos1, pos2, pos3, pos4, pos5, background, neg,  mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength, mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None, context=None):
-        set_cond_area = "default"
-        clip = context.get("clip")
-        positive_1, = CLIPTextEncode().encode(clip, pos1)
-        positive_2, = CLIPTextEncode().encode(clip, pos2)
-        positive_3, = CLIPTextEncode().encode(clip, pos3)
-        positive_4, = CLIPTextEncode().encode(clip, pos4)
-        positive_5, = CLIPTextEncode().encode(clip, pos5)
-        negative, = CLIPTextEncode().encode(clip, neg)
-
-        c = []
-        set_area_to_bounds = False
-        if set_cond_area != "default":
-            set_area_to_bounds = True
-        valid_masks = []
-        
-        # 处理遮罩维度
-        if mask_1 is not None and len(mask_1.shape) < 3:  
-            mask_1 = mask_1.unsqueeze(0)
-        if mask_2 is not None and len(mask_2.shape) < 3:  
-            mask_2 = mask_2.unsqueeze(0)
-        if mask_3 is not None and len(mask_3.shape) < 3:  
-            mask_3 = mask_3.unsqueeze(0)
-        if mask_4 is not None and len(mask_4.shape) < 3:  
-            mask_4 = mask_4.unsqueeze(0)
-        if mask_5 is not None and len(mask_5.shape) < 3:  
-            mask_5 = mask_5.unsqueeze(0)
-
-        # 应用各个遮罩并收集有效的遮罩
-        if mask_1 is not None:
-            for t in positive_1:
-                append_helper(t, mask_1, c, set_area_to_bounds, mask_1_strength)
-            valid_masks.append(mask_1)
-        if mask_2 is not None:
-            for t in positive_2:
-                append_helper(t, mask_2, c, set_area_to_bounds, mask_2_strength)
-            valid_masks.append(mask_2)
-        if mask_3 is not None:
-            for t in positive_3:
-                append_helper(t, mask_3, c, set_area_to_bounds, mask_3_strength)
-            valid_masks.append(mask_3)
-        if mask_4 is not None:
-            for t in positive_4:
-                append_helper(t, mask_4, c, set_area_to_bounds, mask_4_strength)
-            valid_masks.append(mask_4)
-        if mask_5 is not None:
-            for t in positive_5:
-                append_helper(t, mask_5, c, set_area_to_bounds, mask_5_strength)
-            valid_masks.append(mask_5)
-
-        # 计算背景遮罩
-        if valid_masks:
-            total_mask = sum(valid_masks)
-            # 确保总遮罩不超过1
-            total_mask = torch.clamp(total_mask, 0, 1)
-            mask_6 = 1 - total_mask
-        else:
-            mask_6 = torch.ones_like(mask_1) if mask_1 is not None else None
-
-        # 应用背景条件
-        if mask_6 is not None:
-            background_cond, = CLIPTextEncode().encode(clip, background)
-            for t in background_cond:
-                append_helper(t, mask_6, c, set_area_to_bounds, 1)
-
-        context = new_context(context, positive=c, negative=negative, clip=clip)
-
-        return (context, c, negative)
-
-
-
-#endregion-----------tool--------------------------------------------------------------------------------------#--
-
-
-#region-----------风格组--------------------------------------------------------------------------------------#--
-
-
-
-class chx_YC_LG_Redux:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            
-            "context": ("RUN_CONTEXT",),
-            "style_model": (folder_paths.get_filename_list("style_models"), {"default": "flux1-redux-dev.safetensors"}),
-            "clip_vision": (folder_paths.get_filename_list("clip_vision"), {"default": "sigclip_vision_patch14_384.safetensors"}),
-
-            "crop": (["center", "mask_area", "none"], {
-                "default": "none",
-                "tooltip": "裁剪模式：center-中心裁剪, mask_area-遮罩区域裁剪, none-不裁剪"
-            }),
-            "sharpen": ("FLOAT", {
-                "default": 0.0,
-                "min": -5.0,
-                "max": 5.0,
-                "step": 0.1,
-                "tooltip": "锐化强度：负值为模糊，正值为锐化，0为不处理"
-            }),
-            "patch_res": ("INT", {
-                "default": 16,
-                "min": 1,
-                "max": 64,
-                "step": 1,
-                "tooltip": "patch分辨率，数值越大分块越细致"
-            }),
-            "style_strength": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 2.0,
-                "step": 0.01,
-                "tooltip": "风格强度，越高越偏向参考图片"
-            }),
-            "prompt_strength": ("FLOAT", { 
-                "default": 1.0,
-                "min": 0.0,
-                "max": 2.0,
-                "step": 0.01,
-                "tooltip": "文本提示词强度，越高文本特征越强"
-            }),
-            "blend_mode": (["lerp", "feature_boost", "frequency"], {
-                "default": "lerp",
-                "tooltip": "风格强度的计算方式：\n" +
-                        "lerp - 线性混合 - 高度参考原图\n" +
-                        "feature_boost - 特征增强 - 增强真实感\n" +
-                        "frequency - 频率增强 - 增强高频细节"
-            }),
-            "noise_level": ("FLOAT", { 
-                "default": 0.0,
-                "min": 0.0,
-                "max": 1.0,
-                "step": 0.01,
-                "tooltip": "添加随机噪声的强度，可用于修复错误细节"
-            }),
-        },
-        "optional": { 
-            "image": ("IMAGE",),
-            "mask": ("MASK", ), 
-            "guidance": ("FLOAT", {"default": 30, "min": 0.0, "max": 100.0, "step": 0.1}),
-        }}
-        
-    RETURN_TYPES = ("RUN_CONTEXT", "CONDITIONING",)
-    RETURN_NAMES = ("context", "positive",)
-    
-    FUNCTION = "apply_stylemodel"
-    CATEGORY = "Apt_Preset/chx_IPA"
-
-    def crop_to_mask_area(self, image, mask):
-        if len(image.shape) == 4:
-            B, H, W, C = image.shape
-            image = image.squeeze(0)
-        else:
-            H, W, C = image.shape
-        
-        if len(mask.shape) == 3:
-            mask = mask.squeeze(0)
-        
-        nonzero_coords = torch.nonzero(mask)
-        if len(nonzero_coords) == 0:
-            return image, mask
-        
-        top = nonzero_coords[:, 0].min().item()
-        bottom = nonzero_coords[:, 0].max().item()
-        left = nonzero_coords[:, 1].min().item()
-        right = nonzero_coords[:, 1].max().item()
-        
-        width = right - left
-        height = bottom - top
-        size = max(width, height)
-        
-        center_y = (top + bottom) // 2
-        center_x = (left + right) // 2
-        
-        half_size = size // 2
-        new_top = max(0, center_y - half_size)
-        new_bottom = min(H, center_y + half_size)
-        new_left = max(0, center_x - half_size)
-        new_right = min(W, center_x + half_size)
-        
-        cropped_image = image[new_top:new_bottom, new_left:new_right]
-        cropped_mask = mask[new_top:new_bottom, new_left:new_right]
-        
-        cropped_image = cropped_image.unsqueeze(0)
-        cropped_mask = cropped_mask.unsqueeze(0)
-        
-        return cropped_image, cropped_mask
-    
-    def apply_image_preprocess(self, image, strength):
-        original_shape = image.shape
-        original_device = image.device
-        
-        if torch.is_tensor(image):
-            if len(image.shape) == 4:
-                image_np = (image[0].cpu().numpy() * 255).astype(np.uint8)
-            else:
-                image_np = (image.cpu().numpy() * 255).astype(np.uint8)
-        
-        if strength < 0:
-            abs_strength = abs(strength)
-            kernel_size = int(3 + abs_strength * 12) // 2 * 2 + 1
-            sigma = 0.3 + abs_strength * 2.7
-            processed = cv2.GaussianBlur(image_np, (kernel_size, kernel_size), sigma)
-        elif strength > 0:
-            kernel = np.array([[-1,-1,-1],
-                             [-1, 9,-1],
-                             [-1,-1,-1]]) * strength + np.array([[0,0,0],
-                                                               [0,1,0],
-                                                               [0,0,0]]) * (1 - strength)
-            processed = cv2.filter2D(image_np, -1, kernel)
-            processed = np.clip(processed, 0, 255)
-        else:
-            processed = image_np
-        
-        processed_tensor = torch.from_numpy(processed.astype(np.float32) / 255.0).to(original_device)
-        if len(original_shape) == 4:
-            processed_tensor = processed_tensor.unsqueeze(0)
-        
-        return processed_tensor
-    
-    def apply_style_strength(self, cond, txt, strength, mode="lerp"):
-        if mode == "lerp":
-            if txt.shape[1] != cond.shape[1]:
-                txt_mean = txt.mean(dim=1, keepdim=True)
-                txt_expanded = txt_mean.expand(-1, cond.shape[1], -1)
-                return torch.lerp(txt_expanded, cond, strength)
-            return torch.lerp(txt, cond, strength)
-        
-        elif mode == "feature_boost":
-            mean = torch.mean(cond, dim=-1, keepdim=True)
-            std = torch.std(cond, dim=-1, keepdim=True)
-            normalized = (cond - mean) / (std + 1e-6)
-            boost = torch.tanh(normalized * (strength * 2.0))
-            return cond * (1 + boost * 2.0)
-    
-        elif mode == "frequency":
-            try:
-                B, N, C = cond.shape
-                x = cond.float()
-                fft = torch.fft.rfft(x, dim=-1)
-                magnitudes = torch.abs(fft)
-                phases = torch.angle(fft)
-                freq_dim = fft.shape[-1]
-                freq_range = torch.linspace(0, 1, freq_dim, device=cond.device)
-                alpha = 2.0 * strength
-                beta = 0.5
-                filter_response = 1.0 + alpha * torch.pow(freq_range, beta)
-                filter_response = filter_response.view(1, 1, -1)
-                enhanced_magnitudes = magnitudes * filter_response
-                enhanced_fft = enhanced_magnitudes * torch.exp(1j * phases)
-                enhanced = torch.fft.irfft(enhanced_fft, n=C, dim=-1)
-                mean = enhanced.mean(dim=-1, keepdim=True)
-                std = enhanced.std(dim=-1, keepdim=True)
-                enhanced_norm = (enhanced - mean) / (std + 1e-6)
-                mix_ratio = torch.sigmoid(torch.tensor(strength * 2 - 1))
-                result = torch.lerp(cond, enhanced_norm.to(cond.dtype), mix_ratio)
-                residual = (result - cond) * strength
-                final = cond + residual
-                return final
-            except Exception as e:
-                print(f"频率处理出错: {e}")
-                print(f"输入张量形状: {cond.shape}")
-                return cond
-                
-        return cond
-    
-    def apply_stylemodel(self, style_model, clip_vision,
-                        patch_res=16, style_strength=1.0, prompt_strength=1.0, 
-                        noise_level=0.0, crop="none", sharpen=0.0, guidance=30,
-                        blend_mode="lerp", image=None,  mask=None, context=None):
-        
-        
-        conditioning = context.get("positive", None)  
-        if image is None:
-            return (context,positive,)
-
-        style_model_path = folder_paths.get_full_path_or_raise("style_models", style_model)
-        style_model = comfy.sd.load_style_model(style_model_path)
-
-        clip_path = folder_paths.get_full_path_or_raise("clip_vision", clip_vision)
-        clip_vision = comfy.clip_vision.load(clip_path)
-
-
-        
-        processed_image = image.clone()
-        if sharpen != 0:
-            processed_image = self.apply_image_preprocess(processed_image, sharpen)
-        if crop == "mask_area" and mask is not None:
-            processed_image, mask = self.crop_to_mask_area(processed_image, mask)
-            clip_vision_output = clip_vision.encode_image(processed_image, crop=False)
-        else:
-            crop_image = True if crop == "center" else False
-            clip_vision_output = clip_vision.encode_image(processed_image, crop=crop_image)
-        
-        cond = style_model.get_cond(clip_vision_output)
-        
-        B = cond.shape[0]
-        H = W = int(math.sqrt(cond.shape[1]))
-        C = cond.shape[2]
-        cond = cond.reshape(B, H, W, C)
-        
-        new_H = H * patch_res // 16
-        new_W = W * patch_res // 16
-        
-        cond = torch.nn.functional.interpolate(
-            cond.permute(0, 3, 1, 2),
-            size=(new_H, new_W),
-            mode='bilinear',
-            align_corners=False
+    ratio_sizes = list(data['ratios'].keys())
+    ratio_dict = data['ratios']
+    return ratio_sizes, ratio_dict
+
+
+def easySave(images, filename_prefix, output_type, prompt=None, extra_pnginfo=None):  # 预览、保存图片
+
+    if output_type in ["Hide", "None"]:
+        return list()
+    elif output_type in ["Preview", "Preview&Choose"]:
+        filename_prefix = 'easyPreview'
+        results = PreviewImage().save_images(images, filename_prefix, prompt, extra_pnginfo)
+        return results['ui']['images']
+    else:
+        results = SaveImage().save_images(images, filename_prefix, prompt, extra_pnginfo)
+        return results['ui']['images']
+
+
+
+def append_helper(t, mask, c, set_area_to_bounds, strength): #多文本条件
+    if mask is not None:  
+        n = [t[0], t[1].copy()]
+        _, h, w = mask.shape
+        n[1]['mask'] = mask
+        n[1]['set_area_to_bounds'] = set_area_to_bounds
+        n[1]['mask_strength'] = strength
+        c.append(n)
+
+
+def rescale(samples, width, height, algorithm):
+
+    if len(samples.shape) != 4:
+        raise ValueError(f"Expected 4D tensor, but got shape {samples.shape}")
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Width and height must be > 0, but got {width}, {height}")
+    if samples.shape[2] == height and samples.shape[3] == width:
+        return samples
+
+    if algorithm == "nearest":
+        return torch.nn.functional.interpolate(samples, size=(height, width), mode="nearest")
+    elif algorithm == "bilinear":
+        return torch.nn.functional.interpolate(samples, size=(height, width), mode="bilinear")
+    elif algorithm == "bicubic":
+        return torch.nn.functional.interpolate(samples, size=(height, width), mode="bicubic")
+    elif algorithm == "area":
+        return torch.nn.functional.interpolate(samples, size=(height, width), mode="area")
+    elif algorithm == "bislerp":
+        return comfy.utils.bislerp(samples, width, height)
+
+    return samples
+
+
+
+def upscale_with_model(upscale_model, image):
+    device = model_management.get_torch_device()
+    upscale_model.to(device)
+    in_img = image.movedim(-1,-3).to(device)
+    free_memory = model_management.get_free_memory(device)
+
+    tile = 512
+    overlap = 32
+
+    oom = True
+    while oom:
+        try:
+            steps = in_img.shape[0] * comfy.utils.get_tiled_scale_steps(in_img.shape[3], in_img.shape[2], tile_x=tile, tile_y=tile, overlap=overlap)
+            pbar = comfy.utils.ProgressBar(steps)
+            s = comfy.utils.tiled_scale(in_img, lambda a: upscale_model(a), tile_x=tile, tile_y=tile, overlap=overlap, upscale_amount=upscale_model.scale, pbar=pbar)
+            oom = False
+        except model_management.OOM_EXCEPTION as e:
+            tile //= 2
+            if tile < 128:
+                raise e
+
+    upscale_model.cpu()
+    s = torch.clamp(s.movedim(-3,-1), min=0, max=1.0)
+    return s        
+
+
+def image_upscale(image, upscale_method, scale_by):
+    samples = image.movedim(-1,1)
+    width = round(samples.shape[3] * scale_by)
+    height = round(samples.shape[2] * scale_by)
+    s = comfy.utils.common_upscale(samples, width, height, upscale_method, "disabled")
+    s = s.movedim(1,-1)
+    return (s,)
+
+
+def upscale(image, upscale_method, width,height):
+    samples = image.movedim(-1,1)
+    s = comfy.utils.common_upscale(samples, width, height, upscale_method, "disabled")
+    s = s.movedim(1,-1)
+    return (s,)
+
+
+def image_2dtransform(             # 2D图像变换
+        image,
+        x,
+        y,
+        zoom,
+        angle,
+        shear=0,
+        border_handling="edge",
+    ):
+        x = int(x)
+        y = int(y)
+        angle = int(angle)
+
+        if image.size(0) == 0:
+            return (torch.zeros(0),)
+        frames_count, frame_height, frame_width, frame_channel_count = image.size()
+
+        new_height, new_width = int(frame_height * zoom), int(frame_width * zoom)
+
+        # - Calculate diagonal of the original image
+        diagonal = math.sqrt(frame_width**2 + frame_height**2)
+        max_padding = math.ceil(diagonal * zoom - min(frame_width, frame_height))
+        # Calculate padding for zoom
+        pw = int(frame_width - new_width)
+        ph = int(frame_height - new_height)
+
+        pw += abs(max_padding)
+        ph += abs(max_padding)
+
+        padding = [max(0, pw + x), max(0, ph + y), max(0, pw - x), max(0, ph - y)]
+
+        img = tensor2pil(image)
+
+        img = TF.pad(
+            img,  # transformed_frame,
+            padding=padding,
+            padding_mode=border_handling,
         )
-        
-        cond = cond.permute(0, 2, 3, 1)
-        cond = cond.reshape(B, -1, C)
-        cond = cond.flatten(start_dim=0, end_dim=1).unsqueeze(dim=0)
-        
-        c_out = []
-        for t in conditioning:
-            txt, keys = t
-            keys = keys.copy()
-            
-            if prompt_strength != 1.0:
-                txt_enhanced = txt * (prompt_strength ** 3)
-                txt_repeated = txt_enhanced.repeat(1, 2, 1)
-                txt = txt_repeated
-            
-            if style_strength != 1.0:
-                processed_cond = self.apply_style_strength(
-                    cond, txt, style_strength, blend_mode
-                )
-            else:
-                processed_cond = cond
-    
-            if mask is not None:
-                feature_size = int(math.sqrt(processed_cond.shape[1]))
-                processed_mask = torch.nn.functional.interpolate(
-                    mask.unsqueeze(1) if mask.dim() == 3 else mask,
-                    size=(feature_size, feature_size),
-                    mode='bilinear',
-                    align_corners=False
-                ).flatten(1).unsqueeze(-1)
-                
-                if txt.shape[1] != processed_cond.shape[1]:
-                    txt_mean = txt.mean(dim=1, keepdim=True)
-                    txt_expanded = txt_mean.expand(-1, processed_cond.shape[1], -1)
-                else:
-                    txt_expanded = txt
-                
-                processed_cond = processed_cond * processed_mask + \
-                               txt_expanded * (1 - processed_mask)
-    
-            if noise_level > 0:
-                noise = torch.randn_like(processed_cond)
-                noise = (noise - noise.mean()) / (noise.std() + 1e-8)
-                processed_cond = torch.lerp(processed_cond, noise, noise_level)
-                processed_cond = processed_cond * (1.0 + noise_level)
-                
-            c_out.append([torch.cat((txt, processed_cond), dim=1), keys])
-        
-        
-        
-        positive = node_helpers.conditioning_set_values(c_out, {"guidance": guidance})
 
-        context = new_context(context, positive=positive,)
-        
-        return (context,positive,)
-
-
-
-class chx_StyleModelApply:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-                            "context": ("RUN_CONTEXT",),
-                            "style_model": (folder_paths.get_filename_list("style_models"), {"default": "flux1-redux-dev.safetensors"}),
-                            "clip_vision": (folder_paths.get_filename_list("clip_vision"), {"default": "sigclip_vision_patch14_384.safetensors"}),
-                            "image": ("IMAGE",),
-                            
-                            "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.001}),
-                            "strength_type": (["multiply", "attn_bias"], ),
-                            "guidance": ("FLOAT", {"default": 30, "min": 0.0, "max": 100.0, "step": 0.1}),
-                            }}
-
-    RETURN_TYPES = ("RUN_CONTEXT", "CONDITIONING",)
-    RETURN_NAMES = ("context", "positive",)
-    FUNCTION = "apply_stylemodel"
-    CATEGORY = "Apt_Preset/chx_IPA"
-
-    def apply_stylemodel(self, style_model, clip_vision, strength, strength_type, guidance=30, context=None, image=None):
-        
-        conditioning = context.get("positive", None)  
-
-        style_model_path = folder_paths.get_full_path_or_raise("style_models", style_model)
-        style_model = comfy.sd.load_style_model(style_model_path)
-
-        clip_path = folder_paths.get_full_path_or_raise("clip_vision", clip_vision)
-        clip_vision = comfy.clip_vision.load(clip_path)
-        clip_vision_output = clip_vision.encode_image(image, crop="center") 
-    
-        cond = style_model.get_cond(clip_vision_output).flatten(start_dim=0, end_dim=1).unsqueeze(dim=0)
-        if strength_type == "multiply":
-            cond *= strength
-
-        n = cond.shape[1]
-        c_out = []
-        for t in conditioning:
-            (txt, keys) = t
-            keys = keys.copy()
-            if strength_type == "attn_bias" and strength != 1.0:
-                attn_bias = torch.log(torch.Tensor([strength]))
-                mask_ref_size = keys.get("attention_mask_img_shape", (1, 1))
-                n_ref = mask_ref_size[0] * mask_ref_size[1]
-                n_txt = txt.shape[1]
-
-                mask = keys.get("attention_mask", None)
-                if mask is None:
-                    mask = torch.zeros((txt.shape[0], n_txt + n_ref, n_txt + n_ref), dtype=torch.float16)
-                if mask.dtype == torch.bool:
-
-                    mask = torch.log(mask.to(dtype=torch.float16))
-                new_mask = torch.zeros((txt.shape[0], n_txt + n + n_ref, n_txt + n + n_ref), dtype=torch.float16)
-
-                new_mask[:, :n_txt, :n_txt] = mask[:, :n_txt, :n_txt]
-                new_mask[:, :n_txt, n_txt+n:] = mask[:, :n_txt, n_txt:]
-                new_mask[:, n_txt+n:, :n_txt] = mask[:, n_txt:, :n_txt]
-                new_mask[:, n_txt+n:, n_txt+n:] = mask[:, n_txt:, n_txt:]
-
-                new_mask[:, :n_txt, n_txt:n_txt+n] = attn_bias
-                new_mask[:, n_txt+n:, n_txt:n_txt+n] = attn_bias
-                keys["attention_mask"] = new_mask.to(txt.device)
-                keys["attention_mask_img_shape"] = mask_ref_size
-
-            c_out.append([torch.cat((txt, cond), dim=1), keys])
-        
-        positive = node_helpers.conditioning_set_values(c_out, {"guidance": guidance})
-        context = new_context(context, positive=positive,)
-        return (context,positive,)  
-
-
-
-class chx_Style_Redux:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "context": ("RUN_CONTEXT",),
-            "style_model": (folder_paths.get_filename_list("style_models"), {"default": "flux1-redux-dev.safetensors"}),
-            "clip_vision": (folder_paths.get_filename_list("clip_vision"), {"default": "sigclip_vision_patch14_384.safetensors"}),
-            "image": ("IMAGE",),
-            "style_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制整体艺术风格的权重"
-            }),
-            "color_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制颜色特征的权重"
-            }),
-            "content_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制内容语义的权重"
-            }),
-            "structure_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制结构布局的权重"
-            }),
-            "texture_weight": ("FLOAT", {
-                "default": 1.0,
-                "min": 0.0,
-                "max": 10.0,
-                "step": 0.01,
-                "tooltip": "控制纹理细节的权重"
-            }),
-            "similarity_threshold": ("FLOAT", {
-                "default": 0.7,
-                "min": 0.0,
-                "max": 1.0,
-                "step": 0.01,
-                "tooltip": "特征相似度阈值，超过此值的区域将被替换"
-            }),
-            "enhancement_base": ("FLOAT", {
-                "default": 1.5,
-                "min": 1.0,
-                "max": 3.0,
-                "step": 0.1,
-                "tooltip": "文本特征替换的基础增强系数"
-            })
-        },
-        
-        "optional": { 
-            "guidance": ("FLOAT", {"default": 30, "min": 0.0, "max": 100.0, "step": 0.1}),
-        }}
-        
-    
-    RETURN_TYPES = ("RUN_CONTEXT", "CONDITIONING",)
-    RETURN_NAMES = ("context", "positive",)
-    
-    FUNCTION = "apply_style"
-    CATEGORY = "Apt_Preset/chx_IPA"
-
-    def __init__(self):
-        
-        import comfy.ops
-        ops = comfy.ops.manual_cast
-
-        self.text_projector = ops.Linear(4096, 4096)  # 保持维度一致
-        # 为不同类型特征设置增强系数
-        self.enhancement_factors = {
-            'style': 1.2,    # 风格特征增强系数
-            'color': 1.0,    # 颜色特征增强系数
-            'content': 1.1,  # 内容特征增强系数
-            'structure': 1.3, # 结构特征增强系数
-            'texture': 1.0   # 纹理特征增强系数
-        }
-
-    def compute_similarity(self, text_feat, image_feat):
-        """计算多种相似度的组合"""
-        # 1. 余弦相似度
-        cos_sim = torch.cosine_similarity(text_feat, image_feat, dim=-1)
-        
-        l2_dist = torch.norm(text_feat - image_feat, p=2, dim=-1)
-        l2_sim = 1 / (1 + l2_dist)  # 转换为相似度
-        
-        dot_sim = torch.sum(text_feat * image_feat, dim=-1)
-        dot_sim = torch.tanh(dot_sim)  # 归一化到[-1,1]
-        
-        attn_weights = torch.softmax(torch.matmul(text_feat, image_feat.transpose(-2, -1)) / math.sqrt(text_feat.size(-1)), dim=-1)
-        attn_sim = torch.mean(attn_weights, dim=-1)
-        
-        combined_sim = (
-            0.4 * cos_sim +
-            0.2 * l2_sim +
-            0.2 * dot_sim +
-            0.2 * attn_sim
+        img = cast(
+            Image.Image,
+            TF.affine(img, angle=angle, scale=zoom, translate=[x, y], shear=shear),
         )
-        
-        return combined_sim.mean()
 
-    def apply_style(self, style_weight=1.0, color_weight=1.0, content_weight=1.0,guidance=30,
-                structure_weight=1.0, texture_weight=1.0, image=None, style_model=None, clip_vision=None,
-                similarity_threshold=0.7, enhancement_base=1.5,context=None,):
-        
-        conditioning = context.get("positive", None)  
+        left = abs(padding[0])
+        upper = abs(padding[1])
+        right = img.width - abs(padding[2])
+        bottom = img.height - abs(padding[3])
 
-        style_model_path = folder_paths.get_full_path_or_raise("style_models", style_model)
-        style_model = comfy.sd.load_style_model(style_model_path)
+        img = img.crop((left, upper, right, bottom))
 
-        clip_path = folder_paths.get_full_path_or_raise("clip_vision", clip_vision)
-        clip_vision = comfy.clip_vision.load(clip_path)
-        clip_vision_output = clip_vision.encode_image(image, crop="center") 
+        return pil2tensor(img)
+
+
+
+
+def get_image_resize(image, target_image=None):  # 中心裁切，输入和输出都是4维张量或都是PIL
+    # 检查输入是否为PIL图像
+    input_was_pil = isinstance(image, Image.Image)
+    target_was_pil = isinstance(target_image, Image.Image) if target_image is not None else False   
+    # 转换PIL图像为张量
+    if input_was_pil:
+        image = pil2tensor(image)
     
-        image_cond = style_model.get_cond(clip_vision_output).flatten(start_dim=0, end_dim=1)
-        
-        text_features = conditioning[0][0]  # [batch_size, seq_len, 4096]
-        text_features = text_features.mean(dim=1)  # [batch_size, 4096]
-        
-        text_features = self.text_projector(text_features)  # [batch_size, 4096]
-        
-        if text_features.shape[0] != image_cond.shape[0]:
-            text_features = text_features.expand(image_cond.shape[0], -1)
+    if target_was_pil and target_image is not None:
+        target_image = pil2tensor(target_image)  
+    # 原始处理逻辑
+    B, H, W, C = image.shape
+    upscale_method = "lanczos"
+    crop = "center"  
+    if target_image is None:
+        width = W - (W % 8)
+        height = H - (H % 8)
+        image = image.movedim(-1, 1)
+        image = common_upscale(image, width, height, upscale_method, crop)
+        image = image.movedim(1, -1)
+        result = image
+    else:
+        _, height, width, _ = target_image.shape
+        image = image.movedim(-1, 1)
+        image = common_upscale(image, width, height, upscale_method, crop)
+        image = image.movedim(1, -1)
+        result = image
+    # 如果原始输入是PIL图像，转换回PIL图像
+    if input_was_pil:
+        result = tensor2pil(result)
+    
+    return result
 
-        feature_size = image_cond.shape[-1]  # 4096
-        splits = feature_size // 5  # 每部分约819维
 
-        image_features = {
-            'style': image_cond[..., :splits],
-            'color': image_cond[..., splits:splits*2],
-            'content': image_cond[..., splits*2:splits*3],
-            'structure': image_cond[..., splits*3:splits*4],
-            'texture': image_cond[..., splits*4:]
-        }
+
+
+
+
+
+
+#endregion------------------图像处理----------------------------------------------------#
+
+
+
+#region------------------颜色处理----------------------------------------------------#
+
+
+def hex_to_float(color):
+    if not isinstance(color, str):
+        raise ValueError("Color must be a hex string")
+    color = color.strip("#")
+    return int(color, 16) / 255.0
+
+
+def hex_to_rgba(hex_color, alpha): 
+    r, g, b = hex_to_rgb(hex_color)
+    return (r, g, b, int(alpha * 255 / 100))
+
+
+def hex_to_rgb(hex_color):    #只能处理 6 位十六进制颜色字符串作为输入，例如 "#FF0000"
+    hex_color = hex_color.lstrip('#')
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return (r, g, b)
+
+def hex_to_rgb_tuple(color):   # 处理 3 位和 6 位十六进制颜色字符串作为输入，例如 "#F00" 和 "#FF0000"
+    if isinstance(color, list) and len(color) == 3:
+        return tuple(int(c * 255) for c in color)
+    elif isinstance(color, str):
+        color = color.lstrip('#')
+        if len(color) == 6:
+            return tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+        elif len(color) == 3:
+            return tuple(int(c * 2, 16) for c in color)
+    raise ValueError(f"不支持的颜色格式: {color}")
+
+
+color_mapping = {
+    "white": (255, 255, 255),
+    "black": (0, 0, 0),
+    "red": (255, 0, 0),
+    "green": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "yellow": (255, 255, 0),
+    "cyan": (0, 255, 255),
+    "magenta": (255, 0, 255),
+    "orange": (255, 165, 0),
+    "purple": (128, 0, 128),
+    "pink": (255, 192, 203),
+    "brown": (165, 42, 42),
+    "gray": (128, 128, 128),
+    "lightgray": (211, 211, 211),
+    "darkgray": (169, 169, 169),
+    "olive": (128, 128, 0),
+    "lime": (0, 128, 0),
+    "teal": (0, 128, 128),
+    "navy": (0, 0, 128),
+    "maroon": (128, 0, 0),
+    "fuchsia": (255, 0, 128),
+    "aqua": (0, 255, 128),
+    "silver": (192, 192, 192),
+    "gold": (255, 215, 0),
+    "turquoise": (64, 224, 208),
+    "lavender": (230, 230, 250),
+    "violet": (238, 130, 238),
+    "coral": (255, 127, 80),
+    "indigo": (75, 0, 130),    
+}
+
+
+COLORSMAP = ["white", "black", "red", "green", "blue", "yellow",
+        "cyan", "magenta", "orange", "purple", "pink", "brown", "gray",
+        "lightgray", "darkgray", "olive", "lime", "teal", "navy", "maroon",
+        "fuchsia", "aqua", "silver", "gold", "turquoise", "lavender",
+        "violet", "coral", "indigo"]
+
+
+STYLES = ["Accent","afmhot","autumn","binary","Blues","bone","BrBG","brg",
+    "BuGn","BuPu","bwr","cividis","CMRmap","cool","coolwarm","copper","cubehelix","Dark2","flag",
+    "gist_earth","gist_gray","gist_heat","gist_rainbow","gist_stern","gist_yarg","GnBu","gnuplot","gnuplot2","gray","Greens",
+    "Greys","hot","hsv","inferno","jet","magma","nipy_spectral","ocean","Oranges","OrRd",
+    "Paired","Pastel1","Pastel2","pink","PiYG","plasma","PRGn","prism","PuBu","PuBuGn",
+    "PuOr","PuRd","Purples","rainbow","RdBu","RdGy","RdPu","RdYlBu","RdYlGn","Reds","seismic",
+    "Set1","Set2","Set3","Spectral","spring","summer","tab10","tab20","tab20b","tab20c","terrain",
+    "turbo","twilight","twilight_shifted","viridis","winter","Wistia","YlGn","YlGnBu","YlOrBr","YlOrRd"]
+
+
+# endregion------------------颜色处理----------------------------------------------------#
+
+
+
+#region------------------文本处理----------------------------------------------------#
+def replace_text(text, target, replace):
+    def split_with_quotes(s):
+        pattern = r'"([^"]*)"|\s*([^,]+)'
+        matches = re.finditer(pattern, s)
+        return [match.group(1) or match.group(2).strip() for match in matches if match.group(1) or match.group(2).strip()]
+    
+    targets = split_with_quotes(target)
+    exchanges = split_with_quotes(replace)
+    
+    word_map = {}
+    for target_item, exchange_item in zip(targets, exchanges):
+        target_clean = target_item.strip('"').strip().lower()
+        exchange_clean = exchange_item.strip('"').strip()
+        word_map[target_clean] = exchange_clean
+
+    sorted_targets = sorted(word_map.keys(), key=len, reverse=True)
+    result = text
+    
+    for target_item in sorted_targets:
+        if ' ' in target_item:
+            pattern = re.escape(target_item)
+        else:
+            pattern = r'\b' + re.escape(target_item) + r'\b'
         
-        similarities = {}
-        for key, region_features in image_features.items():
-            region_text_features = text_features[..., :region_features.shape[-1]]
-            similarities[key] = self.compute_similarity(region_text_features, region_features)
-        final_features = {}
-        weights = {
-            'style': style_weight,
-            'color': color_weight,
-            'content': content_weight,
-            'structure': structure_weight,
-            'texture': texture_weight
-        }
+        result = re.sub(pattern, word_map[target_item], result, flags=re.IGNORECASE)
+    return result  # 直接返回字符串
+
+def clean_prompt(text, words_to_remove):
+    remove_words = [word.strip().lower() for word in words_to_remove.split(',')]
+    words = re.findall(r'\b\w+\b|[^\w\s]', text)
+
+    cleaned_words = []
+    for i, word in enumerate(words):
+        word_lower = word.lower()
+        if word_lower in remove_words:
+            continue
+        cleaned_words.append(word)
+    cleaned_text = ' '.join(cleaned_words)
+    return cleaned_text  # 直接返回字符串
+#endregion------------------文本处理----------------------------------------------------#
+
+
+
+#region------------------图层混合----------------------------------------------------#
+# 定义混合模式的静态列表
+BLEND_METHODS = [
+    "normal", "multiply", "screen", "overlay", "darken", "lighten","color_dodge", "color_burn", "linear_dodge", "linear_burn",
+    "hard_light", "soft_light", "vivid_light", "linear_light","pin_light", "difference", "exclusion", "subtract"]
+
+BLEND_METHODS = [
+    "normal", "multiply", "screen", "overlay", "darken", "lighten","color_dodge", "color_burn", "linear_dodge", "linear_burn",
+    "hard_light", "soft_light", "vivid_light", "linear_light","pin_light", "difference", "exclusion", "subtract"]
+def apply_blending_mode(bg, fg, mode, strength):
+    bg_np = np.array(bg).astype(np.float32) / 255.0
+    fg_np = np.array(fg).astype(np.float32) / 255.0
+    if bg_np.shape[-1] == 3: bg_np = np.dstack([bg_np, np.ones(bg_np.shape[:2], dtype=np.float32)])
+    if fg_np.shape[-1] == 3: fg_np = np.dstack([fg_np, np.ones(fg_np.shape[:2], dtype=np.float32)])
+    bg_rgb, bg_a = bg_np[..., :3], bg_np[..., 3]
+    fg_rgb, fg_a = fg_np[..., :3], fg_np[..., 3]
+    if mode == "normal": blended_rgb = fg_rgb
+    elif mode == "multiply": blended_rgb = bg_rgb * fg_rgb
+    elif mode == "screen": blended_rgb = 1 - (1 - bg_rgb) * (1 - fg_rgb)
+    elif mode == "overlay": blended_rgb = np.where(bg_rgb <= 0.5, 2 * bg_rgb * fg_rgb, 1 - 2 * (1 - bg_rgb) * (1 - fg_rgb))
+    elif mode == "darken": blended_rgb = np.minimum(bg_rgb, fg_rgb)
+    elif mode == "lighten": blended_rgb = np.maximum(bg_rgb, fg_rgb)
+    elif mode == "color_dodge": blended_rgb = np.where(fg_rgb == 1, 1, np.minimum(1, bg_rgb / (1 - fg_rgb)))
+    elif mode == "color_burn": blended_rgb = np.where(fg_rgb == 0, 0, np.maximum(0, 1 - (1 - bg_rgb) / fg_rgb))
+    elif mode == "linear_dodge": blended_rgb = np.minimum(1, bg_rgb + fg_rgb)
+    elif mode == "linear_burn": blended_rgb = np.maximum(0, bg_rgb + fg_rgb - 1)
+    elif mode == "hard_light": blended_rgb = np.where(fg_rgb <= 0.5, 2 * bg_rgb * fg_rgb, 1 - 2 * (1 - bg_rgb) * (1 - fg_rgb))
+    elif mode == "soft_light": blended_rgb = np.where(fg_rgb <= 0.5, bg_rgb - (1 - 2 * fg_rgb) * bg_rgb * (1 - bg_rgb), bg_rgb + (2 * fg_rgb - 1) * (np.sqrt(bg_rgb) - bg_rgb))
+    elif mode == "vivid_light": blended_rgb = np.where(fg_rgb <= 0.5, np.where(fg_rgb == 0, 0, np.maximum(0, 1 - (1 - bg_rgb) / (2 * fg_rgb))), np.where(fg_rgb == 1, 1, np.minimum(1, bg_rgb / (2 * (1 - fg_rgb)))))
+    elif mode == "linear_light": blended_rgb = np.clip(bg_rgb + 2 * fg_rgb - 1, 0, 1)
+    elif mode == "pin_light": blended_rgb = np.where(fg_rgb <= 0.5, np.minimum(bg_rgb, 2 * fg_rgb), np.maximum(bg_rgb, 2 * fg_rgb - 1))
+    elif mode == "difference": blended_rgb = np.abs(bg_rgb - fg_rgb)
+    elif mode == "exclusion": blended_rgb = bg_rgb + fg_rgb - 2 * bg_rgb * fg_rgb
+    elif mode == "subtract": blended_rgb = np.maximum(0, bg_rgb - fg_rgb)
+    else: blended_rgb = fg_rgb
+    blended_rgb = blended_rgb * strength + bg_rgb * (1 - strength)
+    blended_a = fg_a * strength + bg_a * (1 - strength)
+    blended = np.dstack([blended_rgb, blended_a])
+    out_img = Image.fromarray((blended * 255.0).astype(np.uint8))
+    return out_img
+#endregion------------------图像处理----------------------------------------------------#
+
+
+
+#region------------------遮罩处理----------------------------------------------------#
+
+def pil2mask(image, batch_dim=True, channel_dim=True):
+    # 处理单张图像或批量图像
+    if isinstance(image, Image.Image):
+        images = [image]  # 转为列表处理
+    else:
+        images = image
+    masks = []
+    for img in images:
+        img = img.convert("L")  # 转为灰度图
+        arr = np.array(img).astype(np.float32) / 255.0
+        masks.append(torch.from_numpy(arr))
+    mask_tensor = torch.stack(masks, dim=0)  # 形状: (B, H, W)
+    if channel_dim:
+        mask_tensor = mask_tensor.unsqueeze(1)  # 形状: (B, 1, H, W)
+    if not batch_dim and len(images) == 1:
+        mask_tensor = mask_tensor.squeeze(0)  # 形状: (1, H, W) 或 (H, W)   
+    return mask_tensor
+
+
+
+
+def mask_crop(image, mask):              # 裁剪图片-PIL-------------------------------
+    image_pil = tensor2pil(image)
+    mask_pil = tensor2pil(mask)
+    mask_array = np.array(mask_pil) > 0
+    
+    coords = np.where(mask_array)
+    if coords[0].size == 0 or coords[1].size == 0:
+        return (image, None)
+    x0, y0, x1, y1 = coords[1].min(), coords[0].min(), coords[1].max(), coords[0].max()
+    # 移除边界调整逻辑
+    x0 = max(x0, 0)
+    y0 = max(y0, 0)
+    x1 = min(x1, image_pil.width)
+    y1 = min(y1, image_pil.height)
+    cropped_image_pil = image_pil.crop((x0, y0, x1, y1))
+    cropped_mask_pil = mask_pil.crop((x0, y0, x1, y1))
+    cropped_image_tensor = pil2tensor(cropped_image_pil)
+    cropped_mask_tensor = pil2tensor(cropped_mask_pil)
+    return (cropped_image_tensor, cropped_mask_tensor)
+
+
+
+
+def set_mask(samples, mask):                   # 设置latent的mask
+    s = samples.copy()
+    s["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
+    return s
+
+
+
+def smoothness_mask(mask, smoothness):
+    # 处理不同输入类型，转换为PIL Image
+    if isinstance(mask, torch.Tensor):
+        mask_pil = tensor2pil(mask)  # 假设已有此转换函数
+    elif isinstance(mask, np.ndarray):
+        if mask.ndim == 2:
+            mask_pil = Image.fromarray((mask * 255).astype(np.uint8), mode='L')
+        elif mask.ndim == 3 and mask.shape[2] in [1, 3, 4]:
+            mask_pil = Image.fromarray((mask * 255).astype(np.uint8))
+        else:
+            mask_pil = Image.fromarray((mask * 255).astype(np.uint8), mode='L')
+    elif isinstance(mask, Image.Image):
+        mask_pil = mask
+    else:
+        raise TypeError(f"不支持的输入类型: {type(mask)}")   
+    
+
+    feathered_mask = mask_pil.filter(ImageFilter.GaussianBlur(smoothness))
+    return pil2tensor(feathered_mask)
+
+
+def blur_and_expand_mask(mask_img, mask_blur, mask_expansion):   #图片遮罩膨胀、模糊处理---------------------
+    mask = np.array(mask_img)
+    if mask_expansion != 0:
+        kernel = np.ones((abs(mask_expansion), abs(mask_expansion)), np.uint8)
+        if mask_expansion > 0:
+            mask = cv2.dilate(mask, kernel, iterations=1)
+        else:
+            mask = cv2.erode(mask, kernel, iterations=1)
+    if mask_blur > 0:
+        mask = cv2.GaussianBlur(mask, (0, 0), sigmaX=mask_blur)
+    mask_img = Image.fromarray(mask)
+    return mask_img
+
+
+def apply_extrant_to_block(mask_input):#输入兼容，输出总是图像
+    # 统一转换为NumPy数组
+    if isinstance(mask_input, Image.Image):
+        mask_array = np.array(mask_input)
+        if mask_array.ndim == 2:
+            mask_array = np.expand_dims(mask_array, 0)  # (H, W) -> (1, H, W)
+        else:
+            # 如果是多通道图像，只取第一个通道
+            mask_array = mask_array[:, :, 0] if mask_array.ndim == 3 else mask_array
+            mask_array = np.expand_dims(mask_array, 0)  # (1, H, W)
+    elif isinstance(mask_input, torch.Tensor):
+        mask_tensor = mask_input
+        if mask_tensor.dim() == 2:
+            mask_tensor = mask_tensor.unsqueeze(0)  # (H, W) -> (1, H, W)
+        mask_array = mask_tensor.cpu().numpy()
+    else:  # 假设是np.ndarray
+        if isinstance(mask_input, np.ndarray):
+            mask_array = mask_input
+            if mask_array.ndim == 2:
+                mask_array = np.expand_dims(mask_array, 0)  # (H, W) -> (1, H, W)
+        else:
+            # 如果是其他类型，尝试转换
+            mask_array = np.array(mask_input)
+            if mask_array.ndim == 2:
+                mask_array = np.expand_dims(mask_array, 0)
+    
+    # 处理批次中的每一张mask
+    rectangular_masks = []
+    for i in range(mask_array.shape[0]):
+        single_mask = mask_array[i]  # (H, W)
+        coords = np.argwhere(single_mask > 0)
         
-        for key in image_features:
-            if similarities[key] > similarity_threshold:
-                region_size = image_features[key].shape[-1]
-                dynamic_factor = enhancement_base * self.enhancement_factors[key]
-                final_features[key] = text_features[..., :region_size] * weights[key] * dynamic_factor
-            else:
-                final_features[key] = image_features[key] * weights[key]
+        if len(coords) > 0:
+            y_min, x_min = coords.min(axis=0)
+            y_max, x_max = coords.max(axis=0)
+            rect_mask = np.zeros_like(single_mask)
+            rect_mask[y_min:y_max+1, x_min:x_max+1] = 255
+            rectangular_masks.append(Image.fromarray(rect_mask.astype(np.uint8)))
+        else:
+            rectangular_masks.append(Image.fromarray(single_mask.astype(np.uint8)))
+    
+    # 如果只有一个mask，直接返回该mask而不是包含一个元素的列表
+    if len(rectangular_masks) == 1:
+        return rectangular_masks[0]
+    else:
+        return rectangular_masks
+
+
+#endregion------------------遮罩处理----------------------------------------------------#
+
+
+
+#region------------------图像绘制形状----------------------------------------------------#
+#该函数用于在图像上绘制指定形状。支持多种形状，如圆形、半圆形、正方形等
+DRAW_SHAPE_LIST = ["circle", "semicircle", "quarter_circle", "ellipse", "square", "triangle","cross", "star", "radial"]
+
+def draw_shape(shape, size=(200, 200), offset=(0, 0), scale=1.0, rotation=0, bg_color=(255, 255, 255),
+               shape_color=(0, 0, 0), opacity=1.0, blur_radius=0, base_image=None):
+    width, height = size
+    offset_x, offset_y = offset
+    center_x, center_y = width // 2 + offset_x, height // 2 + offset_y
+    max_dim = min(width, height) * scale
+
+    diagonal = int(math.sqrt(width ** 2 + height ** 2))
+    img_tmp = Image.new('RGBA', (diagonal, diagonal), (0, 0, 0, 0))
+    draw_tmp = ImageDraw.Draw(img_tmp)
+
+    tmp_center = diagonal // 2
+
+    alpha = int(opacity * 255)
+    shape_color = shape_color + (alpha,)
+
+    if shape == 'circle':
+        bbox = (tmp_center - max_dim / 2, tmp_center - max_dim / 2, tmp_center + max_dim / 2, tmp_center + max_dim / 2)
+        draw_tmp.ellipse(bbox, fill=shape_color)
+
+    elif shape == 'semicircle':
+        bbox = (tmp_center - max_dim / 2, tmp_center - max_dim / 2, tmp_center + max_dim / 2, tmp_center + max_dim / 2)
+        draw_tmp.pieslice(bbox, start=0, end=180, fill=shape_color)
+
+    elif shape == 'quarter_circle':
+        bbox = (tmp_center - max_dim / 2, tmp_center - max_dim / 2, tmp_center + max_dim / 2, tmp_center + max_dim / 2)
+        draw_tmp.pieslice(bbox, start=0, end=90, fill=shape_color)
+
+    elif shape == 'ellipse':
+        bbox = (tmp_center - max_dim / 2, tmp_center - max_dim / 4, tmp_center + max_dim / 2, tmp_center + max_dim / 4)
+        draw_tmp.ellipse(bbox, fill=shape_color)
+
+    elif shape == 'square':
+        bbox = (tmp_center - max_dim / 2, tmp_center - max_dim / 2, tmp_center + max_dim / 2, tmp_center + max_dim / 2)
+        draw_tmp.rectangle(bbox, fill=shape_color)
+
+    elif shape == 'triangle':
+        points = [
+            (tmp_center, tmp_center - max_dim / 2),
+            (tmp_center - max_dim / 2, tmp_center + max_dim / 2),
+            (tmp_center + max_dim / 2, tmp_center + max_dim / 2)
+        ]
+        draw_tmp.polygon(points, fill=shape_color)
+
+    elif shape == 'cross':
+        vertical = [(tmp_center - max_dim / 6, tmp_center - max_dim / 2),
+                    (tmp_center + max_dim / 6, tmp_center - max_dim / 2),
+                    (tmp_center + max_dim / 6, tmp_center + max_dim / 2),
+                    (tmp_center - max_dim / 6, tmp_center + max_dim / 2)]
+        horizontal = [(tmp_center - max_dim / 2, tmp_center - max_dim / 6),
+                      (tmp_center + max_dim / 2, tmp_center - max_dim / 6),
+                      (tmp_center + max_dim / 2, tmp_center + max_dim / 6),
+                      (tmp_center - max_dim / 2, tmp_center + max_dim / 6)]
+        draw_tmp.polygon(vertical, fill=shape_color)
+        draw_tmp.polygon(horizontal, fill=shape_color)
+
+    elif shape == 'star':
+        points = []
+        for i in range(10):
+            angle = i * 36 * math.pi / 180
+            radius = max_dim / 2 if i % 2 == 0 else max_dim / 4
+            points.append((tmp_center + radius * math.sin(angle), tmp_center - radius * math.cos(angle)))
+        draw_tmp.polygon(points, fill=shape_color)
+
+    elif shape == 'radial':
+        num_rays = 12
+        for i in range(num_rays):
+            angle = i * (360 / num_rays) * math.pi / 180
+            x1 = tmp_center + max_dim / 4 * math.cos(angle)
+            y1 = tmp_center + max_dim / 4 * math.sin(angle)
+            x2 = tmp_center + max_dim / 2 * math.cos(angle)
+            y2 = tmp_center + max_dim / 2 * math.sin(angle)
+            draw_tmp.line([(x1, y1), (x2, y2)], fill=shape_color, width=int(max_dim / 20))
+
+    img_tmp = img_tmp.rotate(rotation, resample=Image.BICUBIC, expand=True)
+    if base_image is None:
+        img = Image.new('RGBA', size, bg_color + (255,))
+    else:
+        img = base_image.copy()
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+
+    paste_x = center_x - img_tmp.width // 2
+    paste_y = center_y - img_tmp.height // 2
+
+    img.alpha_composite(img_tmp, (paste_x, paste_y))
+
+    if blur_radius > 0:
+        img = img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+
+    return img
+
+
+#endregion------------------图像形状----------------------------------------------------#
+
+
+
+#region------------------mask bridge----------------------------------------------------#
+
+def tensor_to_hash(tensor):
+    np_array = tensor.cpu().numpy()
+    byte_data = np_array.tobytes()
+    hash_value = hashlib.md5(byte_data).hexdigest()
+    return hash_value
+
+
+def create_temp_file(image):
+    output_dir = folder_paths.get_temp_directory()
+    full_output_folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path('material', output_dir)
+    image = tensor2pil(image)
+    image_file = f"{filename}_{counter:05}.png"
+    image_path = os.path.join(full_output_folder, image_file)
+    image.save(image_path, compress_level=4)
+    return (image_path, [{"filename": image_file, "subfolder": subfolder, "type": "temp"}])
+
+
+
+def generate_masked_black_image(image, mask):
+    b, h, w = image.shape[0], image.shape[1], image.shape[2]
+    if mask.dim() == 2:
+        mask = mask.unsqueeze(0)
+    if mask.shape != (b, h, w):
+        mask = torch.zeros_like(image[:, :, :, 0])
+    black_mask = torch.zeros_like(image)
+    masked_image = image * (1 - mask.unsqueeze(-1)) + black_mask * mask.unsqueeze(-1)
+
+    return {"ui": {"images": []}, "result": (masked_image,)}
+
+
+
+
+
+
+#endregion------------------mask bridge----------------------------------------------------#
+
+
+
+
+#region------------------lora----------------------------------------------------#
+
+def apply_lora_stack( model, clip, lora_stack=None):
+    if not lora_stack:
+        return (model, clip,)
+
+    model_lora = model
+    clip_lora = clip
+
+    for tup in lora_stack:
+        lora_name, weight = tup  
+        lora_path = folder_paths.get_full_path("loras", lora_name)
+        lora = comfy.utils.load_torch_file(lora_path, safe_load=True)
+        model_lora, clip_lora = comfy.sd.load_lora_for_models(model_lora, clip_lora, lora, weight, weight )
+
+    return (model_lora, clip_lora,)
+
+
+#endregion------------------lora----------------------------------------------------#
+
+
+
+
+#region------------------vae----------------------------------------------------#
+def decode(vae, samples):
+    images = vae.decode(samples["samples"])
+    if len(images.shape) == 5: #Combine batches
+        images = images.reshape(-1, images.shape[-3], images.shape[-2], images.shape[-1])
+    return (images, )
+
+
+def encode(vae, pixels):
+    t = vae.encode(pixels[:,:,:,:3])
+    return ({"samples":t}, )
+
+#endregion------------------vae----------------------------------------------------#
+
+
+#region------------------latent----------------------------------------------------#
+
+def set_latent_mask(latent, mask): #张量
+    newlatent = latent.clone() 
+    if mask is not None:
+        newlatent["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
+    return newlatent
+
+
+def set_latent_mask2(latent, mask):
+    newlatent = latent.clone()  # 克隆 latent
+    if mask is not None:
+        # 将 mask reshape 成合适的形状 (batch, 1, H, W)
+        processed_mask = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
+        # 返回包含 samples 和 noise_mask 的字典
+        return {"samples": newlatent, "noise_mask": processed_mask}
+    else:
+        return {"samples": newlatent}
+
+def reshape_latent_to(target_shape, latent, repeat_batch=True):
+    if latent.shape[1:] != target_shape[1:]:
+        latent = comfy.utils.common_upscale(latent, target_shape[-1], target_shape[-2], "bilinear", "center")
+    if repeat_batch:
+        return comfy.utils.repeat_to_batch_size(latent, target_shape[0])
+    else:
+        return latent
+
+
+def latent_inter_polate(samples1, samples2, ratio):
+    samples_out = samples1.copy()
+
+    s1 = samples1["samples"]
+    s2 = samples2["samples"]
+
+    s2 = reshape_latent_to(s1.shape, s2)
+
+    m1 = torch.linalg.vector_norm(s1, dim=(1))
+    m2 = torch.linalg.vector_norm(s2, dim=(1))
+
+    s1 = torch.nan_to_num(s1 / m1)
+    s2 = torch.nan_to_num(s2 / m2)
+
+    t = (s1 * ratio + s2 * (1.0 - ratio))
+    mt = torch.linalg.vector_norm(t, dim=(1))
+    st = torch.nan_to_num(t / mt)
+
+    samples_out["samples"] = st * (m1 * ratio + m2 * (1.0 - ratio))
+    return samples_out
+
+
+
+def set_last_layer(clip, clipnum):
+    clip = clip.clone()
+    clip.clip_layer(clipnum)
+    return clip
+
+def create_latent_tensor(width, height, batch):
+    width = width - (width % 8)
+    height = height - (height % 8)
+    latent = torch.zeros([batch, 4, height // 8, width // 8])
+    if latent.shape[1] != 16:
+        latent = latent.repeat(1, 16// 4, 1, 1)
+    return latent
+
+
+
+
+def condi_zero_out(conditioning):
+    c = []
+    for t in conditioning:
+        d = t[1].copy()
+        pooled_output = d.get("pooled_output", None)
+        if pooled_output is not None:
+            d["pooled_output"] = torch.zeros_like(pooled_output)
+        n = [torch.zeros_like(t[0]), d]
+        c.append(n)
+    return (c, )
+
+
+#endregion------------------latent----------------------------------------------------#
+
+
+
+
+
+#region------------------kontext---------------------------------------------------#
+
+PREFERED_KONTEXT_RESOLUTIONS = [
+    (672, 1568),
+    (688, 1504),
+    (720, 1456),
+    (752, 1392),
+    (800, 1328),
+    (832, 1248),
+    (880, 1184),
+    (944, 1104),
+    (1024, 1024),
+    (1104, 944),
+    (1184, 880),
+    (1248, 832),
+    (1328, 800),
+    (1392, 752),
+    (1456, 720),
+    (1504, 688),
+    (1568, 672),
+]
+
+
+def resize_to_multiple_of_8(x):
+    if isinstance(x, torch.Tensor):
+        # Tensor 分支
+        _, h, w, _ = x.shape
+        new_w = w // 8 * 8
+        new_h = h // 8 * 8
+        if new_w != w or new_h != h:
+            x = comfy.utils.common_upscale(
+                x.movedim(-1, 1), new_w, new_h, "bilinear", "center"
+            ).movedim(1, -1)
+        return x
+    elif isinstance(x, Image.Image):
+        # PIL 分支
+        width, height = x.size
+        new_width = (width // 8) * 8
+        new_height = (height // 8) * 8
+        return x.resize((new_width, new_height), Image.LANCZOS)
+    else:
+        raise TypeError("Input must be PIL.Image or torch.Tensor")
+
+
+def kontext_adjust_image_resolution(image, auto_adjust_image):      
+    if auto_adjust_image:
+        width = image.shape[2]
+        height = image.shape[1]
+        aspect_ratio = width / height
+        _, target_width, target_height = min(
+            (abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS
+        )
+
+        scaled_image = comfy.utils.common_upscale(
+            image.movedim(-1, 1),
+            target_width,
+            target_height,
+            "lanczos",
+            "center"
+        ).movedim(1, -1)
+
+        image = scaled_image[:, :, :, :3]
+    else:
+        image = image
+    return (image,)
+
+
+def XXXkontext_latent_and_conditioning(context, vae, image, mask, prompt_weight, relevance, positive): #相关与无关
+    if image is None:
+        latent_data = context.get("latent", None)
+        if latent_data is None or "samples" not in latent_data:
+            raise ValueError("Context latent or samples not found when image is None")
+        encoded_latent = latent_data["samples"]
+    else:
+        encoded_latent = vae.encode(image)
+
+    # 确保 encoded_latent 是正确的形状
+    if len(encoded_latent.shape) == 4:
+        if encoded_latent.shape[0] > 1:
+            encoded_latent = encoded_latent[:1]
+    elif len(encoded_latent.shape) == 3:
+        encoded_latent = encoded_latent.unsqueeze(0)
+    else:
+        raise ValueError(f"Unexpected encoded_latent shape: {encoded_latent.shape}")
+    
+    # 规范化提示权重并计算影响因子
+    prompt_weight = max(0.0, min(prompt_weight, 1.0))
+    influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
+    scaled_latent = encoded_latent * influence
+    
+    # 处理掩码（如果提供）
+    if mask is not None:
+        if len(mask.shape) == 2:
+            mask = mask.unsqueeze(0).unsqueeze(0)
+        elif len(mask.shape) == 3:
+            mask = mask.unsqueeze(0)
+        elif len(mask.shape) != 4:
+            raise ValueError(f"Unexpected mask shape: {mask.shape}")
+        mask = mask[:1, :1]
+    
+    # 构建潜在空间字典
+    latent = {"samples": encoded_latent}
+    ref_latent = scaled_latent
+    
+    # 根据相关性设置参考潜在空间（仅当 relevance 为 True 时处理 positive）
+    if relevance:
+        positive = node_helpers.conditioning_set_values(
+            positive, {"reference_latents": [ref_latent]}, append=True
+        )
+    
+    # 无论相关性如何，只要有掩码就添加到 latent 中
+    if mask is not None:
+        latent["noise_mask"] = mask
+
+    # 验证最终样本形状
+    samples = latent["samples"]
+    if len(samples.shape) != 4:
+        raise ValueError(f"Unexpected samples shape: {samples.shape}")
         
-        # 合并所有特征
-        combined_cond = torch.cat([
-            final_features['style'],
-            final_features['color'],
-            final_features['content'],
-            final_features['structure'],
-            final_features['texture']
-        ], dim=-1).unsqueeze(dim=0)
-        
-        # 构建新的条件
-        c = []
-        for t in conditioning:
-            n = [torch.cat((t[0], combined_cond), dim=1), t[1].copy()]
-            c.append(n)
+    return latent, positive
+
+
+def condi_zero_out(negative): #条件零化
+    c = []
+    for t in negative:
+        d = t[1].copy()
+        pooled_output = d.get("pooled_output", None)
+        if pooled_output is not None:
+            d["pooled_output"] = torch.zeros_like(pooled_output)
+        conditioning_lyrics = d.get("conditioning_lyrics", None)
+        if conditioning_lyrics is not None:
+            d["conditioning_lyrics"] = torch.zeros_like(conditioning_lyrics)
+        n = [torch.zeros_like(t[0]), d]
+        c.append(n)
+    negative = c
+    return (negative, )
+
+
+def Inpaint_encode(positive, negative, pixels, vae, mask, noise_mask=True):
+    x = (pixels.shape[1] // 8) * 8
+    y = (pixels.shape[2] // 8) * 8
+    mask = torch.nn.functional.interpolate(mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])), size=(pixels.shape[1], pixels.shape[2]), mode="bilinear")
+
+    orig_pixels = pixels
+    pixels = orig_pixels.clone()
+    if pixels.shape[1] != x or pixels.shape[2] != y:
+        x_offset = (pixels.shape[1] % 8) // 2
+        y_offset = (pixels.shape[2] % 8) // 2
+        pixels = pixels[:,x_offset:x + x_offset, y_offset:y + y_offset,:]
+        mask = mask[:,:,x_offset:x + x_offset, y_offset:y + y_offset]
+
+    m = (1.0 - mask.round()).squeeze(1)
+    for i in range(3):
+        pixels[:,:,:,i] -= 0.5
+        pixels[:,:,:,i] *= m
+        pixels[:,:,:,i] += 0.5
+    concat_latent = vae.encode(pixels)
+    orig_latent = vae.encode(orig_pixels)
+
+    out_latent = {}
+
+    out_latent["samples"] = orig_latent
+    if noise_mask:
+        out_latent["noise_mask"] = mask
+
+    out = []
+    for conditioning in [positive, negative]:
+        c = node_helpers.conditioning_set_values(conditioning, {"concat_latent_image": concat_latent,
+                                                                "concat_mask": mask})
+        out.append(c)   
+    positive=out[0]
+    negative=out[1]  
+    return (positive, negative, out_latent)
+
+
+
+#endregion------------------kontext---------------------------------------------------#
+
+
+
+
+#region---------------------------视觉标记--------------------------
+
+BJ_MODE=["image", "transparent", "white", "black", "red", "green", "blue"] 
+
+ALIGNMENT_REFERENCE_POINTS = [
+    'center',
+    'top_left',
+    'top_center',
+    'bottom_center',
+    'left_center',
+    'right_center'
+]
+
+def create_background(bg_mode, width, height, f_imge=None,):
+    """
+    创建指定背景模式的背景图像，统一返回4通道tensor
+    """
+    if bg_mode == "transparent":
+        # 创建RGBA透明背景
+        background = np.zeros((height, width, 4), dtype=np.float32)
+        background[:, :, 3] = 0  # Alpha通道设为0（透明）
+        return torch.from_numpy(background)
+    elif bg_mode == "white":
+        background = torch.ones((height, width, 4), dtype=torch.float32)
+        background[:, :, 3] = 1.0  # Alpha通道设为1（不透明）
+        return background
+    elif bg_mode == "black":
+        background = torch.zeros((height, width, 4), dtype=torch.float32)
+        background[:, :, 3] = 1.0  # Alpha通道设为1（不透明）
+        return background
+    elif bg_mode == "red":
+        background = torch.zeros((height, width, 4), dtype=torch.float32)
+        background[:, :, 0] = 1.0  # Red channel
+        background[:, :, 3] = 1.0  # Alpha通道设为1（不透明）
+        return background
+    elif bg_mode == "green":
+        background = torch.zeros((height, width, 4), dtype=torch.float32)
+        background[:, :, 1] = 1.0  # Green channel
+        background[:, :, 3] = 1.0  # Alpha通道设为1（不透明）
+        return background
+    elif bg_mode == "blue":
+        background = torch.zeros((height, width, 4), dtype=torch.float32)
+        background[:, :, 2] = 1.0  # Blue channel
+        background[:, :, 3] = 1.0  # Alpha通道设为1（不透明）
+        return background
+    elif bg_mode == "image" and f_imge is not None:
+        # 如果f_imge是3通道，转换为4通道
+        if f_imge.shape[-1] == 3:
+            alpha_channel = torch.ones((*f_imge.shape[:-1], 1), dtype=f_imge.dtype)
+            f_imge = torch.cat([f_imge, alpha_channel], dim=-1)
+        return f_imge.clone()
+    else:
+        # 默认返回黑色背景
+        background = torch.zeros((height, width, 4), dtype=torch.float32)
+        background[:, :, 3] = 1.0  # Alpha通道设为1（不透明）
+        return background
+
+
+
+def visualize_mask_on_image(base_image, mask, ignore_threshold=100, opacity=0.8, outline_thickness=1, extrant_to_block=False, smoothness=1, out_color="colorful", fill=True):
+    colors = {"white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0), "green": (0, 255, 0), "blue": (0, 0, 255), "yellow": (255, 255, 0), "cyan": (0, 255, 255), "magenta": (255, 0, 255)}
+    
+    def tensorMask2cv2img(tensor_mask):
+        # 处理 None 情况
+        if tensor_mask is None:
+            return np.zeros((base_image.shape[1], base_image.shape[2]), dtype=np.uint8)
             
-        positive = node_helpers.conditioning_set_values(c, {"guidance": guidance})
-        
-        context = new_context(context, positive=positive,)
-        return (context,positive,)  
-
-
-
-#endregion-----------风格组--------------------------------------------------------------------------------------#--
-
-
-
-class pre_sample_data:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-                "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == no change"}),
-                "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == no change"}),
-                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}),  
-                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "normal"}), 
-                
-                
-            },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT", )
-    RETURN_NAMES = ("context", )
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_tool"
-
-    def sample(self, context, steps, cfg, sampler, scheduler):
-        
-        if cfg == 0.0:
-            cfg = context.get("cfg")
-        if steps == 0:
-            steps = context.get("steps")
-        sampler = context.get("sampler","euler")
-        scheduler = context.get("scheduler","normal")
-        
-        context = new_context(context, steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler)
-        return (context, )
-
-#------------------
-
-
-
-class XXpre_Kontext_mul:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-
-            "optional": {
-                
-                "context": ("RUN_CONTEXT",),
-                "image": ("IMAGE",),
-                "mask": ("MASK", ),
-                "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "mask_1": ("MASK", ),
-                "mask_2": ("MASK", ),
-                "mask_3": ("MASK", ),
-                "mask_4": ("MASK", ),
-                "mask_5": ("MASK", ),
-                "prompt_weight1": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "prompt_weight2": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "prompt_weight3": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "prompt_weight4": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "prompt_weight5": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                #"set_cond_area": (["default", "mask bounds"],),
-            }
-        }
-        
-    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING","LATENT" )
-    RETURN_NAMES = ("context","positive","latent")
-
-
-    FUNCTION = "Mutil_Clip"
-    CATEGORY = "Apt_Preset/chx_tool"
-
-
-    def Mutil_Clip (self, pos1, pos2, pos3, pos4, pos5, image, mask, prompt_weight1, prompt_weight2, prompt_weight3, prompt_weight4, prompt_weight5,mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None,context=None,):
-
-
-        if mask is not None and image is not None:
-            vae = context.get("vae", None)
-            latent = encode(vae, image)[0]
-            Flatent = {"samples": latent, "noise_mask": mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))}
+        if isinstance(tensor_mask, torch.Tensor):
+            mask_np = tensor_mask.squeeze().cpu().numpy()
+            # 确保数据类型为uint8
+            if mask_np.dtype != np.uint8:
+                # 检查是否为 None 或空数组
+                if mask_np is not None and mask_np.size > 0:
+                    mask_np = (mask_np * 255).astype(np.uint8)
+                else:
+                    mask_np = np.zeros((base_image.shape[1], base_image.shape[2]), dtype=np.uint8)
+            return mask_np
+        elif isinstance(tensor_mask, np.ndarray):
+            # 确保数据类型为uint8
+            if tensor_mask.dtype != np.uint8:
+                # 检查是否为空数组
+                if tensor_mask.size > 0:
+                    return (tensor_mask * 255).astype(np.uint8)
+                else:
+                    return np.zeros((base_image.shape[1], base_image.shape[2]), dtype=np.uint8)
+            return tensor_mask
         else:
-            raise Exception("pls input image and mask")
-
-
-
-
-        clip = context.get("clip")
+            # 如果是PIL图像或其他类型，先转为numpy数组再转为uint8
+            mask_np = np.array(tensor_mask)
+            if mask_np.dtype != np.uint8:
+                # 检查是否为空数组
+                if mask_np.size > 0:
+                    return (mask_np * 255).astype(np.uint8)
+                else:
+                    return np.zeros((base_image.shape[1], base_image.shape[2]), dtype=np.uint8)
+            return mask_np
+            
+    opencv_gray_image = tensorMask2cv2img(mask)
+    _, binary_mask = cv2.threshold(opencv_gray_image, 1, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours_with_positions = [(cv2.boundingRect(c)[0], cv2.boundingRect(c)[1], c) for c in contours]
+    contours_with_positions.sort(key=lambda x: (x[1], x[0]))
+    sorted_contours = [c[2] for c in contours_with_positions[:8]]
+    fill_mask = np.zeros_like(binary_mask)
+    for contour in sorted_contours:
+        if cv2.contourArea(contour) < ignore_threshold: 
+            continue
+        if extrant_to_block:
+            x, y, w, h = cv2.boundingRect(contour)
+            cv2.rectangle(fill_mask, (x, y), (x+w, y+h), 255, cv2.FILLED)
+        else: 
+            cv2.drawContours(fill_mask, [contour], 0, 255, cv2.FILLED)
     
-        positive_1, = CLIPTextEncode().encode(clip, pos1)
-        positive_2, = CLIPTextEncode().encode(clip, pos2)
-        positive_3, = CLIPTextEncode().encode(clip, pos3)
-        positive_4, = CLIPTextEncode().encode(clip, pos4)
-        positive_5, = CLIPTextEncode().encode(clip, pos5)
-
-        c = []
-
-        #set_cond_area== "default"
-
-        if mask_1 is not None and len(mask_1.shape) < 3:  
-            mask_1 = mask_1.unsqueeze(0)
-        if mask_2 is not None and len(mask_2.shape) < 3:  
-            mask_2 = mask_2.unsqueeze(0)
-        if mask_3 is not None and len(mask_3.shape) < 3:  
-            mask_3 = mask_3.unsqueeze(0)
-        if mask_4 is not None and len(mask_4.shape) < 3:  
-            mask_4 = mask_4.unsqueeze(0)
-        if mask_5 is not None and len(mask_5.shape) < 3:  
-            mask_5 = mask_5.unsqueeze(0)
-
-        if mask_1 is not None:  # 新增判断，如果 mask_1 不为 None 才处理 positive_1
-            for t in positive_1:
-                append_helper(t, mask_1, c, "default", 1)
-        if mask_2 is not None:  # 新增判断，如果 mask_2 不为 None 才处理 positive_2
-            for t in positive_2:
-                append_helper(t, mask_2, c, "default", 1)
-        if mask_3 is not None:  # 新增判断，如果 mask_3 不为 None 才处理 positive_3
-            for t in positive_3:
-                append_helper(t, mask_3, c, "default", 1)
-        if mask_4 is not None:  # 新增判断，如果 mask_4 不为 None 才处理 positive_4
-            for t in positive_4:
-                append_helper(t, mask_4, c, "default", 1)
-        if mask_5 is not None:  # 新增判断，如果 mask_5 不为 None 才处理 positive_5
-            for t in positive_5:
-                append_helper(t, mask_5, c, "default", 1)
-
-
-
-        if mask_1 is not None:
-            influence = 8 * prompt_weight1 * (prompt_weight1 - 1) - 6 * prompt_weight1 + 6
-            latent = latent["samples"] * influence
-            latent1 = {"samples": latent, "noise_mask": mask_1.reshape((-1, 1, mask_1.shape[-2], mask_1.shape[-1]))}
-            c = node_helpers.conditioning_set_values(c, {"reference_latents": [latent1]}, append=True)
-
-        if mask_2 is not None:
-            influence = 8 * prompt_weight2 * (prompt_weight2 - 1) - 6 * prompt_weight2 + 6
-            latent = latent["samples"] * influence
-            latent2 = {"samples": latent, "noise_mask": mask_2.reshape((-1, 1, mask_2.shape[-2], mask_2.shape[-1]))}
-            c = node_helpers.conditioning_set_values(c, {"reference_latents": [latent2]}, append=True)
-
-        if mask_3 is not None:
-            influence = 8 * prompt_weight3 * (prompt_weight3 - 1) - 6 * prompt_weight3 + 6
-            latent = latent["samples"] * influence
-            latent3 = {"samples": latent, "noise_mask": mask_3.reshape((-1, 1, mask_3.shape[-2], mask_3.shape[-1]))}
-            c = node_helpers.conditioning_set_values(c, {"reference_latents": [latent3]}, append=True)
-
-        if mask_4 is not None:
-            influence = 8 * prompt_weight4 * (prompt_weight4 - 1) - 6 * prompt_weight4 + 6
-            latent = latent["samples"] * influence
-            latent4 = {"samples": latent, "noise_mask": mask_4.reshape((-1, 1, mask_4.shape[-2], mask_4.shape[-1]))}
-            c = node_helpers.conditioning_set_values(c, {"reference_latents": [latent4]}, append=True)
-
-        if mask_5 is not None:
-            influence = 8 * prompt_weight5 * (prompt_weight5 - 1) - 6 * prompt_weight5 + 6
-            latent = latent["samples"] * influence
-            latent5 = {"samples": latent, "noise_mask": mask_5.reshape((-1, 1, mask_5.shape[-2], mask_5.shape[-1]))}
-            c = node_helpers.conditioning_set_values(c, {"reference_latents": [latent5]}, append=True)
-
-
-        context = new_context(context, positive=c, latent = Flatent, )
-
-        return (context, c,Flatent )
-
-
-
+    # 确保fill_mask是正确的数据类型
+    if fill_mask.dtype != np.uint8:
+        fill_mask = (fill_mask * 255).astype(np.uint8)
+        
+    if smoothness > 0: 
+        fill_mask_pil = Image.fromarray(fill_mask)
+        fill_mask_pil = fill_mask_pil.filter(ImageFilter.GaussianBlur(radius=smoothness))
+        fill_mask = np.array(fill_mask_pil)
+        
+    base_image_np = base_image[0].cpu().numpy() * 255.0
+    base_image_np = base_image_np.astype(np.float32)
+    mask_color_layer = base_image_np.copy()
+    final_mask = np.zeros_like(binary_mask)
     
-
-class pre_Kontext_mul:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "optional": {
-                "context": ("RUN_CONTEXT",),
-                "image": ("IMAGE",),
-                "mask": ("MASK", ),
-                "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "mask1": ("MASK", ),
-                "mask2": ("MASK", ),
-                "mask3": ("MASK", ),
-                "mask4": ("MASK", ),
-                "mask5": ("MASK", ),
-                "prompt_weight1": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),  # 修改范围为 0~1，默认 0.5
-                "prompt_weight2": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "prompt_weight3": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "prompt_weight4": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "prompt_weight5": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                #"set_cond_area": (["default", "mask bounds"],),
-            }
-        }
-        
-    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING","LATENT" )
-    RETURN_NAMES = ("context","positive","latent")
-
-    FUNCTION = "Mutil_Clip"
-    CATEGORY = "Apt_Preset/chx_tool"
-
-    def Mutil_Clip(self, pos1, pos2, pos3, pos4, pos5, image, mask,  prompt_weight1, prompt_weight2, prompt_weight3, prompt_weight4,prompt_weight5,
-                    mask1=None, mask2=None, mask3=None, mask4=None, mask5=None, context=None):
-        
-        set_cond_area = "default" 
-        if mask is not None and image is not None:
-            vae = context.get("vae", None)
-            latent = encode(vae, image)[0]
-            # 确保 latent 是张量
-            if isinstance(latent, dict):
-                latent_tensor = latent["samples"]
-            else:
-                latent_tensor = latent
-            result = set_latent_mask2(latent_tensor, mask)
-            Flatent = result  # 如果 Flatent 后续只用于 new_context，则保留整个字典
+    for i, contour in enumerate(sorted_contours):
+        area = cv2.contourArea(contour)
+        if area < ignore_threshold: 
+            continue
+        if out_color in ["white", "black", "red", "green", "blue"]: 
+            color = np.array(colors[out_color], dtype=np.float32)
+        elif out_color == "colorful": 
+            color = np.array(colors[["white", "black", "red", "green", "blue", "yellow", "cyan", "magenta"][i % 8]], dtype=np.float32)
+        else: 
+            color = np.array(colors["white"], dtype=np.float32)
+            
+        temp_mask = np.zeros_like(binary_mask)
+        if extrant_to_block:
+            x, y, w, h = cv2.boundingRect(contour)
+            thickness = cv2.FILLED if fill else outline_thickness
+            cv2.rectangle(temp_mask, (x, y), (x+w, y+h), 255, thickness)
         else:
-            raise Exception("pls input image and mask")
+            thickness = cv2.FILLED if fill else outline_thickness
+            cv2.drawContours(temp_mask, [contour], 0, 255, thickness)
+            
+        # 确保temp_mask是正确的数据类型
+        if temp_mask.dtype != np.uint8:
+            temp_mask = (temp_mask * 255).astype(np.uint8)
+            
+        if smoothness > 0: 
+            temp_mask_pil = Image.fromarray(temp_mask)
+            temp_mask_pil = temp_mask_pil.filter(ImageFilter.GaussianBlur(radius=smoothness))
+            temp_mask = np.array(temp_mask_pil)
+            
+        final_mask = cv2.bitwise_or(final_mask, temp_mask)
+        mask_float = temp_mask.astype(np.float32) / 255.0
+        for c in range(3): 
+            mask_color_layer[:, :, c] = mask_float * color[c] + (1 - mask_float) * mask_color_layer[:, :, c]
+            
+    mask_float_global = final_mask.astype(np.float32) / 255.0
+    combined_image = opacity * mask_color_layer + (1 - opacity) * base_image_np
+    combined_image = np.clip(combined_image, 0, 255).astype(np.uint8)
+    combined_image_tensor = torch.from_numpy(combined_image).float() / 255.0
+    combined_image_tensor = combined_image_tensor.unsqueeze(0)
+    final_mask_tensor = torch.from_numpy(final_mask).float() / 255.0
+    final_mask_tensor = final_mask_tensor.unsqueeze(0)
+    return combined_image_tensor, final_mask_tensor
 
-        clip = context.get("clip")
-
-        positive_1, = CLIPTextEncode().encode(clip, pos1)
-        positive_2, = CLIPTextEncode().encode(clip, pos2)
-        positive_3, = CLIPTextEncode().encode(clip, pos3)
-        positive_4, = CLIPTextEncode().encode(clip, pos4)
-        positive_5, = CLIPTextEncode().encode(clip, pos5)
-
-        c = []
-        set_area_to_bounds = False
-        if set_cond_area!= "default":
-            set_area_to_bounds = True
 
 
-        # 处理 mask 维度
-        if mask1 is not None and len(mask1.shape) < 3:
-            mask1 = mask1.unsqueeze(0)
-        if mask2 is not None and len(mask2.shape) < 3:
-            mask2 = mask2.unsqueeze(0)
-        if mask3 is not None and len(mask3.shape) < 3:
-            mask3 = mask3.unsqueeze(0)
-        if mask4 is not None and len(mask4.shape) < 3:
-            mask4 = mask4.unsqueeze(0)
-        if mask5 is not None and len(mask5.shape) < 3:
-            mask5 = mask5.unsqueeze(0)
 
-        # 添加条件权重
-        if mask1 is not None:
-            for t in positive_1:
-                append_helper(t, mask1, c, set_area_to_bounds, 1)
-        if mask2 is not None:
-            for t in positive_2:
-                append_helper(t, mask2, c, set_area_to_bounds, 1)
-        if mask3 is not None:
-            for t in positive_3:
-                append_helper(t, mask3, c, set_area_to_bounds, 1)
-        if mask4 is not None:
-            for t in positive_4:
-                append_helper(t, mask4, c, set_area_to_bounds, 1)
-        if mask5 is not None:
-            for t in positive_5:
-                append_helper(t, mask5, c, set_area_to_bounds, 1)
+def apply_position_transform(bj_img, img, mask, scale, x_position, y_position, rotation):
+    # 确保所有输入都是正确的模式
+    img = img.convert('RGBA')
+    mask = mask.convert('L')
+    bg_width, bg_height = bj_img.size
+    bj_img = bj_img.convert('RGBA')
+    
+    # 计算mask的边界框和中心
+    mask_array = np.array(mask)
+    mask_coords = np.where(mask_array > 128)
+    
+    if len(mask_coords[0]) > 0:
+        x_min, x_max = np.min(mask_coords[1]), np.max(mask_coords[1])
+        y_min, y_max = np.min(mask_coords[0]), np.max(mask_coords[0])
+        mask_center_x = (x_min + x_max) // 2
+        mask_center_y = (y_min + y_max) // 2
+    else:
+        # 如果mask为空，使用图像中心
+        mask_center_x, mask_center_y = img.width // 2, img.height // 2
+    
+    # 创建足够大的画布以容纳所有变换
+    max_dim = int(max(img.width, img.height, bg_width, bg_height) * 3)
+    canvas_width, canvas_height = max_dim, max_dim
+    
+    # 计算在画布上放置背景的位置
+    bj_pos_x = (canvas_width - bg_width) // 2
+    bj_pos_y = (canvas_height - bg_height) // 2
+    
+    # 创建画布并粘贴背景图像
+    canvas = Image.new('RGBA', (canvas_width, canvas_height), (0, 0, 0, 0))
+    canvas.paste(bj_img, (bj_pos_x, bj_pos_y))
+    
+    # 计算前景图像在画布上的初始位置
+    img_pos_x = bj_pos_x + x_position
+    img_pos_y = bj_pos_y + y_position
+    
+    # 应用变换
+    if scale != 1.0 or rotation != 0:
+        # 计算变换后的图像尺寸
+        new_width, new_height = int(img.width * scale), int(img.height * scale)
         
-        b = c
-        # 创建一个原始 latent 的副本，避免重复修改
-        original_latent = latent_tensor  # 使用确保的张量
+        # 缩放图像和遮罩
+        transformed_img = img.resize((new_width, new_height), Image.LANCZOS)
+        transformed_mask = mask.resize((new_width, new_height), Image.NEAREST)
+        
+        # 计算变换后的mask中心（考虑缩放）
+        new_mask_center_x = int(mask_center_x * scale)
+        new_mask_center_y = int(mask_center_y * scale)
+        
+        # 应用旋转（围绕mask中心）
+        if rotation != 0:
+            # 旋转图像和遮罩
+            transformed_img = transformed_img.rotate(
+                -rotation,  # PIL的rotate函数使用逆时针旋转
+                center=(new_mask_center_x, new_mask_center_y),
+                expand=True,  # 允许图像扩展以包含所有旋转后的内容
+                resample=Image.BICUBIC
+            )
+            
+            transformed_mask = transformed_mask.rotate(
+                -rotation,
+                center=(new_mask_center_x, new_mask_center_y),
+                expand=True,
+                resample=Image.NEAREST
+            )
+        
+        # 计算旋转后的图像中心偏移
+        offset_x = (transformed_img.width - new_width) // 2
+        offset_y = (transformed_img.height - new_height) // 2
+        
+        # 更新mask中心位置
+        new_mask_center_x += offset_x
+        new_mask_center_y += offset_y
+        
+        # 计算粘贴位置（左上角）
+        paste_x = img_pos_x - new_mask_center_x + mask_center_x
+        paste_y = img_pos_y - new_mask_center_y + mask_center_y
+        
+        # 将变换后的图像和遮罩粘贴到画布上
+        canvas.paste(transformed_img, (paste_x, paste_y), transformed_mask)
+        
+        # 创建最终的遮罩图像
+        result_mask = Image.new('L', (canvas_width, canvas_height), 0)
+        result_mask.paste(transformed_mask, (paste_x, paste_y))
+        
+        # 计算最终的mask中心位置（相对于原始背景）
+        final_x = x_position
+        final_y = y_position
+    else:
+        # 如果没有变换，直接粘贴原图
+        canvas.paste(img, (img_pos_x, img_pos_y), mask)
+        
+        # 创建最终的遮罩图像
+        result_mask = Image.new('L', (canvas_width, canvas_height), 0)
+        result_mask.paste(mask, (img_pos_x, img_pos_y))
+        
+        # 计算最终的mask中心位置（相对于原始背景）
+        final_x = x_position
+        final_y = y_position
+    
+    # === 关键修改：在输出前进行裁切 ===
+    # 计算相对于原始背景的可见区域
+    bg_visible_x1 = max(0, bj_pos_x)
+    bg_visible_y1 = max(0, bj_pos_y)
+    bg_visible_x2 = min(bj_pos_x + bg_width, canvas_width)
+    bg_visible_y2 = min(bj_pos_y + bg_height, canvas_height)
+    
+    # 裁切画布和遮罩到背景大小
+    cropped_img = canvas.crop((bg_visible_x1, bg_visible_y1, bg_visible_x2, bg_visible_y2))
+    cropped_mask = result_mask.crop((bg_visible_x1, bg_visible_y1, bg_visible_x2, bg_visible_y2))
+    
+    # 如果裁切后的尺寸小于背景尺寸，创建与背景相同大小的新图像并居中粘贴
+    if cropped_img.size != (bg_width, bg_height):
+        final_img = Image.new('RGBA', (bg_width, bg_height), (0, 0, 0, 0))
+        final_mask = Image.new('L', (bg_width, bg_height), 0)
+        
+        paste_x = (bg_width - cropped_img.width) // 2
+        paste_y = (bg_height - cropped_img.height) // 2
+        
+        final_img.paste(cropped_img, (paste_x, paste_y))
+        final_mask.paste(cropped_mask, (paste_x, paste_y))
+    else:
+        final_img = cropped_img
+        final_mask = cropped_mask
+    
+    return final_img, final_mask, final_x, final_y
 
-        if mask1 is not None:
-            influence = 8 * prompt_weight1 * (prompt_weight1 - 1) - 6 * prompt_weight1 + 6
-            result = set_latent_mask2(original_latent, mask1)
-            masked_latent = result["samples"]  # 提取 samples 部分进行计算
-            latent_samples = masked_latent * influence
-            b1 = node_helpers.conditioning_set_values(b, {"reference_latents": [latent_samples]}, append=True)
-            b = b1
-        if mask2 is not None:
-            influence = 8 * prompt_weight2 * (prompt_weight2 - 1) - 6 * prompt_weight2 + 6
-            result = set_latent_mask2(original_latent, mask2)
-            masked_latent = result["samples"]
-            latent_samples = masked_latent * influence
-            b2 = node_helpers.conditioning_set_values(b, {"reference_latents": [latent_samples]}, append=True)
-            b = b2
-        if mask3 is not None:
-            influence = 8 * prompt_weight3 * (prompt_weight3 - 1) - 6 * prompt_weight3 + 6
-            result = set_latent_mask2(original_latent, mask3)
-            masked_latent = result["samples"]
-            latent_samples = masked_latent * influence
-            b3 = node_helpers.conditioning_set_values(b, {"reference_latents": [latent_samples]}, append=True)
-            b = b3
-        if mask4 is not None:
-            influence = 8 * prompt_weight4 * (prompt_weight4 - 1) - 6 * prompt_weight4 + 6
-            result = set_latent_mask2(original_latent, mask4)
-            masked_latent = result["samples"]
-            latent_samples = masked_latent * influence
-            b4 = node_helpers.conditioning_set_values(b, {"reference_latents": [latent_samples]}, append=True)
-            b = b4
 
-        if mask5 is not None:
-            influence = 8 * prompt_weight5 * (prompt_weight5 - 1) - 6 * prompt_weight5 + 6
-            result = set_latent_mask2(original_latent, mask5)
-            masked_latent = result["samples"]
-            latent_samples = masked_latent * influence
-            b5 = node_helpers.conditioning_set_values(b, {"reference_latents": [latent_samples]}, append=True)
-            b = b5  
 
-        # 返回张量而不是字典
-        context = new_context(context, positive=b, latent=Flatent)
-        return (context, b, Flatent)
+def center_transform_layer( align_mode, x_offset, y_offset, rotation, scale, edge_detection, edge_thickness, edge_color, opacity, bj_img=None, fj_img=None, mask=None):
+    # 颜色映射表
+    color_mapping = {
+        "black": (0, 0, 0),
+        "white": (255, 255, 255),
+        "red": (255, 0, 0),
+        "green": (0, 255, 0),
+        "blue": (0, 0, 255),
+        "yellow": (255, 255, 0),
+        "cyan": (0, 255, 255),
+        "magenta": (255, 0, 255),
+    }
+    
+    if fj_img is None: raise ValueError("前景图像(fj_img)是必需的输入")
+    if bj_img is None: bj_img = fj_img.clone()
+        
+    bj_np = bj_img[0].cpu().numpy()
+    fj_np = fj_img[0].cpu().numpy()
+    
+    bj_pil = Image.fromarray((bj_np * 255).astype(np.uint8)).convert("RGBA")
+    fj_pil = Image.fromarray((fj_np * 255).astype(np.uint8)).convert("RGBA")
+    
+    canvas_width, canvas_height = bj_pil.size
+    canvas_center_x, canvas_center_y = canvas_width // 2, canvas_height // 2
+    
+    # 记录原始mask尺寸
+    original_mask_width, original_mask_height = 0, 0
+    if mask is not None:
+        mask_np = mask[0].cpu().numpy()
+        mask_pil = Image.fromarray((mask_np * 255).astype(np.uint8)).convert("L")
+        original_mask_width, original_mask_height = mask_pil.size
+        mask_pil = mask_pil.resize(fj_pil.size, Image.LANCZOS)
+    else:
+        mask_pil = Image.new("L", fj_pil.size, 255)
+        original_mask_width, original_mask_height = mask_pil.size
+    
+    mask_center_x, mask_center_y = mask_pil.size[0] // 2, mask_pil.size[1] // 2
+    
+    # 计算布局调整后的尺寸和缩放比例
+    scale_x, scale_y = 1.0, 1.0
+    if align_mode == "height":
+        height_ratio = canvas_height / fj_pil.size[1]
+        new_width = int(fj_pil.size[0] * height_ratio)
+        scale_x = height_ratio
+        scale_y = height_ratio
+        fj_pil = fj_pil.resize((new_width, canvas_height), Image.LANCZOS)
+        mask_pil = mask_pil.resize((new_width, canvas_height), Image.LANCZOS)
+        mask_center_x, mask_center_y = new_width // 2, canvas_height // 2
+    elif align_mode == "width":
+        width_ratio = canvas_width / fj_pil.size[0]
+        new_height = int(fj_pil.size[1] * width_ratio)
+        scale_x = width_ratio
+        scale_y = width_ratio
+        fj_pil = fj_pil.resize((canvas_width, new_height), Image.LANCZOS)
+        mask_pil = mask_pil.resize((canvas_width, new_height), Image.LANCZOS)
+        mask_center_x, mask_center_y = canvas_width // 2, new_height // 2
+    
+    # 保存调整后但未旋转缩放的尺寸
+    adjusted_mask_width, adjusted_mask_height = mask_pil.size
+    
+    # 确保rotation是数值类型
+    rotation = float(rotation)  # 新增的类型转换
+    
+    # 应用旋转和缩放
+    if rotation != 0 or scale != 1.0:
+        mask_pil = mask_pil.rotate(rotation, center=(mask_center_x, mask_center_y), resample=Image.BICUBIC, expand=True)
+        fj_pil = fj_pil.rotate(rotation, center=(mask_center_x, mask_center_y), resample=Image.BICUBIC, expand=True)
+        
+        if scale != 1.0:
+            new_size = (int(fj_pil.size[0] * scale), int(fj_pil.size[1] * scale))
+            scale_x *= scale
+            scale_y *= scale
+            fj_pil = fj_pil.resize(new_size, Image.LANCZOS)
+            mask_pil = mask_pil.resize(new_size, Image.LANCZOS)
+        
+        mask_center_x, mask_center_y = fj_pil.size[0] // 2, fj_pil.size[1] // 2
+    
+    # 确保composite_pil正确初始化
+    composite_pil = bj_pil.copy()
+    
+    # 计算mask在画布上的位置（考虑偏移，不应用缩放）
+    x_position = canvas_center_x - mask_center_x + x_offset
+    y_position = canvas_center_y - mask_center_y + y_offset
+    
+    # 计算实际粘贴位置（相对于画布左上角）
+    paste_x = max(0, x_position)
+    paste_y = max(0, y_position)
+    
+    # 应用遮罩到前景图像
+    fj_with_mask = fj_pil.copy()
+    fj_with_mask.putalpha(mask_pil)
+    
+    # 调整透明度
+    if opacity < 1.0:
+        r, g, b, a = fj_with_mask.split()
+        a = a.point(lambda p: p * opacity)
+        fj_with_mask = Image.merge("RGBA", (r, g, b, a))
+    
+    # 裁切超出画布的部分
+    cropped_fj = fj_with_mask.crop((
+        max(0, -x_position),
+        max(0, -y_position),
+        min(fj_pil.size[0], canvas_width - x_position),
+        min(fj_pil.size[1], canvas_height - y_position)
+    ))
+    
+    # 合成图像
+    composite_pil.paste(cropped_fj, (paste_x, paste_y), cropped_fj)
+    
+    # 重构完整尺寸的遮罩
+    full_size_mask = Image.new("L", composite_pil.size, 0)
+    full_size_mask.paste(mask_pil.crop((
+        max(0, -x_position),
+        max(0, -y_position),
+        min(fj_pil.size[0], canvas_width - x_position),
+        min(fj_pil.size[1], canvas_height - y_position)
+    )), (paste_x, paste_y))
+    
+    # 计算mask的边界框（相对于mask自身）
+    bbox = mask_pil.getbbox()  # 返回格式：(left, top, right, bottom)
+    
+    if bbox:
+        bbox_left, bbox_top, bbox_right, bbox_bottom = bbox
+        bbox_width = bbox_right - bbox_left
+        bbox_height = bbox_bottom - bbox_top
+        
+        # 计算mask边界框中心点相对于mask的坐标
+        bbox_center_x = bbox_left + bbox_width // 2
+        bbox_center_y = bbox_top + bbox_height // 2
+        
+        # 计算mask有效区域中心点在画布上的实际坐标
+        bbox_actual_x = x_position + bbox_center_x
+        bbox_actual_y = y_position + bbox_center_y
+        
+        # 计算相对于画布中心的偏移（不考虑缩放）
+        bbox_center_x_rel = bbox_actual_x - canvas_center_x
+        bbox_center_y_rel = bbox_actual_y - canvas_center_y
+    else:
+        # 如果mask为空，返回默认值
+        bbox_width = 0
+        bbox_height = 0
+        bbox_center_x_rel = 0
+        bbox_center_y_rel = 0
+    
+    # 应用边缘检测
+    if edge_detection:
+        # 获取颜色值
+        if edge_color in color_mapping:
+            r, g, b = color_mapping[edge_color]
+        else:
+            r, g, b = 0, 0, 0  # 默认黑色
+        
+        # 确保遮罩为二值图像
+        threshold = 128
+        mask_array = np.array(full_size_mask)
+        binary_mask = np.where(mask_array > threshold, 255, 0).astype(np.uint8)
+        binary_mask_pil = Image.fromarray(binary_mask)
+        
+        # 应用边缘检测
+        edge_image = Image.new("RGBA", composite_pil.size, (0, 0, 0, 0))
+        edge_draw = ImageDraw.Draw(edge_image)
+        
+        # 转换为OpenCV格式进行轮廓检测
+        mask_cv = np.array(binary_mask_pil)
+        contours, _ = cv2.findContours(mask_cv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        for contour in contours:
+            for i in range(edge_thickness):
+                points = [tuple(point[0]) for point in contour]
+                edge_draw.line(points, fill=(r, g, b, int(opacity * 255)), width=edge_thickness-i+1)
+        
+        # 合并边缘到合成图
+        composite_pil = Image.alpha_composite(composite_pil, edge_image)
+        
+        # 生成边缘遮罩
+        edge_mask = np.zeros_like(mask_cv)
+        cv2.drawContours(edge_mask, contours, -1, 255, edge_thickness)
+        line_mask_pil = Image.fromarray(edge_mask)
+    else:
+        line_mask_pil = Image.new("L", composite_pil.size, 0)
+    
+    # 准备输出
+    composite_np = np.array(composite_pil).astype(np.float32) / 255.0
+    mask_np = np.array(full_size_mask).astype(np.float32) / 255.0
+    line_mask_np = np.array(line_mask_pil).astype(np.float32) / 255.0
+    
+    if composite_np.shape[2] == 4: pass
+    else: composite_np = np.dstack([composite_np, np.ones_like(composite_np[..., 0:1])])
+    
+    composite_tensor = torch.from_numpy(composite_np).unsqueeze(0)
+    mask_tensor = torch.from_numpy(mask_np).unsqueeze(0).unsqueeze(0)
+    line_mask_tensor = torch.from_numpy(line_mask_np).unsqueeze(0).unsqueeze(0)
+    
+    # box_info格式：(mask有效区域的宽度, mask有效区域的高度, 有效区域中心点相对于画布中心的X坐标, 有效区域中心点相对于画布中心的Y坐标)
+    box_info = (bbox_width, bbox_height, bbox_center_x_rel, bbox_center_y_rel)
+    
+    return (composite_tensor, mask_tensor, line_mask_tensor, box_info)
+
+
+
+#endregion---------------------------视觉标记--------------------------
