@@ -2899,6 +2899,8 @@ class chx_Ksampler_inpaint:
                 return (context, zztx, decoded_image, dyzz)     
 
 
+
+
 class chx_Ksampler_Kontext:
     @classmethod
     def INPUT_TYPES(cls):
@@ -3133,419 +3135,6 @@ class chx_Ksampler_Kontext_adv:
         if image_output == "None": return (context, None, samples_dict)
         elif image_output in ("Hide", "Hide/Save"): return {"ui": {}, "result": (context, final_output, samples_dict)}
         else: return {"ui": {"images": all_results}, "result": (context, final_output, samples_dict)}
-
-
-class pre_Kontext:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-            },
-            "optional": {
-                "image": ("IMAGE", ),
-                "mask": ("MASK",),
-                "prompt_weight":("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
-                "smoothness":("INT", {"default": 0,  "min":0, "max": 10, "step": 0.1,}),
-                "auto_adjust_image": ("BOOLEAN", {"default": False}),  # 新增的输入开关
-                "pos": ("STRING", {"multiline": True, "default": ""}),
-            },
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT","LATENT" )
-    RETURN_NAMES = ("context","latent" )
-    FUNCTION = "process"
-    CATEGORY = "Apt_Preset/chx_tool"
-
-    def process(self, context=None, image=None, mask=None, prompt_weight=0.5, pos="", smoothness=0, auto_adjust_image=True):  # 添加参数
-
-
-        vae = context.get("vae", None)
-        clip = context.get("clip", None)
-
-        if pos and pos.strip(): 
-            positive, = CLIPTextEncode().encode(clip, pos)
-        else:
-            positive = context.get("positive", None)
-
-
-
-        if image is None:
-            image = context.get("images", None)
-            if  image is None:
-                return (context,None)
-
-
-        image=kontext_adjust_image_resolution(image, auto_adjust_image)[0]
-
-        encoded_latent = vae.encode(image)  #
-        latent = {"samples": encoded_latent}
-
-        if positive is not None:
-            influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
-            scaled_latent = latent["samples"] * influence
-            positive = node_helpers.conditioning_set_values( positive, {"reference_latents": [scaled_latent]},  append=True)
-
-        if mask is not None:
-            """mask = tensor2pil(mask)
-            if not isinstance(mask, Image.Image):
-                raise TypeError("mask is not a valid PIL Image object")
-            feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
-            mask = pil2tensor(feathered_image)"""
-            
-            mask =smoothness_mask(mask, smoothness)
-            latent = {"samples": encoded_latent,"noise_mask": mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])) }
-
-        context = new_context(context, positive=positive, latent=latent)
-
-        return (context,latent)
-    
-
-
-class XXXchx_Ksampler_Kontext_inpaint:# 遮罩选项，可参与采样或不参与采样
-    def __init__(self):
-        pass
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "context": ("RUN_CONTEXT",),
-            "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-            "denoise": ("FLOAT", {"default": 1, "min": 0.0, "max": 1.0, "step": 0.01}),
-            "steps": ("INT", {"default": -1, "min": -1, "max": 10000,"tooltip": "-1 means no change"}),
-            #"repaint_mode": (["latent_image", "latent_blank"],),
-            "mask_extend": ("INT", {"default": 0, "min": 0, "max": 64, "step": 1}),
-            "feather":("INT", {"default": 0, "min": 0, "max": 100, "step": 1}),
-            "prompt_weight":("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-            "mask_in_sampling": ("BOOLEAN", {"default": True,}),
-            "crop_mask_as_inpaint_area": ("BOOLEAN", {"default": False,  "tooltip": "Below options are only valid when it is true."}),
-            "crop_area_scale": ("INT", {"default": 512, "min": 0, "max": 2048, "step": 8}),
-            "crop_area_extend": ("INT", {"default": 10, "min": 0, "max": 500, "step": 1}),
-
-
-        },
-                
-            "optional": {
-            "image": ("IMAGE",),
-            "mask": ("MASK",),
-            "pos":("STRING",{"multiline": True, "default": ""}),
-            }
-                     
-        }
-
-    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE", "IMAGE", )
-    RETURN_NAMES = ('context', 'result_img', 'sample_img',)
-    
-    FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-    def mask_crop(self, image, mask, crop_area_extend, crop_area_scale=0):
-        
-
-        image_pil = tensor2pil(image)
-        mask_pil = tensor2pil(mask)
-        mask_array = np.array(mask_pil) > 0
-        coords = np.where(mask_array)
-        if coords[0].size == 0 or coords[1].size == 0:
-            return (image, None, mask)
-        x0, y0, x1, y1 = coords[1].min(), coords[0].min(), coords[1].max(), coords[0].max()
-        x0 -= crop_area_extend
-        y0 -= crop_area_extend
-        x1 += crop_area_extend
-        y1 += crop_area_extend
-        x0 = max(x0, 0)
-        y0 = max(y0, 0)
-        x1 = min(x1, image_pil.width)
-        y1 = min(y1, image_pil.height)
-        cropped_image_pil = image_pil.crop((x0, y0, x1, y1))
-        cropped_mask_pil = mask_pil.crop((x0, y0, x1, y1))
-        if crop_area_scale > 0:
-            min_size = min(cropped_image_pil.size)
-            if min_size < crop_area_scale or min_size > crop_area_scale:
-                scale_ratio = crop_area_scale / min_size
-                new_size = (int(cropped_image_pil.width * scale_ratio), int(cropped_image_pil.height * scale_ratio))
-                cropped_image_pil = cropped_image_pil.resize(new_size, Image.LANCZOS)
-                cropped_mask_pil = cropped_mask_pil.resize(new_size, Image.LANCZOS)
-
-        cropped_image_tensor = pil2tensor(cropped_image_pil)
-        cropped_mask_tensor = pil2tensor(cropped_mask_pil)
-        qtch = image
-        qtzz = mask
-        return (cropped_image_tensor, cropped_mask_tensor, (y0, y1, x0, x1) ,qtch ,qtzz )
-
-    def encode(self, vae, image, mask, mask_extend=6, repaint_mode="latent_blank"):
-        x = (image.shape[1] // 8) * 8
-        y = (image.shape[2] // 8) * 8
-        mask = torch.nn.functional.interpolate(mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])),
-                                            size=(image.shape[1], image.shape[2]), mode="bilinear")
-        if repaint_mode == "latent_blank":
-            image = image.clone()
-            if image.shape[1] != x or image.shape[2] != y:
-                x_offset = (image.shape[1] % 8) // 2
-                y_offset = (image.shape[2] % 8) // 2
-                image = image[:, x_offset:x + x_offset, y_offset:y + y_offset, :]
-                mask = mask[:, :, x_offset:x + x_offset, y_offset:y + y_offset]
-        if mask_extend == 0:
-            mask_erosion = mask
-        else:
-            kernel_tensor = torch.ones((1, 1, mask_extend, mask_extend))
-            padding = math.ceil((mask_extend - 1) / 2)
-            mask_erosion = torch.clamp(torch.nn.functional.conv2d(mask.round(), kernel_tensor, padding=padding), 0, 1)
-
-        m = (1.0 - mask.round()).squeeze(1)
-        if repaint_mode == "latent_blank":
-            for i in range(3):
-                image[:, :, :, i] -= 0.5
-                image[:, :, :, i] *= m
-                image[:, :, :, i] += 0.5
-        t = vae.encode(image)
-        return {"samples": t, "noise_mask": (mask_erosion[:, :, :x, :y].round())}, None
-    
-    def paste_cropped_image_with_mask(self, original_image, cropped_image, crop_coords, mask, MHmask, feather):
-        y0, y1, x0, x1 = crop_coords
-        original_image_pil = tensor2pil(original_image)
-        cropped_image_pil = tensor2pil(cropped_image)
-        mask_pil = tensor2pil(mask)
-        crop_width = x1 - x0
-        crop_height = y1 - y0
-        crop_size = (crop_width, crop_height)
-
-        cropped_image_pil = cropped_image_pil.resize(crop_size, Image.LANCZOS)
-        mask_pil = mask_pil.resize(crop_size, Image.LANCZOS)
-
-        mask_binary = mask_pil.convert('L')
-        mask_rgba = mask_binary.convert('RGBA')
-        blurred_mask = mask_rgba
-        transparent_mask = mask_binary
-        blurred_mask = mask_binary
-        cropped_image_pil = cropped_image_pil.convert('RGBA')
-        original_image_pil = original_image_pil.convert('RGBA')
-        original_image_pil.paste(cropped_image_pil, (x0, y0), mask=blurred_mask)
-        ZT_image_pil=original_image_pil.convert('RGB')
-        IMAGEEE = pil2tensor(ZT_image_pil)        
-        mask_ecmhpil= tensor2pil(MHmask)   
-        mask_ecmh = mask_ecmhpil.convert('L')
-        mask_ecrgba = tensor2pil(MHmask)   
-        maskecmh = None
-        if feather is not None:
-            if feather > -1:
-                maskecmh = mask_ecrgba.filter(ImageFilter.GaussianBlur(feather))
-        dyzz = pil2tensor(maskecmh)
-        maskeccmh = pil2tensor(maskecmh)
-        destination = original_image
-        source = IMAGEEE
-        dyyt = source
-        multiplier = 8
-        resize_source = True
-        mask = dyzz
-        destination = destination.clone().movedim(-1, 1)
-        source=source.clone().movedim(-1, 1)
-        source = source.to(destination.device)
-        if resize_source:
-            source = torch.nn.functional.interpolate(source, size=(destination.shape[2], destination.shape[3]), mode="bilinear")
-
-        source = comfy.utils.repeat_to_batch_size(source, destination.shape[0])
-        x=0
-        y=0
-        x = int(x)
-        y = int(y)  
-        x = max(-source.shape[3] * multiplier, min(x, destination.shape[3] * multiplier))
-        y = max(-source.shape[2] * multiplier, min(y, destination.shape[2] * multiplier))
-
-        left, top = (x // multiplier, y // multiplier)
-        right, bottom = (left + source.shape[3], top + source.shape[2],)
-
-        if mask is None:
-            mask = torch.ones_like(source)
-        else:
-            mask = mask.to(destination.device, copy=True)
-            mask = torch.nn.functional.interpolate(mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])), size=(source.shape[2], source.shape[3]), mode="bilinear")
-            mask = comfy.utils.repeat_to_batch_size(mask, source.shape[0])
-        visible_width, visible_height = (destination.shape[3] - left + min(0, x), destination.shape[2] - top + min(0, y),)
-
-        mask = mask[:, :, :visible_height, :visible_width]
-        inverse_mask = torch.ones_like(mask) - mask
-
-        source_portion = mask * source[:, :, :visible_height, :visible_width]
-        destination_portion = inverse_mask  * destination[:, :, top:bottom, left:right]
-
-        destination[:, :, top:bottom, left:right] = source_portion + destination_portion
-        zztx = destination.movedim(1, -1)
-        return zztx,dyzz,dyyt
-
-
-    def sample(self, context, seed, steps, image=None, mask=None, pos=None, prompt_weight=0.5, mask_extend=6, 
-            denoise=1.0, crop_mask_as_inpaint_area=False, crop_area_extend=0, crop_area_scale=0, 
-            feather=1, mask_in_sampling=True):
-        """
-        采样方法，添加mask_in_sampling参数控制遮罩是否参与实际采样计算
-        """
-        repaint_mode="latent_image"
-        guidance = context.get("guidance", 3.5)
-        if steps == 0 or steps==-1: steps = context.get("steps")
-        model = context.get("model", None)
-        model = DifferentialDiffusion().apply(model)[0]      
-        vae = context.get("vae", None)
-        
-        clip = context.get("clip", None)
-        positive = None
-        if pos and pos.strip():
-            positive, = CLIPTextEncode().encode(clip, pos)
-        else:
-            positive = context.get("positive", None)
-        positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-        negative = context.get("negative", None)
-        steps = context.get("steps", None)
-        cfg = context.get("cfg", None)
-        sampler_name = context.get("sampler", None)
-        scheduler = context.get("scheduler", None)
-
-        if image is not None:
-            latent = VAEEncode().encode(vae, image)[0]
-        else:
-            latent = context.get("latent", None)
-
-        if mask is None or torch.all(mask == 0):
-            # 无遮罩的情况保持不变
-            if positive is not None and prompt_weight > 0:
-                influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
-                scaled_latent = latent["samples"] * influence
-                positive = node_helpers.conditioning_set_values(positive, {"reference_latents": [scaled_latent]}, append=True)
-                positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-            latent = common_ksampler(model, seed, steps, cfg, sampler_name, scheduler,
-                    positive, negative, latent, denoise=denoise)[0]
-            output_image = decode(vae, latent)[0]
-            
-            context = new_context(context, latent=latent, positive=positive, negative=negative, images=output_image)
-            zztx = output_image
-            decoded_image = output_image
-            return (context, zztx, decoded_image, None)
-
-        if mask is not None:
-            latent["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
-            original_image = image
-            hqccimage = tensor2pil(image)
-            sfmask = tensor2pil(mask)
-            sfhmask = sfmask.resize(hqccimage.size, Image.LANCZOS)
-            mask = pil2tensor(sfhmask)
-            MHmask = mask
-            
-            if crop_mask_as_inpaint_area:
-                # 执行图像裁剪，获取裁剪区域和坐标
-                image, mask, crop_coords, bytx, byzz = self.mask_crop(image, mask, crop_area_extend, crop_area_scale)
-                
-                # 对裁剪后的图像进行编码
-                latent_image, _ = self.encode(vae, image, mask, mask_extend, repaint_mode)
-                
-                # 为裁剪区域创建专门的positive条件
-                if positive is not None and prompt_weight > 0:
-                    influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
-                    scaled_latent = latent_image["samples"] * influence
-                    positive_crop = node_helpers.conditioning_set_values(positive.copy(), {"reference_latents": [scaled_latent]}, append=True)
-                    positive_crop = node_helpers.conditioning_set_values(positive_crop, {"guidance": guidance})
-                else:
-                    positive_crop = positive
-                
-                # 根据mask_in_sampling决定是否传递noise_mask给ksampler
-                if not mask_in_sampling and "noise_mask" in latent_image:
-                    # 创建一个不包含noise_mask的副本，确保遮罩不参与采样
-                    latent_image_no_mask = latent_image.copy()
-                    latent_image_no_mask.pop("noise_mask")
-                    
-                    # 使用不包含遮罩的latent进行采样
-                    samples = common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, 
-                                            positive_crop, negative, latent_image_no_mask, denoise=denoise)
-                else:
-                    # 使用原始latent_image（包含noise_mask），遮罩参与采样
-                    samples = common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, 
-                                            positive_crop, negative, latent_image, denoise=denoise)
-                
-                decoded_image = vae.decode(samples[0]["samples"])
-                
-                # 确保采样结果正确贴回原图
-                if not mask_in_sampling:
-                    # 当遮罩不参与采样时，使用全1遮罩确保完全替换裁剪区域
-                    full_mask = torch.ones_like(mask)
-                    final_image, dyzz, dyyt = self.paste_cropped_image_with_mask(
-                        original_image, decoded_image, crop_coords, full_mask, full_mask, feather
-                    )
-                else:
-                    # 当遮罩参与采样时，使用原始裁剪遮罩进行粘贴
-                    final_image, dyzz, dyyt = self.paste_cropped_image_with_mask(
-                        original_image, decoded_image, crop_coords, mask, MHmask, feather
-                    )
-                
-                # 更新latent和context
-                latent = VAEEncode().encode(vae, final_image)[0]
-                context = new_context(context, latent=latent, positive=positive, negative=negative, images=final_image)
-                return (context, final_image, decoded_image)     
-
-            else:
-                # 非裁剪模式保持原有逻辑不变
-                bytx, byzz, crop_coords, image, mask = self.mask_crop(image, mask, crop_area_extend, crop_area_scale)
-                latent_image, _ = self.encode(vae, image, mask, mask_extend, repaint_mode)
-                
-                # 对完整图像应用positive条件
-                if positive is not None and prompt_weight > 0:
-                    influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
-                    scaled_latent = latent_image["samples"] * influence
-                    positive = node_helpers.conditioning_set_values(positive, {"reference_latents": [scaled_latent]}, append=True)
-                    positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-                
-                samples = common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise=denoise)
-                decoded_image = vae.decode(samples[0]["samples"])
-                
-                # 后处理逻辑保持不变
-                mask_ecrgba = tensor2pil(mask)   
-                maskecmh = None
-                if feather is not None:
-                    if feather > -1:
-                        maskecmh = mask_ecrgba.filter(ImageFilter.GaussianBlur(feather))
-                dyzz = pil2tensor(maskecmh)
-                mask = dyzz
-                
-                destination = original_image
-                source = decoded_image       
-                multiplier = 8
-                resize_source = True
-
-                destination = destination.clone().movedim(-1, 1)
-                source = source.clone().movedim(-1, 1)
-                source = source.to(destination.device)
-                if resize_source:
-                    source = torch.nn.functional.interpolate(source, size=(destination.shape[2], destination.shape[3]), mode="bilinear")
-
-                source = comfy.utils.repeat_to_batch_size(source, destination.shape[0])
-                x = 0
-                y = 0
-                x = int(x)
-                y = int(y)  
-                x = max(-source.shape[3] * multiplier, min(x, destination.shape[3] * multiplier))
-                y = max(-source.shape[2] * multiplier, min(y, destination.shape[2] * multiplier))
-
-                left, top = (x // multiplier, y // multiplier)
-                right, bottom = (left + source.shape[3], top + source.shape[2])
-
-                if mask is None:
-                    mask = torch.ones_like(source)
-                else:
-                    mask = mask.to(destination.device, copy=True)
-                    mask = torch.nn.functional.interpolate(mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])), size=(source.shape[2], source.shape[3]), mode="bilinear")
-                    mask = comfy.utils.repeat_to_batch_size(mask, source.shape[0])
-                
-                visible_width, visible_height = (destination.shape[3] - left + min(0, x), destination.shape[2] - top + min(0, y))
-                mask = mask[:, :, :visible_height, :visible_width]
-                inverse_mask = torch.ones_like(mask) - mask
-                source_portion = mask * source[:, :, :visible_height, :visible_width]
-                destination_portion = inverse_mask * destination[:, :, top:bottom, left:right]
-                destination[:, :, top:bottom, left:right] = source_portion + destination_portion
-                zztx = destination.movedim(1, -1)
-            
-                latent = VAEEncode().encode(vae, zztx)[0]
-                context = new_context(context, latent=latent, positive=positive, negative=negative, pos=pos, images=zztx)
-                return (context, zztx, decoded_image)
 
 
 class chx_Ksampler_Kontext_inpaint:
@@ -3874,5 +3463,72 @@ class chx_Ksampler_Kontext_inpaint:
                 context = new_context(context, latent=latent, positive=positive, negative=negative, pos=pos, images=zztx)
                 return (context, zztx, decoded_image)
             
+
+
+class pre_Kontext:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "image": ("IMAGE", ),
+                "mask": ("MASK",),
+                "prompt_weight":("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
+                "smoothness":("INT", {"default": 0,  "min":0, "max": 10, "step": 0.1,}),
+                "auto_adjust_image": ("BOOLEAN", {"default": False}),  # 新增的输入开关
+                "pos": ("STRING", {"multiline": True, "default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("RUN_CONTEXT","LATENT" )
+    RETURN_NAMES = ("context","latent" )
+    FUNCTION = "process"
+    CATEGORY = "Apt_Preset/chx_tool"
+
+    def process(self, context=None, image=None, mask=None, prompt_weight=0.5, pos="", smoothness=0, auto_adjust_image=True):  # 添加参数
+
+
+        vae = context.get("vae", None)
+        clip = context.get("clip", None)
+
+        if pos and pos.strip(): 
+            positive, = CLIPTextEncode().encode(clip, pos)
+        else:
+            positive = context.get("positive", None)
+
+
+
+        if image is None:
+            image = context.get("images", None)
+            if  image is None:
+                return (context,None)
+
+
+        image=kontext_adjust_image_resolution(image, auto_adjust_image)[0]
+
+        encoded_latent = vae.encode(image)  #
+        latent = {"samples": encoded_latent}
+
+        if positive is not None:
+            influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
+            scaled_latent = latent["samples"] * influence
+            positive = node_helpers.conditioning_set_values( positive, {"reference_latents": [scaled_latent]},  append=True)
+
+        if mask is not None:
+            """mask = tensor2pil(mask)
+            if not isinstance(mask, Image.Image):
+                raise TypeError("mask is not a valid PIL Image object")
+            feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+            mask = pil2tensor(feathered_image)"""
+            
+            mask =smoothness_mask(mask, smoothness)
+            latent = {"samples": encoded_latent,"noise_mask": mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])) }
+
+        context = new_context(context, positive=positive, latent=latent)
+
+        return (context,latent)
+    
 
 
