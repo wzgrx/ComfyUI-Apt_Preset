@@ -1,7 +1,6 @@
 ![image](https://github.com/user-attachments/assets/3227c43c-d82d-47d3-bb9a-096f8fdca21c)
 
 
-一些资源和工作流放在Some resources and workflows are placed in  [ComfyUI-Apt_Collect_](https://github.com/cardenluo/ComfyUI-Apt_Collect)
 # <font color="#000000"> 一、Update record更新记录</font>
 
 2025.5.17  Now the system supports switching to Chinese.支持系统切换中文
