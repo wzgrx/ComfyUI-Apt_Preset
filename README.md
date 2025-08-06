@@ -7,18 +7,7 @@
 2025.5.17  Now the system supports switching to Chinese.支持系统切换中文
 
 2025.5.31 Sum_load_adv 的Unet支持GGUF模型加载 ；The Unet supports the loading of GGUF models
-
-2025.6.30 更新内容比较多 
-          ①增加excel互动节点，在comfyui中实现多维表格功能 
-          ②增加pre_kontext节点，让工作流和flux一样简洁
-          ③text_sum节点，增加预设内容，kontext和wan常用提示词
-          ④移除一些重复功能的节点，要找回原来的节点，只能回到旧版本了
-          On June 30, 2025, there are quite a few updates. 
-          ① An Excel interaction node is added to implement the multi - dimensional table function in ComfyUI. 
-          ② A pre_kontext node is added to make the workflow as concise as Flux. 
-          ③ For the text_sum node, preset content is added, including kontext and commonly used prompt words of Wan. 
-          ④ Some nodes with duplicate functions are removed. To retrieve the original nodes, you can only go back to the old version. 
-          
+   
 2025.7.3  增加Kontext采样器，连续编辑
 
 2025.7.6  添加Kontext采样器尺寸选择，自定义或官方自动尺寸
@@ -34,6 +23,13 @@
 2025.7.18  添加节点，创建_遮罩_视角打标  create_Mask_visual_tag 
 
 2025.7.23  添加节点，创建_遮罩_匹配打标  create_Mask_match_shape
+
+2025.8.6  支持qwen-imge 官方版本以及qwen-imge，gguf
+
+
+<img width="2276" height="1059" alt="image" src="https://github.com/user-attachments/assets/7f2cde22-88c1-4c4a-837c-79c045de1702" />
+
+
 
 Simultaneously issue commands to generate for multiple objects
 
