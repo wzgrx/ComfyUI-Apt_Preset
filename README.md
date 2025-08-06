@@ -1,11 +1,6 @@
 ![image](https://github.com/user-attachments/assets/3227c43c-d82d-47d3-bb9a-096f8fdca21c)
 
 
-# <font color="#000000">暂停comfyui manager 自动更新，请在github下载更新</font>
-# Pause the automatic update of Comfyui Manager，Please download the update directly on GitHub.</font>
-
-
-
 一些资源和工作流放在Some resources and workflows are placed in  [ComfyUI-Apt_Collect_](https://github.com/cardenluo/ComfyUI-Apt_Collect)
 # <font color="#000000"> 一、Update record更新记录</font>
 
