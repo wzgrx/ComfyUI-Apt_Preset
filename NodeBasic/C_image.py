@@ -4088,7 +4088,7 @@ class chx_Ksampler_inpaint:   #重构
                 mask = torch.ones((batch_size, height, width), dtype=torch.float32)
         assert mask is not None, "Mask must be provided or exist in the context."
         
-        background_tensor, cropped_image_tensor, cropped_mask_tensor, stitch = \
+        background_tensor, background_mask_tensor, cropped_image_tensor, cropped_mask_tensor, stitch = \
             Image_solo_crop().inpaint_crop(
                 image=image,
                 mask=mask,
@@ -4428,153 +4428,26 @@ class Image_solo_crop:
 
 
 
-class XXCenter_Align:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "align_mode": (
-                    ["居中-中心对齐", "居中-高度对齐", "居中-宽度对齐"],
-                    {"default": "居中-中心对齐"}
-                ),
-            },
-            "optional": {
-                "image1": ("IMAGE",),  # 基准图像（背景/参考图像）
-                "mask1": ("MASK",),    # 基准图像掩码
-                "image2": ("IMAGE",),  # 待对齐图像（前景）
-                "mask2": ("MASK",),    # 待对齐图像掩码
-            }
-        }
 
-    RETURN_TYPES = ("IMAGE", "MASK", "BOX2", "IMAGE", "MASK")
-    RETURN_NAMES = ("composite_image", "composite_mask", "box2", "aligned_img2", "aligned_mask2")
-    FUNCTION = "align"
-    CATEGORY = "Apt_Preset/align"
 
-    def align(self, align_mode, image1=None, mask1=None, image2=None, mask2=None):
-        # 处理图像为空的默认情况
-        if image1 is None and image2 is None:
-            # 创建默认空白图像（1x512x512x3）
-            default_img = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
-            image1, image2 = default_img, default_img
-        elif image1 is None:
-            image1 = image2  # 以image2为基准
-        elif image2 is None:
-            image2 = image1  # 复制image1作为待对齐图像
 
-        # 转换tensor为numpy（处理图像尺寸和通道）
-        def tensor2np(tensor):
-            if isinstance(tensor, torch.Tensor):
-                np_arr = tensor.cpu().numpy()[0]  # 移除batch维度
-                return np_arr if np_arr.ndim == 3 else np_arr[..., np.newaxis]
-            return tensor
 
-        # 转换numpy为tensor（添加batch维度）
-        def np2tensor(np_arr):
-            return torch.from_numpy(np_arr).float().unsqueeze(0)
 
-        # 获取图像1尺寸（基准尺寸）
-        img1_np = tensor2np(image1)
-        h1, w1 = img1_np.shape[0], img1_np.shape[1]
 
-        # 获取图像2原始尺寸
-        img2_np = tensor2np(image2)
-        h2, w2 = img2_np.shape[0], img2_np.shape[1]
 
-        # 处理掩码（默认全白掩码）
-        mask1_np = tensor2np(mask1) if mask1 is not None else np.ones((h1, w1), dtype=np.float32)
-        mask2_np = tensor2np(mask2) if mask2 is not None else np.ones((h2, w2), dtype=np.float32)
-        # 确保掩码为单通道
-        if mask1_np.ndim == 3: mask1_np = mask1_np[..., 0]
-        if mask2_np.ndim == 3: mask2_np = mask2_np[..., 0]
 
-        # 初始化变量
-        adjusted_img2_np = None
-        adjusted_mask2_np = None
-        composite_img = np.zeros((h1, w1, 3), dtype=np.float32)
-        composite_mask = np.zeros((h1, w1), dtype=np.float32)
 
-        # 1. 居中-中心对齐：图像2缩放到与图像1等尺寸，中心完全重叠
-        if align_mode == "居中-中心对齐":
-            # 缩放图像2到图像1尺寸
-            img2_resized = cv2.resize(img2_np, (w1, h1), interpolation=cv2.INTER_LANCZOS4)
-            mask2_resized = cv2.resize(mask2_np, (w1, h1), interpolation=cv2.INTER_LANCZOS4)
-            
-            # 合成（图像1为底，图像2按掩码混合）
-            alpha = mask2_resized[..., np.newaxis]
-            composite_img = img1_np * (1 - alpha) + img2_resized * alpha
-            composite_mask = mask2_resized  # 合成掩码使用图像2的掩码
-            
-            # 记录调整后的图像2和位置（中心坐标）
-            adjusted_img2_np = img2_resized
-            adjusted_mask2_np = mask2_resized
-            box2 = (w1, h1, w1//2, h1//2)  # (宽, 高, 中心x, 中心y)
 
-        # 2. 居中-高度对齐：图像2高度与图像1一致，宽度按比例缩放，中心对齐
-        elif align_mode == "居中-高度对齐":
-            # 计算缩放比例（保持高度一致）
-            scale = h1 / h2
-            new_w2 = int(w2 * scale)
-            new_h2 = h1  # 高度与图像1一致
-            
-            # 缩放图像2
-            img2_resized = cv2.resize(img2_np, (new_w2, new_h2), interpolation=cv2.INTER_LANCZOS4)
-            mask2_resized = cv2.resize(mask2_np, (new_w2, new_h2), interpolation=cv2.INTER_LANCZOS4)
-            
-            # 计算水平居中偏移（使图像2中心与图像1中心对齐）
-            x_offset = (w1 - new_w2) // 2
-            
-            # 合成图像（图像1为底，图像2居中放置）
-            composite_img = img1_np.copy()
-            composite_img[:, x_offset:x_offset+new_w2] = (
-                img1_np[:, x_offset:x_offset+new_w2] * (1 - mask2_resized[..., np.newaxis]) +
-                img2_resized * mask2_resized[..., np.newaxis]
-            )
-            
-            # 合成掩码
-            composite_mask = np.zeros((h1, w1), dtype=np.float32)
-            composite_mask[:, x_offset:x_offset+new_w2] = mask2_resized
-            
-            # 记录调整后的图像2和位置
-            adjusted_img2_np = img2_resized
-            adjusted_mask2_np = mask2_resized
-            box2 = (new_w2, new_h2, w1//2, h1//2)  # 中心与图像1一致
 
-        # 3. 居中-宽度对齐：图像2宽度与图像1一致，高度按比例缩放，中心对齐
-        elif align_mode == "居中-宽度对齐":
-            # 计算缩放比例（保持宽度一致）
-            scale = w1 / w2
-            new_h2 = int(h2 * scale)
-            new_w2 = w1  # 宽度与图像1一致
-            
-            # 缩放图像2
-            img2_resized = cv2.resize(img2_np, (new_w2, new_h2), interpolation=cv2.INTER_LANCZOS4)
-            mask2_resized = cv2.resize(mask2_np, (new_w2, new_h2), interpolation=cv2.INTER_LANCZOS4)
-            
-            # 计算垂直居中偏移（使图像2中心与图像1中心对齐）
-            y_offset = (h1 - new_h2) // 2
-            
-            # 合成图像（图像1为底，图像2居中放置）
-            composite_img = img1_np.copy()
-            composite_img[y_offset:y_offset+new_h2, :] = (
-                img1_np[y_offset:y_offset+new_h2, :] * (1 - mask2_resized[..., np.newaxis]) +
-                img2_resized * mask2_resized[..., np.newaxis]
-            )
-            
-            # 合成掩码
-            composite_mask = np.zeros((h1, w1), dtype=np.float32)
-            composite_mask[y_offset:y_offset+new_h2, :] = mask2_resized
-            
-            # 记录调整后的图像2和位置
-            adjusted_img2_np = img2_resized
-            adjusted_mask2_np = mask2_resized
-            box2 = (new_w2, new_h2, w1//2, h1//2)  # 中心与图像1一致
 
-        # 转换为tensor输出
-        return (
-            np2tensor(composite_img),
-            np2tensor(composite_mask),
-            box2,
-            np2tensor(adjusted_img2_np),
-            np2tensor(adjusted_mask2_np)
-        )
+
+
+
+
+
+
+
+
+
+
+
