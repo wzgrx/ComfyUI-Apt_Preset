@@ -25,6 +25,8 @@
 
 2025.8.6  支持qwen-imge 官方版本以及qwen-imge，gguf
 
+2025.8.9  增加qwen-fone 可以生成各种中文效果字
+
 
 <img width="2276" height="1059" alt="image" src="https://github.com/user-attachments/assets/7f2cde22-88c1-4c4a-837c-79c045de1702" />
 
