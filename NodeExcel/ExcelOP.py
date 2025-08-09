@@ -1038,7 +1038,7 @@ class excel_Prompter:  #help
 
 
 
-class excel_qwen_font:   # 定式  # 简单
+class excel_qwen_font:   
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     EXCEL_DIR = os.path.join(BASE_DIR, "qwen_Image")
 
@@ -1129,7 +1129,12 @@ class excel_qwen_font:   # 定式  # 简单
         pos = prefix_text
         if pos and not pos.endswith((' ', ',')):
             pos += ' '
-        pos += f"在{{object}}，有一行字，内容如下：{B2}\"{{text}}\""
+        
+        if not text_location or text_location.strip() == "":
+            pos += f"{B2}\"{{text}}\""
+        else:
+            pos += f"在{{object}}，有一行字，内容如下：{B2}\"{{text}}\""
+        
         if B1:
             pos += f", {B1}"
         if font_detail_enhance and C2:
@@ -1138,7 +1143,7 @@ class excel_qwen_font:   # 定式  # 简单
             pos += f", {suffix_text}"
             
         # 处理替换逻辑
-        if text_location:
+        if text_location and text_location.strip() != "":
             pos = self.single_replace(pos, "{object}", text_location)
         if text_content:
             pos = self.single_replace(pos, "{text}", text_content)
@@ -1151,10 +1156,6 @@ class excel_qwen_font:   # 定式  # 简单
             neg = negative_prompt
 
         return (pos, neg)
-
-
-
-
 
 
 
