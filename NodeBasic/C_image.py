@@ -4133,7 +4133,8 @@ class chx_Ksampler_inpaint:   #重构
         # 编码裁剪后的图像
         pixels = processed_image
         encoded_latent = vae.encode(pixels)[0]
-        
+        encoded_latent = encoded_latent[:1]
+                
         if encoded_latent.dim() == 3:
             encoded_latent = encoded_latent.unsqueeze(0)
         elif encoded_latent.dim() != 4:
@@ -4425,6 +4426,7 @@ class Image_solo_crop:
 
 
 #endregion----------------------------合并----------
+
 
 
 
