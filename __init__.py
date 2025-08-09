@@ -21,8 +21,6 @@ from .NodeChx.video_node import *
 from .NodeChx.Ksampler_all import *
 from .NodeChx.Keyframe_schedule import *
 
-
-
 from .NodeBasic.lay_img_canvas import *
 from .NodeBasic.highway import Data_Highway
 from .NodeBasic.C_packdata import *
@@ -37,6 +35,9 @@ from .NodeBasic.C_promp import *
 from .NodeBasic.C_imgEffect import *
 from .NodeBasic.C_type import *
 from .NodeBasic.C_basinInput import *
+from .NodeExcel.ExcelOP import *
+from .NodeExcel.AIagent import *
+
 
 from .NodeCollect.mask_face import *
 from .NodeCollect.text_font2img import *
@@ -55,6 +56,9 @@ NODE_CLASS_MAPPINGS= {
 
 
 #-save-------------------------------------------#
+
+
+
 
 #-------------------------------------------------------N
 "sum_load_adv": sum_load_adv,   
@@ -416,6 +420,7 @@ NODE_CLASS_MAPPINGS= {
 
 
 #----------prompt----------------
+"excel_qwen_font":excel_qwen_font,
 "excel_Prompter":excel_Prompter,       
 "excel_read":excel_read,
 "excel_write_data":excel_write_data,
@@ -423,6 +428,14 @@ NODE_CLASS_MAPPINGS= {
 "excel_search_data":excel_search_data,
 "excel_row_diff":excel_row_diff,
 "excel_column_diff":excel_column_diff,         
+
+"AI_Ollama": AI_Ollama,
+"AI_GLM4":AI_GLM4,
+#"DoubaoAPI":DoubaoAPI,
+#"DoubaoConfig":DoubaoConfig,
+#"DoubaoTextChat":DoubaoTextChat,
+#"DoubaoVisionChat": DoubaoVisionChat,
+
 
 
 
