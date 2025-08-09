@@ -2830,7 +2830,7 @@ class Image_Pair_Merge:
             image2 = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
 
         if mask1 is None:
-            mask1 = torch.ones((image1.shape[0], image1.shape[1], image1.shape[2]), dtype=torch.float32)
+            mask1 = torch.zeros((image1.shape[0], image1.shape[1], image1.shape[2]), dtype=torch.float32)
         else:
             if not isinstance(mask1, torch.Tensor):
                 mask1 = torch.from_numpy(np.array(mask1)) if hasattr(mask1, 'numpy') else torch.from_numpy(mask1)
@@ -4133,8 +4133,9 @@ class chx_Ksampler_inpaint:   #重构
         # 编码裁剪后的图像
         pixels = processed_image
         encoded_latent = vae.encode(pixels)[0]
-        encoded_latent = encoded_latent[:1]
-                
+        encoded_latent = encoded_latent[:1]    #确保不是批量生成
+
+
         if encoded_latent.dim() == 3:
             encoded_latent = encoded_latent.unsqueeze(0)
         elif encoded_latent.dim() != 4:
@@ -4426,7 +4427,6 @@ class Image_solo_crop:
 
 
 #endregion----------------------------合并----------
-
 
 
 
