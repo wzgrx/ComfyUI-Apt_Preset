@@ -4168,7 +4168,7 @@ class chx_Ksampler_inpaint:
             context = new_context(context, latent=latent_result, images=output_image)
             return (context, output_image, output_image, None, None, None)
 
-        if image is not None and mask is None:
+        if image is not None and mask is None or (mask.sum() == 0):
             # 先处理提示词
             positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
             
@@ -4247,7 +4247,7 @@ class chx_Ksampler_inpaint:
 
 
     #--------------------------------接入裁切-------------------------------------------------
-        if image is not None and mask is not None:
+        if image is not None and mask is not None and (mask.sum() > 0) :
             background_tensor, background_mask_tensor, cropped_image_tensor, cropped_mask_tensor, stitch = Image_solo_crop().inpaint_crop(
                     image=image,
                     mask=mask,
