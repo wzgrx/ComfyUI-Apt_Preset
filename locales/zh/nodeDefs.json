@@ -12075,7 +12075,7 @@
 
 
 "excel_qwen_artistic": {
-    "display_name": "Excel_Qwen艺术风格",
+    "display_name": "Excel_Qwen艺术字",
     "inputs": {
       "sum_preset": {
         "name": "模版预设"
@@ -12128,3 +12128,4 @@
     }
   }
 }
+
