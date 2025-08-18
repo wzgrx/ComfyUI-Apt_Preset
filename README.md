@@ -29,6 +29,9 @@
 
 2025.8.13  增加excel_qwen_artistic艺术字，主要用于图生图，和单独字体艺术设计，支持DIY
 
+2025.8.19  增加excel_imgEditor_helper,图像编辑助手，支持DIY
+
+
 <img width="2276" height="1059" alt="image" src="https://github.com/user-attachments/assets/7f2cde22-88c1-4c4a-837c-79c045de1702" />
 
 
