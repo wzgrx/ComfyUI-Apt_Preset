@@ -47,6 +47,9 @@ import comfy.model_management
 import comfy.utils
 from functools import partial
 from comfy.model_base import Flux
+from comfy_extras.nodes_model_advanced import ModelSamplingAuraFlow
+
+
 
 from ..main_unit import *
 
@@ -2743,6 +2746,7 @@ class chx_Ksampler_Kontext_adv:
         else: return {"ui": {"images": all_results}, "result": (context, final_output, samples_dict)}
 
 
+
 class pre_Kontext:
     @classmethod
     def INPUT_TYPES(cls):
@@ -3301,6 +3305,233 @@ class chx_Ksampler_Kontext:   #0803仅遮罩数据处理
                 return {"ui": {"images": results}, "result": (context, output_image, latent_result)}
         else:
             return (context, output_image, latent_result)
+
+
+
+
+class pre_QwenEdit:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "image": ("IMAGE", ),
+                "mask": ("MASK",),
+                "ref_edit": ("BOOLEAN", {"default": True}),
+                "model_shift": ("FLOAT", {"default": 3.0, "min": 0.0, "max": 100.0, "step":0.01}),
+                "smoothness":("INT", {"default": 0,  "min":0, "max": 10, "step": 0.1,}),
+                "pos": ("STRING", {"multiline": True, "default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING", "LATENT" )
+    RETURN_NAMES = ("context","positive","latent" )
+    FUNCTION = "process"
+    CATEGORY = "Apt_Preset/chx_tool"
+
+    def process(self, context=None, image=None, mask=None,ref_edit=True, pos="", smoothness=0, model_shift=3.0):  
+
+        vae = context.get("vae", None)
+        clip = context.get("clip", None)
+        model = context.get("model", None)
+        model, = ModelSamplingAuraFlow().patch_aura(model, model_shift)
+
+        if image is None:
+            image = context.get("images", None)
+            if  image is None:
+                return (context,None)
+
+        encoded_latent = vae.encode(image)  #
+        latent = {"samples": encoded_latent}
+
+        if pos is None or (isinstance(pos, str) and pos.strip() == ""):
+            pos = context.get("pos", None)
+        
+        vae = vae if ref_edit else None
+        positive = qwen_encode(clip, pos, vae, image)
+
+
+        if mask is not None:        
+            mask =smoothness_mask(mask, smoothness)
+            latent = {"samples": encoded_latent,"noise_mask": mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])) }
+
+        context = new_context(context, positive=positive, latent=latent, model=model)
+
+        return (context,positive,latent)
+    
+
+class chx_Ksampler_QwenEdit:  
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "steps": ("INT", {"default": -1, "min": -1, "max": 10000,  "tooltip": "-1 means no change"}),
+                "denoise": ("FLOAT", {"default": 1, "min": 0, "max": 1, "step": 0.01}),
+                "model_shift": ("FLOAT", {"default": 3.0, "min": 0.0, "max": 100.0, "step":0.01}),
+                "ref_edit": ("BOOLEAN", {"default": True}),
+                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
+            },
+            "optional": {
+                "image": ("IMAGE", ),
+                "mask": ("MASK", ),
+                "pos": ("STRING", {"multiline": True, "default": ""}),
+            },
+            "hidden": {
+                "prompt": "PROMPT",
+                "extra_pnginfo": "EXTRA_PNGINFO"
+            }
+        }
+
+    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE", "LATENT")
+    RETURN_NAMES = ("context", "image", "latent")
+    FUNCTION = "run"
+    CATEGORY = "Apt_Preset/chx_ksample"
+    OUTPUT_NODE = True
+
+    def run(self, context, seed, image_output="Preview", image=None, mask=None,ref_edit=True, model_shift=3.0, steps=0, denoise=1, pos="", prompt=None, extra_pnginfo=None):
+
+
+        vae = context.get("vae")
+        clip = context.get("clip")
+        if steps == 0 or steps==-1: steps = context.get("steps")
+        cfg = context.get("cfg")
+        sampler = context.get("sampler")
+        scheduler = context.get("scheduler")
+        #guidance = context.get("guidance", 3.5)
+        negative = context.get("negative", None)
+        latent =context.get("latent", None)
+
+        model = context.get("model")
+        model, = ModelSamplingAuraFlow().patch_aura(model, model_shift)
+
+
+        if image is None: #文生图
+            if pos and pos.strip(): 
+                positive, = CLIPTextEncode().encode(clip, pos)
+            else:
+                positive = context.get("positive", None)
+            image = context.get("images", None)
+            if image is None: 
+                result = common_ksampler(model, seed, steps, cfg, sampler, scheduler, positive, negative, latent, denoise=denoise)
+                latent_result = result[0]
+
+                output_image = decode(vae, latent_result)[0]
+                context = new_context(context, latent=latent_result, images=output_image)
+                
+                if image_output != "None":
+                    results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+                    if image_output in ("Hide", "Hide/Save"):
+                        return {"ui": {}, "result": (context, output_image, latent_result)}
+                    else:
+                        return {"ui": {"images": results}, "result": (context, output_image, latent_result)}
+                else:
+                    return (context, output_image, latent_result)
+
+
+        pixels = image
+      
+        encoded_latent = vae.encode(pixels)[0]        
+        if encoded_latent.dim() == 3:
+            encoded_latent = encoded_latent.unsqueeze(0)
+        elif encoded_latent.dim() != 4:
+            raise ValueError(f"Unexpected latent dimensions: {encoded_latent.dim()}. Expected 4D tensor.")           
+        latent = {"samples": encoded_latent}
+
+
+        if pos is None or (isinstance(pos, str) and pos.strip() == ""):
+            pos = context.get("pos", None)
+
+        vae = vae if ref_edit else None
+        positive = qwen_encode(clip, pos, vae, pixels)
+
+        if mask is not None:
+            if mask.dim() == 2:
+                mask = mask.unsqueeze(0)
+            if mask.dim() == 3:
+                mask = mask.unsqueeze(0)
+            
+            if mask.shape[0] == 1 and latent["samples"].shape[0] > 1:
+                mask = mask.repeat(latent["samples"].shape[0], 1, 1, 1)
+            
+            if mask.shape[1] != 1:
+                if mask.shape[1] == 3 or mask.shape[1] == 4:
+                    mask = mask.mean(dim=1, keepdim=True)
+                else:
+                    mask = mask[:, :1, :, :]
+            
+            latent_shape = latent["samples"].shape
+            if len(latent_shape) >= 4 and mask.shape[-2:] != latent_shape[-2:]:
+                try:
+                    mask = torch.nn.functional.interpolate(
+                        mask, 
+                        size=(latent_shape[2], latent_shape[3]), 
+                        mode='bicubic', 
+                        align_corners=False
+                    )
+                except:
+                    mask = torch.nn.functional.interpolate(
+                        mask, 
+                        size=(latent_shape[2], latent_shape[3]), 
+                        mode='nearest'
+                    )
+            
+            mask = torch.clamp(mask, 0, 1)
+            latent["noise_mask"] = mask
+
+
+
+        result = common_ksampler(model, seed, steps, cfg, sampler, scheduler, positive, negative, latent, denoise=denoise)
+        latent_result = result[0]
+
+        output_image = decode(vae, latent_result)[0]
+        context = new_context(context, latent=latent_result, images=output_image)
+        
+        if image_output != "None":
+            results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+            if image_output in ("Hide", "Hide/Save"):
+                return {"ui": {}, "result": (context, output_image, latent_result)}
+            else:
+                return {"ui": {"images": results}, "result": (context, output_image, latent_result)}
+        else:
+            return (context, output_image, latent_result)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
