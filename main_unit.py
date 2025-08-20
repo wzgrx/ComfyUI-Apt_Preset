@@ -1841,60 +1841,6 @@ def kontext_adjust_image_resolution(image, auto_adjust_image):
     return (image,)
 
 
-def XXXkontext_latent_and_conditioning(context, vae, image, mask, prompt_weight, relevance, positive): #相关与无关
-    if image is None:
-        latent_data = context.get("latent", None)
-        if latent_data is None or "samples" not in latent_data:
-            raise ValueError("Context latent or samples not found when image is None")
-        encoded_latent = latent_data["samples"]
-    else:
-        encoded_latent = vae.encode(image)
-
-    # 确保 encoded_latent 是正确的形状
-    if len(encoded_latent.shape) == 4:
-        if encoded_latent.shape[0] > 1:
-            encoded_latent = encoded_latent[:1]
-    elif len(encoded_latent.shape) == 3:
-        encoded_latent = encoded_latent.unsqueeze(0)
-    else:
-        raise ValueError(f"Unexpected encoded_latent shape: {encoded_latent.shape}")
-    
-    # 规范化提示权重并计算影响因子
-    prompt_weight = max(0.0, min(prompt_weight, 1.0))
-    influence = 8 * prompt_weight * (prompt_weight - 1) - 6 * prompt_weight + 6
-    scaled_latent = encoded_latent * influence
-    
-    # 处理掩码（如果提供）
-    if mask is not None:
-        if len(mask.shape) == 2:
-            mask = mask.unsqueeze(0).unsqueeze(0)
-        elif len(mask.shape) == 3:
-            mask = mask.unsqueeze(0)
-        elif len(mask.shape) != 4:
-            raise ValueError(f"Unexpected mask shape: {mask.shape}")
-        mask = mask[:1, :1]
-    
-    # 构建潜在空间字典
-    latent = {"samples": encoded_latent}
-    ref_latent = scaled_latent
-    
-    # 根据相关性设置参考潜在空间（仅当 relevance 为 True 时处理 positive）
-    if relevance:
-        positive = node_helpers.conditioning_set_values(
-            positive, {"reference_latents": [ref_latent]}, append=True
-        )
-    
-    # 无论相关性如何，只要有掩码就添加到 latent 中
-    if mask is not None:
-        latent["noise_mask"] = mask
-
-    # 验证最终样本形状
-    samples = latent["samples"]
-    if len(samples.shape) != 4:
-        raise ValueError(f"Unexpected samples shape: {samples.shape}")
-        
-    return latent, positive
-
 
 def condi_zero_out(negative): #条件零化
     c = []
@@ -2458,3 +2404,62 @@ def center_transform_layer( align_mode, x_offset, y_offset, rotation, scale, edg
 
 
 #endregion---------------------------视觉标记--------------------------
+
+
+def qwen_encode(clip, prompt, vae=None, image=None):
+        ref_latent = None
+        if image is None:
+            images = []
+        else:
+            samples = image.movedim(-1, 1)
+            total = int(1024 * 1024)
+
+            scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
+            width = round(samples.shape[3] * scale_by)
+            height = round(samples.shape[2] * scale_by)
+
+            s = comfy.utils.common_upscale(samples, width, height, "area", "disabled")
+            image = s.movedim(1, -1)
+            images = [image[:, :, :, :3]]
+            if vae is not None:
+                ref_latent = vae.encode(image[:, :, :, :3])
+
+        tokens = clip.tokenize(prompt, images=images)
+        conditioning = clip.encode_from_tokens_scheduled(tokens)
+        if ref_latent is not None:
+            conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_latents": [ref_latent]}, append=True)
+        return conditioning
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
