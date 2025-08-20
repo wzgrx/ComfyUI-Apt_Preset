@@ -2392,6 +2392,9 @@
       "image": {
         "name": "图像"
       },
+      "crop_image": {
+        "name": "裁切图像"
+      },
       "mask": {
         "name": "遮罩"
       },
@@ -7870,6 +7873,105 @@
       }
     }
   },
+
+"chx_Ksampler_QwenEdit": {
+    "display_name": "采样器_Qwen编辑",
+    "inputs": {
+        "context": {
+            "name": "context"
+        },
+        "seed": {
+            "name": "种子"
+        },
+        "steps": {
+            "name": "步数"
+        },
+        "denoise": {
+            "name": "去噪强度"
+        },
+        "model_shift": {
+            "name": "模型偏移"
+        },
+        "ref_edit": {
+            "name": "参考编辑"
+        },
+        "image_output": {
+            "name": "图像输出"
+        },
+        "image": {
+            "name": "图像"
+        },
+        "mask": {
+            "name": "遮罩"
+        },
+        "pos": {
+            "name": "正向提示词"
+        },
+        "prompt": {
+            "name": "提示词"
+        },
+        "extra_pnginfo": {
+            "name": "额外PNG信息"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "context"
+        },
+        "1": {
+            "name": "图像"
+        },
+        "2": {
+            "name": "latent"
+        }
+    }
+},
+
+"pre_QwenEdit": {
+    "display_name": "pre_QwenEdit",
+    "inputs": {
+        "context": {
+            "name": "context"
+        },
+        "image": {
+            "name": "图像"
+        },
+        "mask": {
+            "name": "遮罩"
+        },
+        "ref_edit": {
+            "name": "参考编辑"
+        },
+        "model_shift": {
+            "name": "模型偏移"
+        },
+        "smoothness": {
+            "name": "平滑度"
+        },
+        "pos": {
+            "name": "正向提示词"
+        }
+    },
+    "outputs": {
+        "context": {
+            "name": "上下文"
+        },
+        "positive": {
+            "name": "正向条件"
+        },
+        "latent": {
+            "name": "潜在变量"
+        }
+    }
+},
+
+
+
+
+
+
+
+
   "lay_texture_Offset": {
     "display_name": "排版_纹理偏移",
     "inputs": {
