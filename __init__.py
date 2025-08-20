@@ -101,7 +101,7 @@ NODE_CLASS_MAPPINGS= {
 "chx_Ksampler_mix": chx_Ksampler_mix,
 "chx_Ksampler_VisualStyle": chx_Ksampler_VisualStyle,  
 "chx_ksampler_Deforum_sch":chx_ksampler_Deforum_sch,
-
+#"chx_Ksampler_QwenEdit":chx_Ksampler_QwenEdit, 显存要求高
 
 #"basic_Ksampler_batch": basic_Ksampler_batch,
 #"chx_ksampler_Deforum_math": chx_ksampler_Deforum_math,
@@ -121,6 +121,7 @@ NODE_CLASS_MAPPINGS= {
 "sum_stack_Wan": sum_stack_Wan,
 "sum_stack_AD": sum_stack_AD,
 
+"pre_QwenEdit":pre_QwenEdit,
 "pre_Kontext": pre_Kontext,                              
 "pre_Kontext_mul": pre_Kontext_mul,
 
@@ -132,7 +133,6 @@ NODE_CLASS_MAPPINGS= {
 "pre_ic_light_sd15":  pre_ic_light_sd15,
 "pre_latent_light": pre_latent_light,
 "pre_Flex2": pre_Flex2,
-
 
 
 #-IPA-------------------------------------------#
