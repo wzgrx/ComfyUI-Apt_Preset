@@ -47,8 +47,11 @@ from comfy_extras.nodes_hidream import QuadrupleCLIPLoader
 from comfy_extras.nodes_hooks import PairConditioningSetProperties
 from comfy.utils import load_torch_file as comfy_load_torch_file
 
-from .load_GGUF.nodes import  UnetLoaderGGUF2
+from comfy_extras.nodes_model_patch import ModelPatchLoader,QwenImageDiffsynthControlnet
 
+
+
+from .load_GGUF.nodes import  UnetLoaderGGUF2
 from ..main_unit import *
 
 
@@ -2606,110 +2609,6 @@ class pre_controlnet_union:
         return (context, positive, negative, )
 
 
-class XXXpre_mul_Mulcondi:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "optional": {
-                "context": ("RUN_CONTEXT",),
-                "pos1": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos2": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos3": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos4": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "pos5": ("STRING", {"multiline": True, "dynamicPrompts": True,"default": "" }),
-                "mask_1": ("MASK", ),
-                "mask_2": ("MASK", ),
-                "mask_3": ("MASK", ),
-                "mask_4": ("MASK", ),
-                "mask_5": ("MASK", ),
-                "mask_1_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_2_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_3_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_4_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "mask_5_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-                "background": ("STRING", {"multiline": False, "dynamicPrompts": True, "default": "background is sea"}),
-                "neg": ("STRING", {"multiline": False, "dynamicPrompts": True,"default": "Poor quality" }),
-            }
-        }
-        
-    RETURN_TYPES = ("RUN_CONTEXT","CONDITIONING", "CONDITIONING", )
-    RETURN_NAMES = ("context","positive", "negative",)
-
-    FUNCTION = "Mutil_Clip"
-    CATEGORY = "Apt_Preset/chx_tool"
-
-    def Mutil_Clip (self, pos1, pos2, pos3, pos4, pos5, background, neg,  mask_1_strength, mask_2_strength, mask_3_strength, mask_4_strength, mask_5_strength, mask_1=None, mask_2=None, mask_3=None, mask_4=None, mask_5=None, context=None):
-        set_cond_area = "default"
-        clip = context.get("clip")
-        positive_1, = CLIPTextEncode().encode(clip, pos1)
-        positive_2, = CLIPTextEncode().encode(clip, pos2)
-        positive_3, = CLIPTextEncode().encode(clip, pos3)
-        positive_4, = CLIPTextEncode().encode(clip, pos4)
-        positive_5, = CLIPTextEncode().encode(clip, pos5)
-        negative, = CLIPTextEncode().encode(clip, neg)
-
-        c = []
-        set_area_to_bounds = False
-        if set_cond_area != "default":
-            set_area_to_bounds = True
-        valid_masks = []
-        
-        # 处理遮罩维度
-        if mask_1 is not None and len(mask_1.shape) < 3:  
-            mask_1 = mask_1.unsqueeze(0)
-        if mask_2 is not None and len(mask_2.shape) < 3:  
-            mask_2 = mask_2.unsqueeze(0)
-        if mask_3 is not None and len(mask_3.shape) < 3:  
-            mask_3 = mask_3.unsqueeze(0)
-        if mask_4 is not None and len(mask_4.shape) < 3:  
-            mask_4 = mask_4.unsqueeze(0)
-        if mask_5 is not None and len(mask_5.shape) < 3:  
-            mask_5 = mask_5.unsqueeze(0)
-
-        # 应用各个遮罩并收集有效的遮罩
-        if mask_1 is not None:
-            for t in positive_1:
-                append_helper(t, mask_1, c, set_area_to_bounds, mask_1_strength)
-            valid_masks.append(mask_1)
-        if mask_2 is not None:
-            for t in positive_2:
-                append_helper(t, mask_2, c, set_area_to_bounds, mask_2_strength)
-            valid_masks.append(mask_2)
-        if mask_3 is not None:
-            for t in positive_3:
-                append_helper(t, mask_3, c, set_area_to_bounds, mask_3_strength)
-            valid_masks.append(mask_3)
-        if mask_4 is not None:
-            for t in positive_4:
-                append_helper(t, mask_4, c, set_area_to_bounds, mask_4_strength)
-            valid_masks.append(mask_4)
-        if mask_5 is not None:
-            for t in positive_5:
-                append_helper(t, mask_5, c, set_area_to_bounds, mask_5_strength)
-            valid_masks.append(mask_5)
-
-        # 计算背景遮罩
-        if valid_masks:
-            total_mask = sum(valid_masks)
-            # 确保总遮罩不超过1
-            total_mask = torch.clamp(total_mask, 0, 1)
-            mask_6 = 1 - total_mask
-        else:
-            mask_6 = torch.ones_like(mask_1) if mask_1 is not None else None
-
-        # 应用背景条件
-        if mask_6 is not None:
-            background_cond, = CLIPTextEncode().encode(clip, background)
-            for t in background_cond:
-                append_helper(t, mask_6, c, set_area_to_bounds, 1)
-
-        context = new_context(context, positive=c, negative=negative, clip=clip)
-
-        return (context, c, negative)
-
-
-
-
 class pre_mul_Mulcondi:
     @classmethod
     def INPUT_TYPES(s):
@@ -3570,6 +3469,68 @@ class pre_Kontext_mul:
         return (context, b, Flatent)
 
 
+
+class pre_qwen_controlnet:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {"context": ("RUN_CONTEXT",),
+            },
+            "optional": {
+                "image1": ("IMAGE",),
+                "mask1": ("MASK",),
+                "controlnet1": (['None'] + folder_paths.get_filename_list("model_patches"),),
+                "strength1": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 2.0, "step": 0.01}),
+                
+                "image2": ("IMAGE",),
+                "mask2": ("MASK",),
+                "controlnet2": (['None'] + folder_paths.get_filename_list("model_patches"),),
+                "strength2": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 2.0, "step": 0.01}),
+                
+                "image3": ("IMAGE",),
+                "mask3": ("MASK",),
+                "controlnet3": (['None'] + folder_paths.get_filename_list("model_patches"),),
+                "strength3": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 2.0, "step": 0.01}),
+                
+            },
+
+        }
+
+    RETURN_TYPES = ("RUN_CONTEXT","MODEL", )
+    RETURN_NAMES = ("context","model", )
+    CATEGORY = "Apt_Preset/chx_tool"
+    FUNCTION = "load_controlnet"
+
+    def load_controlnet(self, 
+                        strength1, 
+                        strength2,
+                        strength3,  
+                        context=None, 
+                        controlnet1=None, controlnet2=None, controlnet3=None,
+                        image1=None, image2=None, image3=None, vae=None,mask1=None, mask2=None, mask3=None):
+
+
+
+        vae = context.get("vae", None)
+        model = context.get("model", None)
+
+        if controlnet1 != "None" and image1 is not None:
+            cn1=ModelPatchLoader().load_model_patch(controlnet1)[0]
+            model=QwenImageDiffsynthControlnet().diffsynth_controlnet(model, cn1, vae, image1, strength1, mask1)[0]
+
+
+        if controlnet2 != "None" and image2 is not None:
+            cn2=ModelPatchLoader().load_model_patch(controlnet2)[0]
+            model=QwenImageDiffsynthControlnet().diffsynth_controlnet(model, cn2, vae, image2, strength2, mask2)[0]
+
+
+        if controlnet3 != "None" and image3 is not None:
+            cn3=ModelPatchLoader().load_model_patch(controlnet3)[0]
+            model=QwenImageDiffsynthControlnet().diffsynth_controlnet(model, cn3, vae, image3, strength3, mask3)[0]
+
+
+        context = new_context(context, model=model)
+        return (context, model)
 
 
 
