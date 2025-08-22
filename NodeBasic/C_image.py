@@ -1446,46 +1446,28 @@ class color_Local_Gray:
         return (image_result, bj_image_result, mask_result)
 
 
-class color_Picker:
+class color_selector:
 
     def __init__(self):
         pass
 
     @classmethod
     def INPUT_TYPES(self):
-        mode_list = ['HEX', 'DEC']
         return {
             "required": {
                 "color": ("COLOR", {"default": "#FFFFFF"},),
-                "mode": (mode_list,),  
             },
             "optional": {
             }
         }
-
+    
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("HEX",)
-    FUNCTION = 'picker'
+    FUNCTION = 'selector'
     CATEGORY = "Apt_Preset/image"
-
-    def Hex_to_RGB(self,inhex:str) -> tuple:
-        if not inhex.startswith('#'):
-            raise ValueError(f'Invalid Hex Code in {inhex}')
-        else:
-            if len(inhex) == 4:
-                inhex = "#" + "".join([char * 2 for char in inhex[1:]])
-            rval = inhex[1:3]
-            gval = inhex[3:5]
-            bval = inhex[5:]
-            rgb = (int(rval, 16), int(gval, 16), int(bval, 16))
-        return tuple(rgb)
-
-    def picker(self, color, mode):
-        ret = color
-        if mode == 'DEC':
-            ret = self.Hex_to_RGB(ret)
-        return (ret,)
-
+    
+    def selector(self, color):
+        return (color,)
 
 
 
@@ -1802,6 +1784,12 @@ class Image_Channel_Apply:
                 "channel_data": ("MASK",),
                 "channel": (["A", "R", "G", "B"],),
                 "invert_channel": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "background_color": (
+                    ["none", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
+                    {"default": "none"}
+                ),
             }
         }
 
@@ -1809,7 +1797,21 @@ class Image_Channel_Apply:
     CATEGORY = "Apt_Preset/image"
     FUNCTION = "Image_Channel_Apply"
 
-    def Image_Channel_Apply(self, images: torch.Tensor, channel_data: torch.Tensor, channel, invert_channel=False):
+    def Image_Channel_Apply(self, images: torch.Tensor, channel_data: torch.Tensor, channel, 
+                           invert_channel=False, background_color="none"):
+        # 定义颜色字典，将颜色名称映射到RGB值（已归一化到0-1范围）
+        colors = {
+            "white": (1.0, 1.0, 1.0),
+            "black": (0.0, 0.0, 0.0),
+            "red": (1.0, 0.0, 0.0),
+            "green": (0.0, 1.0, 0.0),
+            "blue": (0.0, 0.0, 1.0),
+            "yellow": (1.0, 1.0, 0.0),
+            "cyan": (0.0, 1.0, 1.0),
+            "magenta": (1.0, 0.0, 1.0),
+            "gray": (0.5, 0.5, 0.5)  
+        }
+        
         merged_images = []
 
         # 如果需要反向通道数据，则进行反向处理
@@ -1819,10 +1821,12 @@ class Image_Channel_Apply:
         for image in images:
             image = image.cpu().clone()
 
+            # 应用通道数据到指定通道
             if channel == "A":
+                # 如果图像没有Alpha通道，则添加一个
                 if image.shape[2] < 4:
                     image = torch.cat([image, torch.ones((image.shape[0], image.shape[1], 1))], dim=2)
-
+                # 设置Alpha通道
                 image[:, :, 3] = channel_data
             elif channel == "R":
                 image[:, :, 0] = channel_data
@@ -1830,6 +1834,28 @@ class Image_Channel_Apply:
                 image[:, :, 1] = channel_data
             else:  # channel == "B"
                 image[:, :, 2] = channel_data
+
+            # 如果选择了背景颜色，则创建纯色背景并合成
+            if background_color != "none" and background_color in colors:
+                # 获取颜色值
+                r, g, b = colors[background_color]
+                
+                # 创建与图像相同大小的纯色背景（RGB）
+                h, w, _ = image.shape
+                background = torch.zeros((h, w, 3))
+                background[:, :, 0] = r  # R通道
+                background[:, :, 1] = g  # G通道
+                background[:, :, 2] = b  # B通道
+                
+                # 如果图像有Alpha通道，则使用Alpha通道进行混合
+                if image.shape[2] >= 4:
+                    alpha = image[:, :, 3].unsqueeze(2)
+                    # 合成公式：result = image_rgb * alpha + background * (1 - alpha)
+                    image_rgb = image[:, :, :3]
+                    image = image_rgb * alpha + background * (1 - alpha)
+                else:
+                    # 如果没有Alpha通道，直接使用背景（实际上这种情况不会发生，因为原图像已有RGB通道）
+                    image = background
 
             merged_images.append(image)
 
@@ -1845,7 +1871,6 @@ class Image_Channel_Apply:
 
 #region------图像-双图合并---总控制---------
 
-
 class Image_Pair_crop:
     @classmethod
     def INPUT_TYPES(cls):
@@ -1854,7 +1879,8 @@ class Image_Pair_crop:
                 "image": ("IMAGE",),
                 "mask": ("MASK",),
                 "box2": ("BOX2",),
-                "crop_right_image": ("BOOLEAN", {"default": "裁剪左图", "label": "裁剪右图"}),
+                "crop_image": ("BOOLEAN", {"default": False,"label_on": "img2", "label_off": "img1"}),
+
             }
         }
 
@@ -1863,13 +1889,13 @@ class Image_Pair_crop:
     RETURN_NAMES = ("裁剪图像","裁剪遮罩")
     FUNCTION = "cropbox"
 
-    def cropbox(self, mask=None, image=None, box2=None, crop_right_image=False):
+    def cropbox(self, mask=None, image=None, box2=None, crop_image=False):
         if box2 is None:
             return (None, None)
             
         box1_w, box1_h, box1_x, box1_y, box2_w, box2_h, box2_x, box2_y = box2
         
-        if crop_right_image:
+        if crop_image:
             region_width, region_height, center_x, center_y = box2_w, box2_h, box2_x, box2_y
         else:
             region_width, region_height, center_x, center_y = box1_w, box1_h, box1_x, box1_y
@@ -1907,9 +1933,10 @@ class Image_Pair_Merge:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "layout_mode": (["居中-自动对齐","居中-中心对齐", "居中-高度对齐", "居中-宽度对齐", 
+                "layout_mode": ([
                                  "左右-中心对齐", "左右-高度对齐", "左右-宽度对齐",
-                                 "上下-中心对齐", "上下-宽度对齐", "上下-高度对齐"],), 
+                                 "上下-中心对齐", "上下-宽度对齐", "上下-高度对齐", 
+                                 "居中-自动对齐","居中-中心对齐", "居中-高度对齐", "居中-宽度对齐"],), 
                 "bg_mode": (["crop_image","image", "transparent", "white", "black", "red", "green", "blue"],),
                 "size_mode": (["auto", "输出宽度", "输出高度"],),
                 "target_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 8}),
@@ -2767,7 +2794,7 @@ class Mask_transform_sum:
 
 
 
-class Image_solo_crop:
+class XXImage_solo_crop:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -3705,6 +3732,232 @@ class Image_transform_layer:
         line_mask_tensor = torch.from_numpy(line_mask_np).unsqueeze(0).unsqueeze(0)
         
         return (composite_tensor, mask_tensor, line_mask_tensor, )
+
+
+
+
+class Image_solo_crop:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "crop_mode": (["按遮罩裁切", "不裁切", "设置裁切图_宽度", "设置裁切图_高度", "设置背景图_宽度", "设置背景图_高度"],),
+                "crop_value": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
+            },
+            "optional": {
+                "mask": ("MASK",),
+                "mask_stack": ("MASK_STACK",),
+                "background_color": (
+                    ["none", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
+                    {"default": "none"}
+                ),
+            }
+        }
+
+    CATEGORY = "Apt_Preset/image"
+    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "MASK", "STITCH2")
+    RETURN_NAMES = ("bj_image", "bj_mask", "cropped_image", "cropped_mask", "stitch")
+    FUNCTION = "inpaint_crop"
+
+    def get_mask_bounding_box(self, mask):
+        mask_np = (mask[0].cpu().numpy() * 255).astype(np.uint8)
+        coords = cv2.findNonZero(mask_np)
+        if coords is None:
+            raise ValueError("Mask is empty")
+        x, y, w, h = cv2.boundingRect(coords)
+        return w, h
+
+    def process_resize(self, image, mask, crop_mode, crop_value, expand_width, expand_height, divisible_by):
+        batch_size, img_height, img_width, channels = image.shape
+        image_ratio = img_width / img_height
+        mask_w, mask_h = self.get_mask_bounding_box(mask)
+        mask_ratio = mask_w / mask_h
+        new_width, new_height = img_width, img_height
+        
+        adjusted_mask_w = mask_w + expand_width
+        adjusted_mask_h = mask_h + expand_height
+        
+        if crop_mode == "设置背景图_宽度":
+            new_width = crop_value
+            new_height = int(new_width / image_ratio)
+        elif crop_mode == "设置背景图_高度":
+            new_height = crop_value
+            new_width = int(new_height * image_ratio)
+        elif crop_mode == "设置裁切图_宽度":
+            new_mask_width = crop_value
+            new_mask_height = int(new_mask_width / mask_ratio)
+            mask_scale = new_mask_width / adjusted_mask_w
+            new_width = int(img_width * mask_scale)
+            new_height = int(img_height * mask_scale)
+        elif crop_mode == "设置裁切图_高度":
+            new_mask_height = crop_value
+            new_mask_width = int(new_mask_height * mask_ratio)
+            mask_scale = new_mask_height / adjusted_mask_h
+            new_width = int(img_width * mask_scale)
+            new_height = int(img_height * mask_scale)
+        elif crop_mode == "不裁切":
+            new_width, new_height = img_width, img_height
+            if adjusted_mask_w > adjusted_mask_h:
+                new_mask_width = crop_value
+                new_mask_height = int(new_mask_width / mask_ratio)
+            else:
+                new_mask_height = crop_value
+                new_mask_width = int(new_mask_height * mask_ratio)
+        
+        if divisible_by > 1:
+            new_width = new_width - (new_width % divisible_by)
+            new_height = new_height - (new_height % divisible_by)
+            new_width = max(new_width, divisible_by)
+            new_height = max(new_height, divisible_by)
+        
+        resized_images = []
+        for img in image:
+            pil_img = Image.fromarray((img.numpy() * 255).astype(np.uint8))
+            resized_pil = pil_img.resize((new_width, new_height), Image.LANCZOS)
+            resized_tensor = torch.from_numpy(np.array(resized_pil).astype(np.float32) / 255.0)
+            resized_images.append(resized_tensor)
+        crop_image = torch.stack(resized_images)
+        
+        resized_masks = []
+        for m in mask:
+            pil_mask = Image.fromarray((m.numpy() * 255).astype(np.uint8))
+            resized_pil_mask = pil_mask.resize((new_width, new_height), Image.LANCZOS)
+            resized_tensor_mask = torch.from_numpy(np.array(resized_pil_mask).astype(np.float32) / 255.0).unsqueeze(0)
+            resized_masks.append(resized_tensor_mask)
+        crop_mask = torch.cat(resized_masks, dim=0)
+        
+        return (crop_image, crop_mask)
+
+    def inpaint_crop(self, image, crop_mode, crop_value, mask=None, mask_stack=None, background_color="none"):
+        colors = {
+            "white": (1.0, 1.0, 1.0),
+            "black": (0.0, 0.0, 0.0),
+            "red": (1.0, 0.0, 0.0),
+            "green": (0.0, 1.0, 0.0),
+            "blue": (0.0, 0.0, 1.0),
+            "yellow": (1.0, 1.0, 0.0),
+            "cyan": (0.0, 1.0, 1.0),
+            "magenta": (1.0, 0.0, 1.0),
+            "gray": (0.5, 0.5, 0.5)
+        }
+        
+        if mask is None:
+            batch_size, height, width, _ = image.shape
+            mask = torch.ones((batch_size, height, width), dtype=torch.float32)
+
+        if mask_stack is not None:
+            mask_mode, smoothness, mask_expand, mask_min, mask_max, expand_width, expand_height, divisible_by = mask_stack            
+        else:
+            mask_mode, smoothness, mask_expand, mask_min, mask_max, expand_width, expand_height, divisible_by = "original", 1, 0, 0, 1, 20, 20, 1
+
+        crop_image, original_crop_mask = self.process_resize(
+            image, mask, crop_mode, crop_value, expand_width, expand_height, divisible_by)
+        
+        bj_mask_tensor = original_crop_mask
+        
+        crop_mask = original_crop_mask
+        if mask_stack and crop_mask is not None:
+            if hasattr(crop_mask, 'convert'):
+                mask_tensor = pil2tensor(crop_mask.convert('L'))
+            else:
+                if isinstance(crop_mask, torch.Tensor):
+                    mask_tensor = crop_mask if len(crop_mask.shape) <= 3 else crop_mask.squeeze(-1) if crop_mask.shape[-1] == 1 else crop_mask
+                else:
+                    mask_tensor = crop_mask
+          
+            separated_result = Mask_transform_sum().separate(  
+                bg_mode="crop_image", 
+                mask_mode=mask_mode,
+                ignore_threshold=0, 
+                opacity=1, 
+                outline_thickness=1, 
+                smoothness=smoothness,
+                mask_expand=mask_expand,
+                expand_width=expand_width, 
+                expand_height=expand_height,
+                rescale_crop=1.0,
+                tapered_corners=True,
+                mask_min=mask_min, 
+                mask_max=mask_max,
+                base_image=crop_image, 
+                mask=mask_tensor, 
+                crop_to_mask=False,
+                divisible_by=divisible_by
+            )
+            crop_image = separated_result[0]
+            crop_mask = separated_result[1]
+        
+        if background_color != "none" and background_color in colors:
+            r, g, b = colors[background_color]
+            h, w, _ = crop_image.shape[1:]
+            background = torch.zeros((crop_image.shape[0], h, w, 3))
+            background[:, :, :, 0] = r
+            background[:, :, :, 1] = g
+            background[:, :, :, 2] = b
+            
+            if crop_image.shape[3] >= 4:
+                alpha = crop_image[:, :, :, 3].unsqueeze(3)
+                image_rgb = crop_image[:, :, :, :3]
+                crop_image = image_rgb * alpha + background * (1 - alpha)
+            else:
+                alpha = crop_mask.unsqueeze(3)
+                image_rgb = crop_image[:, :, :, :3]
+                crop_image = image_rgb * alpha + background * (1 - alpha)
+        
+        image_np = (crop_image[0].cpu().numpy() * 255).astype(np.uint8)
+        mask_np = (crop_mask[0].cpu().numpy() * 255).astype(np.uint8)
+        original_h, original_w = image_np.shape[0], image_np.shape[1]
+        coords = cv2.findNonZero(mask_np)
+        if coords is None:
+            raise ValueError("Mask is empty after processing")
+        x, y, w, h = cv2.boundingRect(coords)
+        
+        mask_center_x = x + w // 2
+        mask_center_y = y + h // 2
+        new_half_width = (w // 2) + expand_width
+        new_half_height = (h // 2) + expand_height
+        x_new = max(0, mask_center_x - new_half_width)
+        y_new = max(0, mask_center_y - new_half_height)
+        x_end = min(original_w, mask_center_x + new_half_width)
+        y_end = min(original_h, mask_center_y + new_half_height)
+        new_w = x_end - x_new
+        new_h = y_end - y_new
+        
+        if crop_mode == "不裁切":
+            cropped_image = image_np.copy()
+            new_mask = np.zeros((original_h, original_w), dtype=np.uint8)
+            new_mask[y:y+h, x:x+w] = mask_np[y:y+h, x:x+w]
+            current_crop_position = (x, y)
+            current_crop_size = (w, h)
+        else:
+            cropped_image = image_np[y_new:y_end, x_new:x_end]
+            mask_x_start = max(0, x - x_new)
+            mask_y_start = max(0, y - y_new)
+            mask_x_end = min(new_w, (x + w) - x_new)
+            mask_y_end = min(new_h, (y + h) - y_new)
+            new_mask = np.zeros((new_h, new_w), dtype=np.uint8)
+            if mask_x_start < mask_x_end and mask_y_start < mask_y_end:
+                new_mask[mask_y_start:mask_y_end, mask_x_start:mask_x_end] = mask_np[
+                    y + mask_y_start - mask_y_start:y + mask_y_end - mask_y_start,
+                    x + mask_x_start - mask_x_start:x + mask_x_end - mask_x_start
+                ]
+            current_crop_position = (x_new, y_new)
+            current_crop_size = (new_w, new_h)
+        
+        cropped_image_tensor = torch.from_numpy(cropped_image / 255.0).float()
+        cropped_mask_tensor = torch.from_numpy(new_mask / 255.0).float().unsqueeze(0)
+        
+        stitch = {
+            "original_shape": (original_h, original_w),
+            "crop_position": current_crop_position,
+            "crop_size": current_crop_size,
+        }
+        
+        return (crop_image, bj_mask_tensor, cropped_image_tensor.unsqueeze(0), cropped_mask_tensor, stitch)
+
+
+
 
 
 
