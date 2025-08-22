@@ -3480,17 +3480,17 @@ class pre_qwen_controlnet:
                 "image1": ("IMAGE",),
                 "mask1": ("MASK",),
                 "controlnet1": (['None'] + folder_paths.get_filename_list("model_patches"),),
-                "strength1": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 2.0, "step": 0.01}),
+                "strength1": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 2.0, "step": 0.01}),
                 
                 "image2": ("IMAGE",),
                 "mask2": ("MASK",),
                 "controlnet2": (['None'] + folder_paths.get_filename_list("model_patches"),),
-                "strength2": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 2.0, "step": 0.01}),
+                "strength2": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 2.0, "step": 0.01}),
                 
                 "image3": ("IMAGE",),
                 "mask3": ("MASK",),
                 "controlnet3": (['None'] + folder_paths.get_filename_list("model_patches"),),
-                "strength3": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 2.0, "step": 0.01}),
+                "strength3": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 2.0, "step": 0.01}),
                 
             },
 
@@ -3531,6 +3531,7 @@ class pre_qwen_controlnet:
 
         context = new_context(context, model=model)
         return (context, model)
+
 
 
 
