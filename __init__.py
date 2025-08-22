@@ -125,6 +125,7 @@ NODE_CLASS_MAPPINGS= {
 "pre_Kontext": pre_Kontext,                              
 "pre_Kontext_mul": pre_Kontext_mul,
 
+"pre_qwen_controlnet": pre_qwen_controlnet,
 "pre_sample_data": pre_sample_data,
 "pre_controlnet": pre_controlnet,
 "pre_controlnet_union": pre_controlnet_union,
@@ -347,6 +348,7 @@ NODE_CLASS_MAPPINGS= {
 
 
 "color_tool": color_tool,
+"color_selector":color_selector,
 "color_adjust_HDR": color_adjust_HDR,
 "color_adjust_light": color_adjust_light,
 "color_adjust_HSL": color_adjust_HSL,
