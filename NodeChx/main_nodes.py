@@ -47,8 +47,6 @@ from comfy_extras.nodes_hidream import QuadrupleCLIPLoader
 from comfy_extras.nodes_hooks import PairConditioningSetProperties
 from comfy.utils import load_torch_file as comfy_load_torch_file
 
-from comfy_extras.nodes_model_patch import ModelPatchLoader,QwenImageDiffsynthControlnet
-
 
 
 from .load_GGUF.nodes import  UnetLoaderGGUF2
@@ -66,6 +64,14 @@ try:
 except ImportError:
     cv2 = None
     REMOVER_AVAILABLE = False  # 导入失败时设置为False
+    
+try:
+    from comfy_extras.nodes_model_patch import ModelPatchLoader, QwenImageDiffsynthControlnet
+    REMOVER_AVAILABLE = True  
+except ImportError:
+    ModelPatchLoader = None
+    QwenImageDiffsynthControlnet = None
+    REMOVER_AVAILABLE = False  
 
 
 
@@ -3531,6 +3537,7 @@ class pre_qwen_controlnet:
 
         context = new_context(context, model=model)
         return (context, model)
+
 
 
 
