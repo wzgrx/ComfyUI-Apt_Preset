@@ -21,9 +21,9 @@ class WanImageToVideo:
         return {"required": {"positive": ("CONDITIONING", ),
                              "negative": ("CONDITIONING", ),
                              "vae": ("VAE", ),
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                             "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                             "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                             "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
                 },
                 "optional": {"clip_vision_output": ("CLIP_VISION_OUTPUT", ),
@@ -65,9 +65,9 @@ class WanFunControlToVideo:
         return {"required": {"positive": ("CONDITIONING", ),
                              "negative": ("CONDITIONING", ),
                              "vae": ("VAE", ),
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                             "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                             "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                             "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
                 },
                 "optional": {"clip_vision_output": ("CLIP_VISION_OUTPUT", ),
@@ -115,9 +115,9 @@ class WanFirstLastFrameToVideo:
         return {"required": {"positive": ("CONDITIONING", ),
                              "negative": ("CONDITIONING", ),
                              "vae": ("VAE", ),
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                             "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                             "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                             "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
                 },
                 "optional": {"clip_vision_start_image": ("CLIP_VISION_OUTPUT", ),
@@ -181,9 +181,9 @@ class WanFunInpaintToVideo:
         return {"required": {"positive": ("CONDITIONING", ),
                              "negative": ("CONDITIONING", ),
                              "vae": ("VAE", ),
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                             "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                             "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                             "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
                 },
                 "optional": {"clip_vision_output": ("CLIP_VISION_OUTPUT", ),
@@ -208,9 +208,9 @@ class WanVaceToVideo:
         return {"required": {"positive": ("CONDITIONING", ),
                              "negative": ("CONDITIONING", ),
                              "vae": ("VAE", ),
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                             "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                             "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                             "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
                              "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step": 0.01}),
                 },
@@ -315,9 +315,9 @@ class WanCameraImageToVideo:
         return {"required": {"positive": ("CONDITIONING", ),
                              "negative": ("CONDITIONING", ),
                              "vae": ("VAE", ),
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                             "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                             "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                             "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
                 },
                 "optional": {"clip_vision_output": ("CLIP_VISION_OUTPUT", ),
@@ -363,9 +363,9 @@ class WanPhantomSubjectToVideo:
         return {"required": {"positive": ("CONDITIONING", ),
                              "negative": ("CONDITIONING", ),
                              "vae": ("VAE", ),
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                             "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                             "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                             "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
                 },
                 "optional": {"images": ("IMAGE", ),
@@ -456,8 +456,6 @@ class IO_video_encode:
 
         context = new_context(context, latent=samples ,images=images,) 
         return (context, images)
-
-
 
 
 
@@ -573,49 +571,22 @@ class Stack_WanFunInpaintToVideo:
         return ((width, height, length, start_image, end_image, clip_img, clip_vision_name),)
 
 
-class XXstack_WanVaceToVideo:
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
-                             "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step": 0.01}),
-                },
-                "optional": {"control_video": ("IMAGE", ),
-                             "control_masks": ("MASK", ),
-                             "reference_image": ("IMAGE", ),
-                }}
-    RETURN_TYPES = ("VACE_2V",)
-    RETURN_NAMES = ("vace_2V",)
-    FUNCTION = "encode"
-    CATEGORY = "Apt_Preset/stack"
-
-    def encode(self, width, height, length, strength, control_video=None, control_masks=None, reference_image=None):
-        #vace_2V = (width, height, length, strength, control_video, control_masks, reference_image)
-        return ((width, height, length, strength, control_video, control_masks, reference_image),)
-
-
-class stack_WanVaceToVideo_mul:
+class Stack_WanVaceToVideo:
 
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                 "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step": 0.01}),
-                "strength1": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step": 0.01}),
-                "strength2": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step": 0.01}),
             },
             "optional": {
                 "control_video": ("IMAGE", ),
                 "control_masks": ("MASK", ),
                 "reference_image": ("IMAGE", ),
-                "control_video1": ("IMAGE", ),
-                "control_video2": ("IMAGE", ),
+
             }
         }
 
@@ -624,25 +595,25 @@ class stack_WanVaceToVideo_mul:
     FUNCTION = "encode"
     CATEGORY = "Apt_Preset/stack"
 
-    def encode(self, width, height, length,strength, strength1, strength2, control_video=None, control_masks=None,
+    def encode(self, width, height, length,strength, control_video=None, control_masks=None,
 
-            reference_image=None, control_video1=None, control_video2=None):
+            reference_image=None):
         # 返回包含新字段的元组
         return (
-            (width, height, length, strength, strength1, strength2, control_video1, control_video2, control_video, control_masks, reference_image),
+            (width, height, length, strength, control_video, control_masks, reference_image),
         )
 
 
 
 
-class stack_WanCameraImageToVideo:
+class Stack_WanCameraImageToVideo:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
                 "clip_vision_name": (['None'] +folder_paths.get_filename_list("clip_vision"),{"default": 'clip_vision_h.safetensors'}),
-                "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                "width": ("INT", {"default": 832, "min": 16, "max": 4096, "step": 16}),
+                "height": ("INT", {"default": 480, "min": 16, "max": 4096, "step": 16}),
+                "length": ("INT", {"default": 81, "min": 1, "max": 4096, "step": 4}),
                 },
                 "optional": {
                 "clip_img": ("IMAGE", ),
@@ -660,17 +631,6 @@ class stack_WanCameraImageToVideo:
 
         #cameral_2V = ( width, height, length, start_image,clip_img,clip_vision_name, camera_conditions)
         return (( width, height, length, start_image,clip_img,clip_vision_name, camera_conditions),)
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -711,6 +671,7 @@ class sum_stack_Wan:
         clip = context.get("clip", None)
         vae = context.get("vae")
         latent = None
+        trim_latent = 0  # 初始化trim_latent默认值
         
         if model is None:
             model = context.get("model")
@@ -725,7 +686,6 @@ class sum_stack_Wan:
             width, height, length, start_image, clip_img, clip_vision_name = Image_2V
             clip_vision_output = None
             if clip_img is not None and clip_vision_name is not None:
-                # 提取元组中的对象
                 clip_vision_output = clip_vision_output_encode(clip_vision_name, clip_img)[0]
 
             positive, negative, latent = WanImageToVideo().encode(positive, negative, vae, width, height, length, 1, start_image=start_image, clip_vision_output=clip_vision_output)
@@ -735,7 +695,6 @@ class sum_stack_Wan:
             width, height, length, start_image, control_video, clip_img, clip_vision_name = FunControl_2V
             clip_vision_output = None
             if clip_img is not None and clip_vision_name is not None:
-                # 提取元组中的对象
                 clip_vision_output = clip_vision_output_encode(clip_vision_name, clip_img)[0]
 
             positive, negative, latent = WanFunControlToVideo().encode(positive, negative, vae, width, height, length, 1, start_image=start_image, clip_vision_output=clip_vision_output, control_video=control_video)
@@ -743,8 +702,8 @@ class sum_stack_Wan:
 
         if FirstLast_2V is not None:
             width, height, length, start_image, end_image, clip_start_img, clip_end_img, clip_vision_start, clip_vision_end = FirstLast_2V
-            clip_vision_start_image = None  # 初始化 clip_vision_start_image
-            clip_vision_end_image = None  # 初始化 clip_vision_end_image
+            clip_vision_start_image = None
+            clip_vision_end_image = None
             if clip_start_img is not None and clip_vision_start is not None:
                 clip_vision_start_image = clip_vision_output_encode(clip_vision_start, clip_start_img)[0]
             if clip_end_img is not None and clip_vision_end is not None:
@@ -755,18 +714,26 @@ class sum_stack_Wan:
 
 
         if vace_2V is not None:
-            width, height, length,strength, strength1, strength2, control_video1, control_video2, control_video, control_masks, reference_image = vace_2V
-            if control_video is not None and control_video.shape[0] > 0:
-                positive, negative, latent, trim_latent = WanVaceToVideo().encode(positive, negative, vae, width, height, length, 1, strength, control_video=control_video, control_masks=control_masks, reference_image=reference_image)
-            if control_video1 is not None and control_video1.shape[0] > 0:
-                positive, negative, latent, trim_latent = WanVaceToVideo().encode(positive, negative, vae, width, height, length, 1, strength1, control_video=control_video, control_masks=control_masks, reference_image=reference_image)
-            if control_video2  is not None and control_video2.shape[0] > 0:
-                positive, negative, latent, trim_latent = WanVaceToVideo().encode(positive, negative, vae, width, height, length, 1, strength2, control_video=control_video, control_masks=control_masks, reference_image=reference_image)
+            width, height, length, strength, control_video, control_masks, reference_image = vace_2V       
+            positive, negative, latent, trim_latent = WanVaceToVideo().encode(
+                    positive=positive,
+                    negative=negative,
+                    vae=vae,
+                    width=width,
+                    height=height,
+                    length=length,
+                    batch_size=1,
+                    strength=strength,
+                    control_video=control_video,
+                    control_masks=control_masks,
+                    reference_image=reference_image
+                )
+
 
 
         if cameral_2V is not None:
             width, height, length, start_image,clip_img, clip_vision_name, camera_conditions = cameral_2V 
-            clip_vision_output = None  # 初始化 clip_vision_output
+            clip_vision_output = None
             if clip_img is not None and clip_vision_name is not None:
                 clip_vision_output = clip_vision_output_encode(clip_vision_name, clip_img)[0]
             positive, negative, latent = WanCameraImageToVideo().encode (positive, negative, vae, width, height, length, 1, start_image=start_image, clip_vision_output=clip_vision_output, camera_conditions=camera_conditions)
@@ -774,15 +741,15 @@ class sum_stack_Wan:
 
         context = new_context(context, clip=clip, positive=positive, latent=latent, negative=negative, model=model)
 
-
-        trim_latent = None  
-        if vace_2V is not None:
-            if control_video is not None and control_video.shape[0] > 0:
-                _, _, _, trim_latent = WanVaceToVideo().encode(positive, negative, vae, width, height, length, 1, strength, control_video=control_video, control_masks=control_masks, reference_image=reference_image)
-            if control_video1 is not None and control_video1.shape[0] > 0:
-                _, _, _, trim_latent = WanVaceToVideo().encode(positive, negative, vae, width, height, length, 1, strength1, control_video=control_video, control_masks=control_masks, reference_image=reference_image)
-            if control_video2 is not None and control_video2.shape[0] > 0:
-                _, _, _, trim_latent = WanVaceToVideo().encode(positive, negative, vae, width, height, length, 1, strength2, control_video=control_video, control_masks=control_masks, reference_image=reference_image)
-
         return (context, model, positive, negative, latent, trim_latent )
+
+
+
+
+
+
+
+
+
+
 
