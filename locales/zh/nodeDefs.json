@@ -1278,12 +1278,28 @@
       "channel": {
         "name": "通道"
       }
+      ,
+      "invert_channel": {
+        "name": "通道反转"
+      }
+      ,
+      "background_color": {
+        "name": "背景色"
+      }
     },
     "outputs": {
       "image": {
         "name": "图像"
       }
     }
+
+
+
+
+
+
+
+
   },
   "img_effect_Load": {
     "display_name": "图效_加载",
@@ -3905,7 +3921,7 @@
         "name": "潜在变量样本"
       },
       "trim_latent": {
-        "name": "裁切潜在变量"
+        "name": "vace修剪latent"
       },
       "tile_size": {
         "name": "切片尺寸"
@@ -3930,7 +3946,7 @@
     }
   },
   "view_node_Script": {
-    "display_name": "输出_节点脚本",
+    "display_name": "view_node_Script",
     "inputs": {
       "mode": {
         "name": "模式"
@@ -8112,6 +8128,9 @@
       "crop_mode": {
         "name": "裁切尺寸模式"
       },
+      "background_color": {
+        "name": "背景颜色"
+      },
       "crop_value": {
         "name": "裁切尺寸设置"
       },
@@ -11085,7 +11104,7 @@
     }
   },
   "Stack_WanImageToVideo": {
-    "display_name": "Stack_WanImageToVideo",
+    "display_name": "wan_图生视频",
     "inputs": {
       "clip_vision_name": {
         "name": "视觉模型"
@@ -11113,7 +11132,7 @@
     }
   },
   "Stack_WanFunControlToVideo": {
-    "display_name": "Stack_WanFunControlToVideo",
+    "display_name": "wan_fun控制生视频",
     "inputs": {
       "clip_vision_name": {
         "name": "视觉模型"
@@ -11144,7 +11163,7 @@
     }
   },
   "Stack_WanFirstLastFrameToVideo": {
-    "display_name": "Stack_WanFirstLastFrameToVideo",
+    "display_name": "Wan_首尾帧生视频",
     "inputs": {
       "clip_vision_start": {
         "name": "视觉开始模型"
@@ -11181,7 +11200,7 @@
     }
   },
   "Stack_WanFunInpaintToVideo": {
-    "display_name": "Stack_WanFunInpaintToVideo",
+    "display_name": "wan_fun视频重绘",
     "inputs": {
       "clip_vision_name": {
         "name": "clip_vision_name"
@@ -11227,30 +11246,36 @@
         "name": "负条件"
       },
       "Image_2V": {
-        "name": "图生视频"
+        "name": "图或文生视频"
       },
       "FunControl_2V": {
-        "name": "可控视频"
+        "name": "fun控制视频"
       },
       "FirstLast_2V": {
         "name": "首尾帧视频"
       },
-      "FunInpaint_2V": {
-        "name": "重绘视频"
+      "vace_2V": {
+        "name": "vace视频编辑"
       }
     },
     "outputs": {
-      "run_context": {
+      "0": {
         "name": "context"
       },
-      "model": {
+      "1": {
         "name": "模型"
       },
-      "conditioning": {
-        "name": "条件"
+      "2": {
+        "name": "正条件"
       },
-      "latent": {
+      "3": {
+        "name": "负条件"
+      },
+      "4": {
         "name": "latent"
+      },
+      "5": {
+        "name": "vace修剪latent"
       }
     }
   },
@@ -12154,6 +12179,87 @@
       }
     }
   },
+
+
+"Stack_WanVaceToVideo": {
+    "display_name": "wan_vace视频编辑",
+    "inputs": {
+      "width": {
+        "name": "宽度"
+      },
+      "height": {
+        "name": "高度"
+      },
+      "length": {
+        "name": "长度"
+      },
+      "strength": {
+        "name": "强度"
+      },
+      "strength1": {
+        "name": "强度1"
+      },
+      "strength2": {
+        "name": "强度2"
+      },
+      "control_video": {
+        "name": "控制视频"
+      },
+      "control_masks": {
+        "name": "控制遮罩"
+      },
+      "reference_image": {
+        "name": "参考图像"
+      },
+      "control_video1": {
+        "name": "控制视频1"
+      },
+      "control_video2": {
+        "name": "控制视频2"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "vace视频编辑"
+      }
+    }
+  },
+
+"Stack_WanCameraImageToVideo": {
+    "display_name": "Wan_运镜生视频",
+    "inputs": {
+      "clip_vision_name": {
+        "name": "CLIP视觉模型名称"
+      },
+      "width": {
+        "name": "宽度"
+      },
+      "height": {
+        "name": "高度"
+      },
+      "length": {
+        "name": "长度"
+      },
+      "clip_img": {
+        "name": "CLIP图像"
+      },
+      "start_image": {
+        "name": "起始图像"
+      },
+      "camera_conditions": {
+        "name": "相机条件嵌入"
+      }
+    },
+    "outputs": {
+      "cameral_2V": {
+        "name": "相机_2V"
+      }
+    }
+  },
+
+
+
+
 
 
   "basicIn_int": {
