@@ -188,8 +188,8 @@ NODE_CLASS_MAPPINGS= {
 "Stack_WanFunControlToVideo": Stack_WanFunControlToVideo,
 "Stack_WanFirstLastFrameToVideo": Stack_WanFirstLastFrameToVideo,
 "Stack_WanFunInpaintToVideo": Stack_WanFunInpaintToVideo,
-"Stack_WanVaceToVideo_mul": stack_WanVaceToVideo_mul,
-"Stack_WanCameralToVideo": stack_WanCameraImageToVideo,
+"Stack_WanVaceToVideo": Stack_WanVaceToVideo,
+"Stack_WanCameralToVideo": Stack_WanCameraImageToVideo,
 
 #--------AD------------------------------------------
 
@@ -472,3 +472,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 "chx_ksampler_tile": "chx_ksampler_tile(sole)",   
 
 }
+
