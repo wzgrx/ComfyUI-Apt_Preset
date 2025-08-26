@@ -9,7 +9,6 @@ import glob
 import csv
 import json
 import math
-from telnetlib import OUTMRK
 import re
 #from turtle import width
 
@@ -3537,6 +3536,7 @@ class pre_qwen_controlnet:
 
         context = new_context(context, model=model)
         return (context, model)
+
 
 
 
