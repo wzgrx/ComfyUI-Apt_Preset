@@ -35,7 +35,7 @@
 
 2025.8.22  增加 pre_qwen_controlnet，qwen的多级controlnet
 
-
+2025.8.30  更新kontext采样器，支持controlnet_union
 
 <img width="2328" height="989" alt="image" src="https://github.com/user-attachments/assets/ba112cb8-f2b3-4202-b2d2-d621a8f91f9d" />
 
