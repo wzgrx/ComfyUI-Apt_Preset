@@ -3467,7 +3467,6 @@ class pre_QwenEdit:
                 conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_latents": [ref_latent]}, append=True)
             return conditioning
 
-
     def process(self, context=None, image=None, mask=None,ref_edit=True, mask_condi=True, pos="", smoothness=0, model_shift=3.0):  
 
         vae = context.get("vae", None)
@@ -3486,6 +3485,8 @@ class pre_QwenEdit:
         if pos is None or (isinstance(pos, str) and pos.strip() == ""):
             pos = context.get("pos", None)
 
+        # 初始化newimage为image
+        newimage = image
         if mask is not None:        
             mask =smoothness_mask(mask, smoothness)
             latent = {"samples": encoded_latent,"noise_mask": mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])) }
@@ -3501,20 +3502,16 @@ class pre_QwenEdit:
         positive =self.qwen_encode(clip, pos, vae, newimage)
         negative =self.qwen_encode(clip, "", vae, newimage)
         
-        positive, negative, latent = InpaintModelConditioning().encode(positive, negative, image, vae, mask, True)
+        # 只有当mask不为None时才使用InpaintModelConditioning
+        if mask is not None:
+            positive, negative, latent = InpaintModelConditioning().encode(positive, negative, image, vae, mask, True)
+        else:
+            # 如果没有mask，则直接创建latent
+            latent = {"samples": encoded_latent}
 
         context = new_context(context, positive=positive, latent=latent, model=model)
 
         return (context,positive,latent)
-    
-
-
-
-
-
-
-
-
 
 
 
