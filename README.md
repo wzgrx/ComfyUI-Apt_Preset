@@ -38,16 +38,12 @@
 2025.8.30  更新kontext采样器，支持controlnet_union
 
 2025.9.07  增加pre_USO, 支持USO图像编辑+风格参考
+
 pre_USO
 <img width="2976" height="1520" alt="image" src="https://github.com/user-attachments/assets/8ffdac4c-bc4b-4437-8c7d-02144a2d034d" />
 
 Qwen_edit
 <img width="2328" height="989" alt="image" src="https://github.com/user-attachments/assets/ba112cb8-f2b3-4202-b2d2-d621a8f91f9d" />
-
-
-<img width="2276" height="1059" alt="image" src="https://github.com/user-attachments/assets/7f2cde22-88c1-4c4a-837c-79c045de1702" />
-
-
 
 Simultaneously issue commands to generate for multiple objects
 
