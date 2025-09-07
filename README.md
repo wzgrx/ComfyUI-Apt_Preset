@@ -26,23 +26,6 @@ Simultaneously issue commands to generate for multiple objects
 
 
 
-
-连续编辑Continuous editing     ksampler_Kontext
-![image](https://github.com/user-attachments/assets/e84c2e03-32af-4608-bb5b-5ed683628c69)
-
-
-
-精细化控制Fine-grained control    pre_Kontext
-![image](https://github.com/user-attachments/assets/152014f4-5d0e-421c-abb8-b7e5a0ff4742)
-
-
-
-
-遮罩高级处理kontext_inpaint--遮罩部分太小，识别不了的时候，用放大再采样When the masked part is too small to be recognized, use magnification and then resampling.
-<img width="3060" height="1145" alt="image" src="https://github.com/user-attachments/assets/f82d292b-f586-4248-88bb-47379fda8b2e" />
-
-
-
 # <font color="#000000">二、Usage Guide使用指南</font> 
 **1、预设加载器 Load：Sum_load_adv 组合各种流程需要的模型加载，Unet还支持GGUF模型**
 
