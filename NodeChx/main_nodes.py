@@ -2556,8 +2556,6 @@ class pre_controlnet_union:
 
 
 
-
-
 class pre_mul_Mulcondi:
     @classmethod
     def INPUT_TYPES(s):
@@ -2606,28 +2604,17 @@ class pre_mul_Mulcondi:
             set_area_to_bounds = True
         valid_masks = []
         
-        # 处理遮罩维度，确保所有遮罩都是正确的4D张量
-        def process_mask(mask):
-            if mask is None:
-                return None
-            # 确保遮罩是正确的维度 [B, H, W]
-            if len(mask.shape) == 2:  # [H, W] -> [1, H, W]
-                mask = mask.unsqueeze(0)
-            elif len(mask.shape) == 3 and mask.shape[0] > 1:  # [B, H, W] where B > 1
-                # 如果批次大小大于1，我们只取第一个
-                mask = mask[0].unsqueeze(0)
-            elif len(mask.shape) > 3:  # 5D or higher, squeeze extra dims
-                while len(mask.shape) > 3:
-                    mask = mask.squeeze(-1)
-                if len(mask.shape) == 2:
-                    mask = mask.unsqueeze(0)
-            return mask
-
-        mask_1 = process_mask(mask_1)
-        mask_2 = process_mask(mask_2)
-        mask_3 = process_mask(mask_3)
-        mask_4 = process_mask(mask_4)
-        mask_5 = process_mask(mask_5)
+        # 处理遮罩维度
+        if mask_1 is not None and len(mask_1.shape) < 3:  
+            mask_1 = mask_1.unsqueeze(0)
+        if mask_2 is not None and len(mask_2.shape) < 3:  
+            mask_2 = mask_2.unsqueeze(0)
+        if mask_3 is not None and len(mask_3.shape) < 3:  
+            mask_3 = mask_3.unsqueeze(0)
+        if mask_4 is not None and len(mask_4.shape) < 3:  
+            mask_4 = mask_4.unsqueeze(0)
+        if mask_5 is not None and len(mask_5.shape) < 3:  
+            mask_5 = mask_5.unsqueeze(0)
 
         # 应用各个遮罩并收集有效的遮罩
         if mask_1 is not None:
@@ -2653,22 +2640,7 @@ class pre_mul_Mulcondi:
 
         # 计算背景遮罩
         if valid_masks:
-            # 确保所有遮罩具有相同的形状
-            target_shape = valid_masks[0].shape
-            processed_masks = []
-            for mask in valid_masks:
-                if mask.shape != target_shape:
-                    # 插值到目标形状
-                    mask = torch.nn.functional.interpolate(
-                        mask.unsqueeze(0) if len(mask.shape) == 3 else mask,
-                        size=target_shape[-2:],
-                        mode='nearest'
-                    )
-                    if len(mask.shape) == 4 and mask.shape[0] == 1:
-                        mask = mask.squeeze(0)
-                processed_masks.append(mask)
-            
-            total_mask = sum(processed_masks)
+            total_mask = sum(valid_masks)
             # 确保总遮罩不超过1
             total_mask = torch.clamp(total_mask, 0, 1)
             mask_6 = 1 - total_mask
@@ -2684,6 +2656,11 @@ class pre_mul_Mulcondi:
         context = new_context(context, positive=c, negative=negative, clip=clip)
 
         return (context, c, negative)
+
+
+
+
+
 
 
 
@@ -3593,6 +3570,7 @@ class pre_USO:
         context = new_context(context, positive=positive, latent=latent, model=model )
 
         return (context, model, positive, latent )
+
 
 
 
