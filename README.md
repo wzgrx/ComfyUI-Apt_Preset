@@ -37,6 +37,11 @@
 
 2025.8.30  更新kontext采样器，支持controlnet_union
 
+2025.9.07  增加pre_USO, 支持USO图像编辑+风格参考
+
+<img width="2976" height="1520" alt="image" src="https://github.com/user-attachments/assets/8ffdac4c-bc4b-4437-8c7d-02144a2d034d" />
+
+
 <img width="2328" height="989" alt="image" src="https://github.com/user-attachments/assets/ba112cb8-f2b3-4202-b2d2-d621a8f91f9d" />
 
 
