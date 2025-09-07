@@ -3,32 +3,6 @@
 
 # <font color="#000000"> 一、Update record更新记录</font>
 
-2025.5.17  Now the system supports switching to Chinese.支持系统切换中文
-
-2025.5.31 Sum_load_adv 的Unet支持GGUF模型加载 ；The Unet supports the loading of GGUF models
-   
-2025.7.3  增加Kontext采样器，连续编辑
-
-2025.7.6  添加Kontext采样器尺寸选择，自定义或官方自动尺寸
-
-2025.7.9  添加在线PS工具和lora触发词获取添加到stack lora
-
-2025.7.12  添加节点 kontext_inpaint
-
-2025.7.13  添加 kontext官方presets。放入了 text_sum
-
-2025.7.15  添加 kontext多条件遮罩 pre kontext_mul 
-
-2025.7.18  添加节点，创建_遮罩_视角打标  create_Mask_visual_tag 
-
-2025.7.23  添加节点，创建_遮罩_匹配打标  create_Mask_match_shape
-
-2025.8.6  支持qwen-imge 官方版本以及qwen-imge，gguf
-
-2025.8.9  增加qwen-fone 主要用于文生图，搭配场景生成文字
-
-2025.8.13  增加excel_qwen_artistic艺术字，主要用于图生图，和单独字体艺术设计，支持DIY
-
 2025.8.19  增加excel_imgEditor_helper,图像编辑助手，支持DIY
 
 2025.8.20  增加 pre_Qwen_image_edit，qwen图像编辑预处理节点，支持局部编辑
@@ -39,10 +13,10 @@
 
 2025.9.07  增加pre_USO, 支持USO图像编辑+风格参考
 
-pre_USO
+pre_USO 支持局部重绘，图像编辑+风格参考
 <img width="2976" height="1520" alt="image" src="https://github.com/user-attachments/assets/8ffdac4c-bc4b-4437-8c7d-02144a2d034d" />
 
-Qwen_edit
+pre_Qwen_edit 支持，图像编辑+局部重绘
 <img width="2328" height="989" alt="image" src="https://github.com/user-attachments/assets/ba112cb8-f2b3-4202-b2d2-d621a8f91f9d" />
 
 Simultaneously issue commands to generate for multiple objects
