@@ -13,6 +13,8 @@
 
 2025.9.07  增加pre_USO, 支持USO图像编辑+风格参考
 
+2025.9.08  增加pre_Kontext_MulImage, 多图编辑kontext  ,增加 load_Nanchaku ,需要先安装好Nanchaku才能使用
+
 pre_USO 支持局部重绘，图像编辑+风格参考
 <img width="2976" height="1520" alt="image" src="https://github.com/user-attachments/assets/8ffdac4c-bc4b-4437-8c7d-02144a2d034d" />
 
