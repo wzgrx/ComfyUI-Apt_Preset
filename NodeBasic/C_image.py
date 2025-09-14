@@ -3855,6 +3855,8 @@ class Image_Resize_longsize:
         }
     }
     RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "execute"
+
     CATEGORY = "Apt_Preset/image"
 
     def execute(
