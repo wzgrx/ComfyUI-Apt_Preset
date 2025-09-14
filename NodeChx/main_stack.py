@@ -1027,7 +1027,6 @@ class XXXStack_CN_union:
         return (tuple(stack), )
     
 
-
 class Stack_CN_union:
     @classmethod
     def INPUT_TYPES(s):
@@ -1056,7 +1055,6 @@ class Stack_CN_union:
     - dual_type_2: 只选一个，单控图
     """
 
-
     def load_controlnet(self,  
                         image,
                         controlNet="None",
@@ -1072,18 +1070,19 @@ class Stack_CN_union:
         if union_stack is not None:
             stack_list.extend([item for item in union_stack if item[0] is not None])
 
-        if controlNet != "None"and strength != 0 and image is not None:
-           if type1 != "None":
-              control_net = SetUnionControlNetType().set_controlnet_type(control_net, type1)[0]  
-           if type2 != "None":
-              control_net = SetUnionControlNetType().set_controlnet_type(control_net, type2)[0]
+        if controlNet != "None" and strength != 0 and image is not None:
+            # 先加载control_net
+            control_net = ControlNetLoader().load_controlnet(controlNet)[0]
+            
+            # 根据type1和type2设置控制网络类型
+            if type1 != "None":
+                control_net = SetUnionControlNetType().set_controlnet_type(control_net, type1)[0]  
+            if type2 != "None":
+                control_net = SetUnionControlNetType().set_controlnet_type(control_net, type2)[0]
 
-           control_net = ControlNetLoader().load_controlnet(controlNet)[0]
-           stack_list.append((control_net, image, strength, start_percent, end_percent))
+            stack_list.append((control_net, image, strength, start_percent, end_percent))
 
         return (tuple(stack_list), )
-    
-
 
 
 class Apply_CN_union:
