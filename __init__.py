@@ -334,7 +334,7 @@ NODE_CLASS_MAPPINGS= {
 "Image_Upscaletile": Image_Upscaletile,    
 "Image_Resize_sum": Image_Resize_sum,      
 "Image_Resize2": Image_Resize2,
-
+"Image_Resize_longsize": Image_Resize_longsize,
 
 "Image_batch_select": Image_batch_select,
 "Image_batch_composite": Image_batch_composite,
