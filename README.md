@@ -15,6 +15,8 @@
 
 2025.9.08  增加pre_Kontext_mul_Image, 多图编辑kontext  ,增加 load_Nanchaku ,需要先安装好Nanchaku才能使用
 
+2025.9.14  load_Nacnchaku支持qwen_edit， 修改了部分节点 ，image_resize放大 /controlnet_union合并图参考类型
+
 pre_USO 支持局部重绘，图像编辑+风格参考
 <img width="2976" height="1520" alt="image" src="https://github.com/user-attachments/assets/8ffdac4c-bc4b-4437-8c7d-02144a2d034d" />
 
