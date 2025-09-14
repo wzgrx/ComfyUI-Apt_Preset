@@ -28,7 +28,7 @@ import ast
 from nodes import CLIPTextEncode, common_ksampler,InpaintModelConditioning
 from comfy_extras.nodes_upscale_model import ImageUpscaleWithModel,UpscaleModelLoader
 from comfy_extras.nodes_post_processing import ImageScaleToTotalPixels
-
+from torchvision.transforms import InterpolationMode
 
 
 from ..main_unit import *
@@ -3840,6 +3840,63 @@ class Image_Resize2:
         image = image.movedim(1,-1)
 
         return(image,image.shape[2], image.shape[1])
+
+
+
+
+class Image_Resize_longsize:
+    INPUT_TYPES = lambda: {
+        "required": {
+            "image": ("IMAGE",),
+            "size": ("INT", {"default": 512, "min": 0, "step": 1, "max": 99999}),
+            "interpolation_mode": (
+                ["bicubic", "bilinear", "nearest", "nearest exact"],
+            ),
+        }
+    }
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Apt_Preset/image"
+
+    def execute(
+        self,
+        image: torch.Tensor,
+        size: int,
+        interpolation_mode: str,
+    ):
+        assert isinstance(image, torch.Tensor)
+        assert isinstance(size, int)
+        assert isinstance(interpolation_mode, str)
+
+        interpolation_mode = interpolation_mode.upper().replace(" ", "_")
+        interpolation_mode = getattr(InterpolationMode, interpolation_mode)
+
+        _, h, w, _ = image.shape
+
+        if h >= w:
+            new_h = size
+            new_w = round(w * new_h / h)
+        else:  # h < w
+            new_w = size
+            new_h = round(h * new_w / w)
+
+        image = image.permute(0, 3, 1, 2)
+        image = F.resize(
+            image,
+            (new_h, new_w),
+            interpolation=interpolation_mode,
+            antialias=True,
+        )
+        image = image.permute(0, 2, 3, 1)
+
+        return (image,)
+
+
+
+
+
+
+
+
 
 
 
