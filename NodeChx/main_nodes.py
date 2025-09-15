@@ -46,24 +46,23 @@ from comfy_extras.nodes_hidream import QuadrupleCLIPLoader
 from comfy_extras.nodes_hooks import PairConditioningSetProperties
 from comfy.utils import load_torch_file as comfy_load_torch_file
 
-
-from comfy_extras.nodes_flux import FluxKontextMultiReferenceLatentMethod
-
-
 from nodes import CLIPVisionLoader, CLIPVisionEncode
-
-
-
-
 
 
 from .load_GGUF.nodes import  UnetLoaderGGUF2
 from ..main_unit import *
 
 
-
-
 #---------------------安全导入------
+
+
+try:
+    from comfy_extras.nodes_flux import FluxKontextMultiReferenceLatentMethod
+    REMOVER_AVAILABLE = True  
+except ImportError:
+    FluxKontextMultiReferenceLatentMethod = None
+    REMOVER_AVAILABLE = False  
+
 
 
 try:
@@ -4019,6 +4018,7 @@ class pre_inpaint_sum:
         
         image[mask > 0.5] = masked_pixel
         return (image,)
+
 
 
 
