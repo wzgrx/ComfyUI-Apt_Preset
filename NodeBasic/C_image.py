@@ -3764,7 +3764,7 @@ class Image_Resize_longsize:
 
 
 
-class Image_Resize_sum_restore:
+class XXXImage_Resize_sum_restore:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -4227,6 +4227,169 @@ class Image_Resize_sum:
 
 
 
+class Image_Resize_sum_restore:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "resized_image": ("IMAGE",),
+                "mask": ("MASK",),
+                "stitch": ("STITCH3",),
+            },
+            "optional": {}
+        }
+
+    CATEGORY = "Apt_Preset/image"
+    RETURN_TYPES = ("IMAGE", "MASK",)
+    RETURN_NAMES = ("restored_image", "restored_mask",)
+    FUNCTION = "restore"
+
+    def restore(self, resized_image, stitch, mask=None):
+        original_h, original_w = stitch["original_shape"]
+        target_resized_h, target_resized_w = stitch["resized_shape"]
+        crop_x, crop_y = stitch["crop_position"]
+        crop_w, crop_h = stitch["crop_size"]
+        pad_left, pad_right, pad_top, pad_bottom = stitch["pad_info"]
+        keep_proportion = stitch["keep_proportion"]
+        scale_factor = stitch["scale_factor"]
+        final_width, final_height = stitch["final_size"]
+        image_pos_x, image_pos_y = stitch["image_position"]
+        has_input_mask = stitch.get("has_input_mask", False)
+        original_image = stitch.get("original_image", None)
+        
+        # 检查是否需要缩放：仅当当前尺寸与目标尺寸不一致时才执行缩放
+        current_h, current_w = resized_image.shape[1], resized_image.shape[2]
+        if current_w != target_resized_w or current_h != target_resized_h:
+            resized_image = common_upscale(
+                resized_image.movedim(-1, 1),
+                target_resized_w,
+                target_resized_h,
+                stitch["upscale_method"],
+                crop="disabled"
+            ).movedim(1, -1)
+        
+        # 对mask执行相同的尺寸检查
+        if mask is not None and mask.numel() > 0 and has_input_mask:
+            current_mask_h, current_mask_w = mask.shape[1], mask.shape[2]
+            if current_mask_w != target_resized_w or current_mask_h != target_resized_h:
+                mask = common_upscale(
+                    mask.unsqueeze(1),
+                    target_resized_w,
+                    target_resized_h,
+                    stitch["upscale_method"],
+                    crop="disabled"
+                ).squeeze(1)
+
+        if keep_proportion == "crop":
+            # 检查裁剪恢复的尺寸是否匹配
+            current_restored_w, current_restored_h = resized_image.shape[2], resized_image.shape[1]
+            if current_restored_w != crop_w or current_restored_h != crop_h:
+                restored_image = common_upscale(
+                    resized_image.movedim(-1, 1), 
+                    crop_w, crop_h, 
+                    stitch["upscale_method"], 
+                    crop="disabled"
+                ).movedim(1, -1)
+            else:
+                restored_image = resized_image  # 尺寸匹配，无需缩放
+            
+            if original_image is not None:
+                final_image = original_image.clone()
+            else:
+                final_image = torch.zeros(
+                    (resized_image.shape[0], original_h, original_w, resized_image.shape[3]), 
+                    dtype=resized_image.dtype, 
+                    device=resized_image.device
+                )
+            
+            final_image[:, crop_y:crop_y+crop_h, crop_x:crop_x+crop_w, :] = restored_image
+            
+            if mask is not None and mask.numel() > 0 and has_input_mask:
+                # 检查mask裁剪恢复的尺寸是否匹配
+                current_mask_restored_w, current_mask_restored_h = mask.shape[2], mask.shape[1]
+                if current_mask_restored_w != crop_w or current_mask_restored_h != crop_h:
+                    restored_mask = common_upscale(
+                        mask.unsqueeze(1), 
+                        crop_w, crop_h, 
+                        stitch["upscale_method"], 
+                        crop="disabled"
+                    ).squeeze(1)
+                else:
+                    restored_mask = mask  # 尺寸匹配，无需缩放
+                    
+                final_mask = torch.zeros(
+                    (mask.shape[0], original_h, original_w), 
+                    dtype=mask.dtype, 
+                    device=mask.device
+                )
+                final_mask[:, crop_y:crop_y+crop_h, crop_x:crop_x+crop_w] = restored_mask
+                return (final_image, final_mask)
+            else:
+                return (final_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+                
+        elif keep_proportion.startswith("pad"):
+            unpadded_image = resized_image[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width, :]
+            
+            # 检查填充恢复的尺寸是否匹配
+            current_unpadded_w, current_unpadded_h = unpadded_image.shape[2], unpadded_image.shape[1]
+            if current_unpadded_w != original_w or current_unpadded_h != original_h:
+                restored_image = common_upscale(
+                    unpadded_image.movedim(-1, 1), 
+                    original_w, original_h, 
+                    stitch["upscale_method"], 
+                    crop="disabled"
+                ).movedim(1, -1)
+            else:
+                restored_image = unpadded_image  # 尺寸匹配，无需缩放
+            
+            if mask is not None and mask.numel() > 0 and has_input_mask:
+                unpadded_mask = mask[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width]
+                
+                # 检查mask填充恢复的尺寸是否匹配
+                current_mask_unpadded_w, current_mask_unpadded_h = unpadded_mask.shape[2], unpadded_mask.shape[1]
+                if current_mask_unpadded_w != original_w or current_mask_unpadded_h != original_h:
+                    restored_mask = common_upscale(
+                        unpadded_mask.unsqueeze(1), 
+                        original_w, original_h, 
+                        stitch["upscale_method"], 
+                        crop="disabled"
+                    ).squeeze(1)
+                else:
+                    restored_mask = unpadded_mask  # 尺寸匹配，无需缩放
+                    
+                return (restored_image, restored_mask)
+            else:
+                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+                
+        else:
+            # 检查常规恢复的尺寸是否匹配
+            current_regular_w, current_regular_h = resized_image.shape[2], resized_image.shape[1]
+            if current_regular_w != original_w or current_regular_h != original_h:
+                restored_image = common_upscale(
+                    resized_image.movedim(-1, 1), 
+                    original_w, original_h, 
+                    stitch["upscale_method"], 
+                    crop="disabled"
+                ).movedim(1, -1)
+            else:
+                restored_image = resized_image  # 尺寸匹配，无需缩放
+            
+            if mask is not None and mask.numel() > 0 and has_input_mask:
+                # 检查mask常规恢复的尺寸是否匹配
+                current_mask_regular_w, current_mask_regular_h = mask.shape[2], mask.shape[1]
+                if current_mask_regular_w != original_w or current_mask_regular_h != original_h:
+                    restored_mask = common_upscale(
+                        mask.unsqueeze(1), 
+                        original_w, original_h, 
+                        stitch["upscale_method"], 
+                        crop="disabled"
+                    ).squeeze(1)
+                else:
+                    restored_mask = mask  # 尺寸匹配，无需缩放
+                    
+                return (restored_image, restored_mask)
+            else:
+                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
 
 
 
