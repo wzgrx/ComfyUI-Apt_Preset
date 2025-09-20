@@ -3891,6 +3891,7 @@ class Image_Resize_sum_restore:
 
 
 
+
 class Image_Resize_sum:
     @classmethod
     def INPUT_TYPES(s):
@@ -3913,13 +3914,12 @@ class Image_Resize_sum:
 
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK", "STITCH3", "MASK", )
-    RETURN_NAMES = ("IMAGE", "mask", "stitch", "composite_mask", )
+    RETURN_TYPES = ("IMAGE", "MASK", "STITCH3", "MASK", "FLOAT",)
+    RETURN_NAMES = ("IMAGE", "mask", "stitch", "composite_mask", "scale_factor",)
     FUNCTION = "resize"
     CATEGORY = "Apt_Preset/image"
 
-    def resize(self, image, width, height, keep_proportion, upscale_method, divisible_by, pad_color, crop_position, get_image_size=None,  mask=None,  mask_stack=None):
-        # 保存原始图像尺寸信息
+    def resize(self, image, width, height, keep_proportion, upscale_method, divisible_by, pad_color, crop_position, get_image_size=None, mask=None, mask_stack=None):
         if len(image.shape) == 3:
             B, H, W, C = 1, image.shape[0], image.shape[1], image.shape[2]
             original_image = image.unsqueeze(0)
@@ -3937,13 +3937,11 @@ class Image_Resize_sum:
         if get_image_size is not None:
             _, height, width, _ = get_image_size.shape
         
-        # 初始化裁剪/填充参数
         new_width, new_height = width, height
         pad_left, pad_right, pad_top, pad_bottom = 0, 0, 0, 0
         crop_x, crop_y, crop_w, crop_h = 0, 0, W, H
         scale_factor = 1.0
         
-        # 首先处理 mask_stack（如果提供了 mask 和 mask_stack）
         processed_mask = mask
         if mask is not None and mask_stack is not None:
             mask_mode, smoothness, mask_expand, mask_min, mask_max = mask_stack
@@ -3967,24 +3965,21 @@ class Image_Resize_sum:
                 crop_to_mask=False,
                 divisible_by=1
             )
-            processed_mask = separated_result[1]  # 只获取处理后的mask
+            processed_mask = separated_result[1]
         
         if keep_proportion == "resize" or keep_proportion.startswith("pad"):
             if width == 0 and height != 0:
-                ratio = height / H
-                new_width = round(W * ratio)
+                scale_factor = height / H
+                new_width = round(W * scale_factor)
                 new_height = height
-                scale_factor = ratio
             elif height == 0 and width != 0:
-                ratio = width / W
+                scale_factor = width / W
                 new_width = width
-                new_height = round(H * ratio)
-                scale_factor = ratio
+                new_height = round(H * scale_factor)
             elif width != 0 and height != 0:
-                ratio = min(width / W, height / H)
-                new_width = round(W * ratio)
-                new_height = round(H * ratio)
-                scale_factor = ratio
+                scale_factor = min(width / W, height / H)
+                new_width = round(W * scale_factor)
+                new_height = round(H * scale_factor)
 
             if keep_proportion.startswith("pad"):
                 if crop_position == "center":
@@ -4014,177 +4009,198 @@ class Image_Resize_sum:
                     pad_bottom = height - new_height - pad_top
 
         elif keep_proportion == "crop":
-            old_width = W
-            old_height = H
-            old_aspect = old_width / old_height
+            old_aspect = W / H
             new_aspect = width / height
             
-            if old_aspect > new_aspect:  # Image is wider than target
-                crop_h = old_height
-                crop_w = round(old_height * new_aspect)
-                scale_factor = height / old_height
-            else:  # Image is taller than target
-                crop_w = old_width
-                crop_h = round(old_width / new_aspect)
-                scale_factor = width / old_width
+            if old_aspect > new_aspect:
+                crop_h = H
+                crop_w = round(H * new_aspect)
+                scale_factor = height / H
+            else:
+                crop_w = W
+                crop_h = round(W / new_aspect)
+                scale_factor = width / W
             
-            # Calculate crop position
             if crop_position == "center":
-                crop_x = (old_width - crop_w) // 2
-                crop_y = (old_height - crop_h) // 2
+                crop_x = (W - crop_w) // 2
+                crop_y = (H - crop_h) // 2
             elif crop_position == "top":
-                crop_x = (old_width - crop_w) // 2
+                crop_x = (W - crop_w) // 2
                 crop_y = 0
             elif crop_position == "bottom":
-                crop_x = (old_width - crop_w) // 2
-                crop_y = old_height - crop_h
+                crop_x = (W - crop_w) // 2
+                crop_y = H - crop_h
             elif crop_position == "left":
                 crop_x = 0
-                crop_y = (old_height - crop_h) // 2
+                crop_y = (H - crop_h) // 2
             elif crop_position == "right":
-                crop_x = old_width - crop_w
-                crop_y = (old_height - crop_h) // 2
+                crop_x = W - crop_w
+                crop_y = (H - crop_h) // 2
 
-        # Apply divisible_by constraint
         final_width = new_width
         final_height = new_height
         if divisible_by > 1:
             final_width = final_width - (final_width % divisible_by)
             final_height = final_height - (final_height % divisible_by)
+            if new_width != 0:
+                scale_factor *= (final_width / new_width)
+            if new_height != 0:
+                scale_factor *= (final_height / new_height)
 
         out_image = image.clone()
         out_mask = processed_mask.clone() if processed_mask is not None else None
-        
-        # 创建填充遮罩 (padding_mask) - 标记填充区域
         padding_mask = None
-        
-        # Handle cropping
+
         if keep_proportion == "crop":
             out_image = out_image.narrow(-2, crop_x, crop_w).narrow(-3, crop_y, crop_h)
             if out_mask is not None:
-                # 对mask也进行相同的裁剪操作
                 out_mask = out_mask.narrow(-1, crop_x, crop_w).narrow(-2, crop_y, crop_h)
-        
-        # Scale image
-        out_image = common_upscale(out_image.movedim(-1,1), final_width, final_height, upscale_method, crop="disabled").movedim(1,-1)
+
+        out_image = common_upscale(
+            out_image.movedim(-1, 1),
+            final_width,
+            final_height,
+            upscale_method,
+            crop="disabled"
+        ).movedim(1, -1)
 
         if out_mask is not None:
             if upscale_method == "lanczos":
-                out_mask = common_upscale(out_mask.unsqueeze(1).repeat(1, 3, 1, 1), final_width, final_height, upscale_method, crop="disabled").movedim(1,-1)[:, :, :, 0]
+                out_mask = common_upscale(
+                    out_mask.unsqueeze(1).repeat(1, 3, 1, 1),
+                    final_width,
+                    final_height,
+                    upscale_method,
+                    crop="disabled"
+                ).movedim(1, -1)[:, :, :, 0]
             else:
-                out_mask = common_upscale(out_mask.unsqueeze(1), final_width, final_height, upscale_method, crop="disabled").squeeze(1)
-            
-        # Handle padding
-        if keep_proportion.startswith("pad"):
-            if pad_left > 0 or pad_right > 0 or pad_top > 0 or pad_bottom > 0:
-                padded_width = final_width + pad_left + pad_right
-                padded_height = final_height + pad_top + pad_bottom
-                if divisible_by > 1:
-                    width_remainder = padded_width % divisible_by
-                    height_remainder = padded_height % divisible_by
-                    if width_remainder > 0:
-                        extra_width = divisible_by - width_remainder
-                        pad_right += extra_width
-                    if height_remainder > 0:
-                        extra_height = divisible_by - height_remainder
-                        pad_bottom += extra_height
-                
-                color_map = {
-                    "black": "0, 0, 0",
-                    "white": "255, 255, 255",
-                    "red": "255, 0, 0",
-                    "green": "0, 255, 0",
-                    "blue": "0, 0, 255",
-                    "gray": "128, 128, 128"
-                }
-                
-                pad_color_value = color_map[pad_color]
-                
-                out_image, padding_mask = self.resize_pad(out_image, pad_left, pad_right, pad_top, pad_bottom, 0, pad_color_value, "edge" if keep_proportion == "pad_edge" else "color")
-                
-                # 处理输入遮罩
-                if out_mask is not None:
-                    out_mask = out_mask.unsqueeze(1).repeat(1, 3, 1, 1).movedim(1,-1)
-                    out_mask, _ = self.resize_pad(out_mask, pad_left, pad_right, pad_top, pad_bottom, 0, pad_color_value, "edge" if keep_proportion == "pad_edge" else "color")
-                    out_mask = out_mask[:, :, :, 0]
-                else:
-                    B, H_pad, W_pad, _ = out_image.shape
-                    out_mask = torch.ones((B, H_pad, W_pad), dtype=out_image.dtype, device=out_image.device)
-                    out_mask[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width] = 0.0
+                out_mask = common_upscale(
+                    out_mask.unsqueeze(1),
+                    final_width,
+                    final_height,
+                    upscale_method,
+                    crop="disabled"
+                ).squeeze(1)
 
-        # 如果没有输入mask且不是crop模式，创建一个默认的mask
-        if out_mask is None and keep_proportion != "crop":
-            out_mask = torch.zeros((out_image.shape[0], out_image.shape[1], out_image.shape[2]), dtype=torch.float32)
-        elif out_mask is None:
-            # 对于crop模式，如果无mask输入，创建一个默认mask
-            out_mask = torch.zeros((out_image.shape[0], out_image.shape[1], out_image.shape[2]), dtype=torch.float32)
-        
-        # 创建合成遮罩 - 合并填充遮罩和输入遮罩
-        # 1表示遮罩区域，0表示非遮罩区域
+        if keep_proportion.startswith("pad") and (pad_left > 0 or pad_right > 0 or pad_top > 0 or pad_bottom > 0):
+            padded_width = final_width + pad_left + pad_right
+            padded_height = final_height + pad_top + pad_bottom
+            if divisible_by > 1:
+                width_remainder = padded_width % divisible_by
+                height_remainder = padded_height % divisible_by
+                if width_remainder > 0:
+                    extra_width = divisible_by - width_remainder
+                    pad_right += extra_width
+                    padded_width += extra_width
+                if height_remainder > 0:
+                    extra_height = divisible_by - height_remainder
+                    pad_bottom += extra_height
+                    padded_height += extra_height
+            
+            color_map = {
+                "black": "0, 0, 0",
+                "white": "255, 255, 255",
+                "red": "255, 0, 0",
+                "green": "0, 255, 0",
+                "blue": "0, 0, 255",
+                "gray": "128, 128, 128"
+            }
+            pad_color_value = color_map[pad_color]
+            
+            out_image, padding_mask = self.resize_pad(
+                out_image,
+                pad_left,
+                pad_right,
+                pad_top,
+                pad_bottom,
+                0,
+                pad_color_value,
+                "edge" if keep_proportion == "pad_edge" else "color"
+            )
+            
+            if out_mask is not None:
+                out_mask = out_mask.unsqueeze(1).repeat(1, 3, 1, 1).movedim(1, -1)
+                out_mask, _ = self.resize_pad(
+                    out_mask,
+                    pad_left,
+                    pad_right,
+                    pad_top,
+                    pad_bottom,
+                    0,
+                    pad_color_value,
+                    "edge" if keep_proportion == "pad_edge" else "color"
+                )
+                out_mask = out_mask[:, :, :, 0]
+            else:
+                out_mask = torch.ones((B, padded_height, padded_width), dtype=out_image.dtype, device=out_image.device)
+                out_mask[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width] = 0.0
+
+        if out_mask is None:
+            if keep_proportion != "crop":
+                out_mask = torch.zeros((out_image.shape[0], out_image.shape[1], out_image.shape[2]), dtype=torch.float32)
+            else:
+                out_mask = torch.zeros((out_image.shape[0], out_image.shape[1], out_image.shape[2]), dtype=torch.float32)
+
         if padding_mask is not None:
-            # 填充遮罩是1的地方表示是填充区域
-            # 输入遮罩是1的地方表示是遮罩区域
-            # 合成遮罩取两者的并集
             composite_mask = torch.clamp(padding_mask + out_mask, 0, 1)
         else:
-            # 如果没有填充遮罩，合成遮罩就是输入遮罩
             composite_mask = out_mask.clone()
-        
-        # 创建 stitch 信息用于还原
+
         stitch_info = {
-            "original_image": original_image,  # 原始图像
+            "original_image": original_image,
             "original_shape": (original_H, original_W),
-            "resized_shape": (out_image.shape[1], out_image.shape[2]),  # (height, width)
-            "crop_position": (crop_x, crop_y),  # (x, y)
-            "crop_size": (crop_w, crop_h),  # (width, height)
+            "resized_shape": (out_image.shape[1], out_image.shape[2]),
+            "crop_position": (crop_x, crop_y),
+            "crop_size": (crop_w, crop_h),
             "pad_info": (pad_left, pad_right, pad_top, pad_bottom),
             "keep_proportion": keep_proportion,
             "upscale_method": upscale_method,
-            "scale_factor": scale_factor,  # 添加缩放因子
-            "final_size": (final_width, final_height),  # 添加最终尺寸
-            "image_position": (pad_left, pad_top) if keep_proportion.startswith("pad") else (0, 0),  # 图像在填充后的画布中的位置
-            "has_input_mask": mask is not None  # 标记是否有输入mask
+            "scale_factor": scale_factor,
+            "final_size": (final_width, final_height),
+            "image_position": (pad_left, pad_top) if keep_proportion.startswith("pad") else (0, 0),
+            "has_input_mask": mask is not None
         }
         
-        return (out_image.cpu(), out_mask.cpu(), stitch_info, composite_mask.cpu())
+        scale_factor =1/scale_factor
 
-        
+        return (out_image.cpu(), out_mask.cpu(), stitch_info, composite_mask.cpu(), scale_factor)
+
+
+
     def resize_pad(self, image, left, right, top, bottom, extra_padding, color, pad_mode, mask=None, target_width=None, target_height=None):
-        import torch.nn.functional as F  # 添加这行导入
-        
+        import torch.nn.functional as F
+
         B, H, W, C = image.shape
-        
+
         if mask is not None:
             BM, HM, WM = mask.shape
             if HM != H or WM != W:
                 mask = F.interpolate(mask.unsqueeze(1), size=(H, W), mode='nearest-exact').squeeze(1)
 
-        bg_color = [int(x.strip())/255.0 for x in color.split(",")]
+        bg_color = [int(x.strip()) / 255.0 for x in color.split(",")]
         if len(bg_color) == 1:
             bg_color = bg_color * 3
         bg_color = torch.tensor(bg_color, dtype=image.dtype, device=image.device)
-        
+
         if target_width is not None and target_height is not None:
             if extra_padding > 0:
                 image = common_upscale(image.movedim(-1, 1), W - extra_padding, H - extra_padding, "lanczos", "disabled").movedim(1, -1)
                 B, H, W, C = image.shape
 
-            padded_width = target_width
-            padded_height = target_height
-            pad_left = (padded_width - W) // 2
-            pad_right = padded_width - W - pad_left
-            pad_top = (padded_height - H) // 2
-            pad_bottom = padded_height - H - pad_top
+            pad_left = (target_width - W) // 2
+            pad_right = target_width - W - pad_left
+            pad_top = (target_height - H) // 2
+            pad_bottom = target_height - H - pad_top
         else:
             pad_left = left + extra_padding
             pad_right = right + extra_padding
             pad_top = top + extra_padding
             pad_bottom = bottom + extra_padding
 
-            padded_width = W + pad_left + pad_right
-            padded_height = H + pad_top + pad_bottom
+        padded_width = W + pad_left + pad_right
+        padded_height = H + pad_top + pad_bottom
+
         out_image = torch.zeros((B, padded_height, padded_width, C), dtype=image.dtype, device=image.device)
-        
         for b in range(B):
             if pad_mode == "edge":
                 top_edge = image[b, 0, :, :]
@@ -4201,14 +4217,55 @@ class Image_Resize_sum:
                 out_image[b, :, :, :] = bg_color.unsqueeze(0).unsqueeze(0)
                 out_image[b, pad_top:pad_top+H, pad_left:pad_left+W, :] = image[b]
 
-        
-        # 创建填充遮罩 - 1表示填充区域，0表示原始图像区域
         padding_mask = torch.ones((B, padded_height, padded_width), dtype=image.dtype, device=image.device)
         for m in range(B):
-            # 原始图像区域设为0
             padding_mask[m, pad_top:pad_top+H, pad_left:pad_left+W] = 0.0
 
         return (out_image, padding_mask)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
