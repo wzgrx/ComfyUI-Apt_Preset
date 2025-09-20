@@ -923,16 +923,16 @@
         "name": "图像"
       },
       "width": {
-        "name": "宽度"
+        "name": "限宽"
       },
       "height": {
-        "name": "高度"
+        "name": "限高"
       },
       "upscale_method": {
         "name": "缩放方法"
       },
       "keep_proportion": {
-        "name": "保持比例"
+        "name": "比例模式"
       },
       "pad_color": {
         "name": "填充颜色"
