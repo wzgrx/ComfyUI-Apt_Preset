@@ -9157,7 +9157,7 @@
       "mask": {
         "name": "遮罩"
       },
-      "scale_mode": {
+      "crop_mode": {
         "name": "缩放模式"
       },
       "crop_img_bj": {
@@ -9167,14 +9167,14 @@
       "upscale_method": {
         "name": "缩放方法"
       },
-      "scale_longside": {
+      "long_side": {
         "name": "长边缩放"
       },
-      "target_w": {
-        "name": "裁切图宽"
+      "expand_width": {
+        "name": "宽扩展"
       },
-      "target_h": {
-        "name": "裁切图高"
+      "expand_height": {
+        "name": "高扩展"
       },
 
       "mask_stack": {
@@ -9248,6 +9248,35 @@
       }
     }
   },
+
+
+"Image_smooth_blur": {
+    "display_name": "图像_羽化",
+    "inputs": {
+      "image": {
+        "name": "图像"
+      },
+      "mask": {
+        "name": "遮罩"
+      },
+      "smoothness": {
+        "name": "羽化"
+      },
+      "bg_color": {
+        "name": "背景颜色"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "图像"
+      },
+      "1": {
+        "name": "羽化遮罩"
+      }
+    }
+  },
+
+
   "Data_chx_Merge": {
     "display_name": "管道数据_合并",
     "inputs": {
