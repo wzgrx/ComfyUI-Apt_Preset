@@ -355,12 +355,12 @@ NODE_CLASS_MAPPINGS= {
 #----------------image------------------------
 
 "Image_pad_outfill": Image_pad_outfill,  #N
+
+"Image_transform_solo": Image_transform_solo,  
+"Image_transform_layer":Image_transform_layer,   
+
 "Image_Upscaletile": Image_Upscaletile,    
-
-
-
 "Image_Resize_longsize": Image_Resize_longsize,
-
 "Image_Resize_sum": Image_Resize_sum,    
 "Image_Resize_sum_restore":Image_Resize_sum_restore,
 
@@ -368,9 +368,10 @@ NODE_CLASS_MAPPINGS= {
 "Image_batch_composite": Image_batch_composite,
 
 
-"Image_transform_solo": Image_transform_solo,  
-"Image_transform_layer":Image_transform_layer,      
+  
 "Image_solo_crop": Image_solo_crop,  
+"Image_solo_stitch": Image_solo_stitch, 
+
 
 
 "Image_Pair_Merge": Image_Pair_Merge,  
@@ -378,7 +379,7 @@ NODE_CLASS_MAPPINGS= {
 
 
 
-
+"Image_smooth_blur": Image_smooth_blur,
 "Image_Channel_Extract": Image_Channel_Extract,
 "Image_Channel_Apply": Image_Channel_Apply,
 "Image_Channel_RemoveAlpha": Image_Channel_RemoveAlpha,
@@ -520,7 +521,7 @@ NODE_CLASS_MAPPINGS= {
 "chx_Ksampler_Kontext": chx_Ksampler_Kontext,   #(Deprecated)
 "chx_Ksampler_Kontext_adv": chx_Ksampler_Kontext_adv,  #(Deprecated)
 "chx_Ksampler_Kontext_inpaint": chx_Ksampler_Kontext_inpaint,  #(Deprecated)
-"Image_solo_stitch": Image_solo_stitch,  #(Deprecated)
+
 
 "sum_stack_all": sum_stack_all,#(Deprecated)
 "stack_sum_pack": stack_sum_pack,#(Deprecated)
