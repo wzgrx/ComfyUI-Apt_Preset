@@ -3291,7 +3291,7 @@ class Image_solo_crop:
                 "upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
                 "target_w": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 2}),
                 "target_h": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 2}),
-                "divisible_by": ("INT", {"default": 2, "min": 1, "max": 128, "step": 2}),
+                "divisible_by": ("INT", {"default": 2, "min": 0, "max": 128, "step": 1}),
             },
             "optional": {
                 "mask": ("MASK",),
