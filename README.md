@@ -19,6 +19,10 @@
 
 2025.9.20  添加尺寸还原节点组Image_Resize_sum  and Image_Resize_sum_restore
 
+2025.9.27  整合kontext，wan,qwenEdit功能包节点
+
+
+
 
 pre_USO 支持局部重绘，图像编辑+风格参考
 <img width="2976" height="1520" alt="image" src="https://github.com/user-attachments/assets/8ffdac4c-bc4b-4437-8c7d-02144a2d034d" />
