@@ -944,11 +944,12 @@ class sum_stack_QwenEdit:
         if model is None:
             model = context.get("model", None)
 
+        clip = context.get("clip", None)
+
         if lora_stack is not None:
             model, clip = Apply_LoRAStack().apply_lora_stack(model, clip, lora_stack)
 
         negative= context.get("negative", None)
-        clip = context.get("clip", None)
         vae = context.get("vae", None)
         latent = context.get("latent", None)
 
