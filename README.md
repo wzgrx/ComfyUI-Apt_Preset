@@ -10,22 +10,33 @@
 
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
+
 1、全能加载器 Sum_load_adv, 支持 GGuf模型
 
 1）各种工作流的模型组合，和官方工作流是一样的。
+
 ①XL，SD 模式，单一模型加载： checkpoint 或者 Unet 或者 over model. 
+
 ②wan2.1,wan2,2, QwenEdit 加载模型： Unet +  clip1 
+
 ②Flux\Kontext 模式：加载模型Unet +  clip1 +  clip2   （注意：按顺序，不要clip1+clip3）
+
 ③SD3.5模式：加载模型 Unet+clip1 +clip2+clip3
+
 ④Hi-dream模式：加载模型 Unet+clip1 +clip2+clip3+clip4
 
 2）覆盖模式over_model和over_clip
+
 ①使用over_model，加载器内部对应的modle或Unet失效，会直接输出model
+
 ②使用over_clip，加载器内部对应的clip1,2,3,4全部失效， 会直接输出clip
 
 3）预设保存，可以将加载模型，和采样方法统一保存下来
+
 ① 至少要选择一个任意预设，否则会报错
+
 ②选择任意预设后，所有参数都可以任意修改并生效。
+
 ③可以将新设置的参数，保存为新的预设，但是要重启comfyui才可以选择使用
 
 ![image](https://github.com/user-attachments/assets/c937203d-6ada-4b58-a882-512290e30dcd)
@@ -33,6 +44,7 @@
 
 
 2、控制器stack：功能化模块，与之关联的控制工具，集中一起
+
 ①总控_image堆
 ②总控_wan堆
 ③总控_AD堆
@@ -46,7 +58,9 @@
 3、采样器 Sampler：丰富的采样方式，省去重复连线
 
 ①基础采样器
+
 ②特殊功能采样器
+
 集成好的采样器能快速实现常用功能，一般的工作流要实现生成图，修复、放大全流程，需要大量的节点配合，像下面会变的非常简单 
 
 
