@@ -15,9 +15,9 @@
 
 1）各种工作流的模型组合，和官方工作流是一样的。
 
-①XL，SD 模式，单一模型加载： checkpoint 或者 Unet 或者 over model. 
+①XL，SD 模式：模型加载checkpoint 或者 Unet 或者 over model. 
 
-②wan2.1,wan2,2, QwenEdit 加载模型： Unet +  clip1 
+②wan2.1,wan2,2, QwenEdit 模式：加载模型 Unet +  clip1 
 
 ②Flux\Kontext 模式：加载模型Unet +  clip1 +  clip2   （注意：按顺序，不要clip1+clip3）
 
