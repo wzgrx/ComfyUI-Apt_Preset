@@ -42,8 +42,7 @@
 ![image](https://github.com/user-attachments/assets/c937203d-6ada-4b58-a882-512290e30dcd)
 
 
-
-##2、控制器stack：功能化模块，与之关联的控制工具，集中一起
+## <font color="#000000"> 2、控制器stack：功能化模块，与之关联的控制工具，集中一起</font>
 
 ①总控_image堆
 ②总控_wan堆
@@ -54,8 +53,7 @@
 
 
 
-
-##3、采样器 Sampler：丰富的采样方式，省去重复连线
+## <font color="#000000">3、采样器 Sampler：丰富的采样方式，省去重复连线</font>
 
 ①基础采样器
 
