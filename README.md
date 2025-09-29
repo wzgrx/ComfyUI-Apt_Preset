@@ -68,7 +68,7 @@
 
 
 # <font color="#000000"> 三 、Installation</font>
-Clone the repository to the **custom_nodes** directory and install dependencies
+将存储库克隆到**custom_nodes**目录并安装依赖项
 
 ```
 
