@@ -90,7 +90,8 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 
 
 # <font color="#000000">四、参考节点包</font>
-The code of this open-source project has referred to the following code during the development process. We express our sincere gratitude for their contributions in the relevant fields.
+
+这个开源项目的代码在开发过程中参考了以下代码，对他们在相关领域所做的贡献表示诚挚的感谢。
 
 | [ComfyUI](https://github.com/comfyanonymous/ComfyUI)                      | [ComfyUI\_VisualStylePrompting](https://github.com/ExponentialML/ComfyUI_VisualStylePrompting) | [Comfyroll_CustomNodes](https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes) |
 | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
