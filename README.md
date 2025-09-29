@@ -1,5 +1,5 @@
 
-<img width="4131" height="634" alt="生成特定艺术字 (2)" src="https://github.com/user-attachments/assets/c6ca505f-2cf7-4e9e-83ea-cc1581cd6efb" />
+<img width="6131" height="634" alt="生成特定艺术字 (2)" src="https://github.com/user-attachments/assets/2de79be9-c04a-46a4-b702-53b3a65ac79e" />
 
 
 # <font color="#000000"> 一、Update record更新记录</font>
