@@ -11,7 +11,7 @@
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
 
-## <font color="#000000"> 1、全能加载器 Sum_load_adv, 支持 GGuf模型</font>
+## <font color="#0000FF"> 1、全能加载器 Sum_load_adv, 支持 GGuf模型</font>
 
 1）各种工作流的模型组合，和官方工作流是一样的。
 
@@ -42,25 +42,28 @@
 ![image](https://github.com/user-attachments/assets/c937203d-6ada-4b58-a882-512290e30dcd)
 
 
-## <font color="#000000"> 2、控制器stack：功能化模块，与之关联的控制工具，集中一起</font>
+## <font color="#0000FF"> 2、控制器stack：功能化模块，与之关联的控制工具，集中一起</font>
 
 ①总控_image堆
+
 ②总控_wan堆
+
 ③总控_AD堆
+
 ④总控_Kontext堆
+
 ⑤总控_QwenEdit堆
 
 
 
 
-## <font color="#000000">3、采样器 Sampler：丰富的采样方式，省去重复连线</font>
+## <font color="#0000FF">3、采样器 Sampler：丰富的采样方式，省去重复连线</font>
 
 ①基础采样器
 
 ②特殊功能采样器
 
 集成好的采样器能快速实现常用功能，一般的工作流要实现生成图，修复、放大全流程，需要大量的节点配合，像下面会变的非常简单 
-
 
 
 
