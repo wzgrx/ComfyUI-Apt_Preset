@@ -4,7 +4,9 @@
 # <font color="#000000"> 概述</font>
 当前工作流连线愈发密集，不仅理解困难、操作繁琐，还存在统一性差的问题；随着工作流保存量增多，实际使用时不仅频繁报错，还需重新学习操作方法。为此开发插件，旨在简化工作流、明晰其控制思路，并将围绕 “加载器 ---- 控制器 ----- 采样器” 框架对节点进行设计。
 
-<a href="./README.md">English</a>     <a href="./README.ZH.md">中文版</a>
+## <a href="./README_ZH.md">中文版</a> >> <a href="./README.md">English</a>
+
+
 # <font color="#000000"> 一、Update record更新记录</font>
 
 
