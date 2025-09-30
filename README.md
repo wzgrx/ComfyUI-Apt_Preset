@@ -92,19 +92,6 @@ git clone https://github.com/cardenluo/ComfyUI-Apt_Preset.git
 要使用load_Nanchaku节点，请先安装[ComfyUI-nunchaku](https://github.com/nunchaku-tech/ComfyUI-nunchaku) .
 
 
-# <font color="#000000">四、参考节点包</font>
-
-这个开源项目的代码在开发过程中参考了以下代码，对他们在相关领域所做的贡献表示诚挚的感谢。
-
-| [ComfyUI](https://github.com/comfyanonymous/ComfyUI)                      | [ComfyUI\_VisualStylePrompting](https://github.com/ExponentialML/ComfyUI_VisualStylePrompting) | [Comfyroll_CustomNodes](https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes) |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [ComfyUI-EasyDeforum](https://github.com/Chan-0312/ComfyUI-EasyDeforum)   | [ComfyUI-Advanced-ControlNet](https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet)      | [ComfyUI-Inspire-Pack](https://github.com/ltdrdata/ComfyUI-Inspire-Pack)         |
-| [rgthree-comfy](https://github.com/rgthree/rgthree-comfy)                 | [ComfyUI\_mittimiLoadPreset2](https://github.com/mittimi/ComfyUI_mittimiLoadPreset2)           | [ComfyUI-Impact-Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack)           |
-| [ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus) | [ComfyUI-AnimateDiff-Evolved](https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved)      | [ComfyUI-Easy-Use](https://github.com/yolain/ComfyUI-Easy-Use)                   |
-| [ComfyUI_essentials](https://github.com/cubiq/ComfyUI_essentials)         | [Comfyui__Flux_Style_Adjust](https://github.com/yichengup/Comfyui_Flux_Style_Adjust)           | [ComfyUI_LayerStyle_](https://github.com/chflame163/ComfyUI_LayerStyle)          |
-| [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes)               | [ComfyUI-AudioScheduler](https://github.com/a1lazydog/ComfyUI-AudioScheduler)                  | [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF)                           |
-| [ComfyUI-IC-Light](https://github.com/kijai/ComfyUI-IC-Light)             |                                                                                                |                                                                                  |
-
 
 ## Disclaimer免责声明
 This open-source project and its contents are provided "AS IS" without any express or implied warranties, including but not limited to warranties of merchantability, fitness for a particular purpose, and non-infringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.
