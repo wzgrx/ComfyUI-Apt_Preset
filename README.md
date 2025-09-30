@@ -111,5 +111,5 @@ Users are responsible for ensuring compliance with all applicable laws and regul
 
 
 ## 关注我，分享工作流轻松搭建的方法
-<img width="333" height="395" alt="PixPin_2025-07-18_09-12-23" src="https://github.com/user-attachments/assets/35238903-a94c-4802-a67a-5aea3580d533" />
+B站 https://space.bilibili.com/2008798642?spm_id_from=333.33.0.0
 
