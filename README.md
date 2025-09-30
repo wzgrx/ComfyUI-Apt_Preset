@@ -4,7 +4,7 @@
 # Overview
 The current workflow connections are becoming increasingly dense, making them difficult to understand and operate, and there are issues with poor consistency. As the number of saved workflows increases, frequent errors occur during actual use, and the operation methods need to be relearned. To address this, a plugin has been developed to simplify workflows, clarify control concepts, and design nodes around the "Loader ---- Controller ----- Sampler" framework.
 
-#<a href="./README.md">English</a> >>>> <a href="./README_ZH.md">中文版</a>
+# <a href="./README.md">English</a> >> <a href="./README_ZH.md">中文版</a>
 
 
 # I. Update Record
