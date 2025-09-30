@@ -44,16 +44,17 @@
 
 ## <font color="#0000FF"> 2、控制器stack：功能化模块，与之关联的控制工具，集中一起</font>
 
-①总控_image堆
+①总控_image堆：通用的图像生成控制，SD,XL,Flux的常用控制工具集成在一起
 
-②总控_wan堆
+②总控_wan堆：官方支持的所有wan视频生成节点
 
-③总控_AD堆
+③总控_AD堆：Animatediff动画生成控制，提示词调度、CN调度、IPA调度等
 
-④总控_Kontext堆
+④总控_Kontext堆：多图参考，分区生成，redux迁移，union_controlnet
 
-⑤总控_QwenEdit堆
+⑤总控_QwenEdit堆：多图参考，union_controlnet
 
+<img width="1612" height="372" alt="image" src="https://github.com/user-attachments/assets/fa16c55f-d875-421a-badc-ffcf015860e5" />
 
 
 
