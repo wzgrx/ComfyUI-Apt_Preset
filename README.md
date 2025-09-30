@@ -44,7 +44,7 @@
 
 ## <font color="#0000FF"> 2、控制器stack：功能化模块，与之关联的控制工具，集中一起</font>
 
-①总控_image堆：通用图像控制 SD,XL,Flux等，Ipa风格参考，redux迁移，Union_controlnet, controlnet_adv， inpaint重绘
+①总控_image堆：通用控制SD,XL,Flux等，Ipa风格，redux迁移，Union_controlnet, controlnet_adv，inpaint重绘
 
 ②总控_wan堆：官方支持的所有wan视频生成节点
 
