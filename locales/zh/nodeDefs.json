@@ -1582,6 +1582,9 @@
       "mask": {
         "name": "遮罩"
       },
+      "pad_mask_remove": {
+        "name": "移除pad遮罩"
+      },      
       "get_image_size": {
         "name": "获取图像尺寸"
       },
@@ -9202,53 +9205,71 @@
       }
     }
   },
+
+
   "Image_solo_stitch": {
     "display_name": "图像图层_粘合",
+        "inputs": {
+            "bj_image": {
+                "name": "背景图像"
+            },
+            "inpainted_image": {
+                "name": "重绘图像"
+            },
+            "mask": {
+                "name": "遮罩"
+            },
+            "stitch": {
+                "name": "拼接"
+            },
+            "smoothness": {
+                "name": "羽化"
+            },
+            "blend_factor": {
+                "name": "混合因子"
+            },
+            "blend_mode": {
+                "name": "混合模式"
+            },
+            "opacity": {
+                "name": "不透明度"
+            },
+            "stitch_mode": {
+                "name": "拼接模式"
+            }
+        },
+        "outputs": {
+            "image": {
+                "name": "图像"
+            }
+        }
+    
+  },
+
+
+
+"math_Remap_slide": {
+    "display_name": "运算_滑块映射值",
     "inputs": {
-      "inpainted_image": {
-        "name": "重绘图像"
+      "source_min": {
+        "name": "源最小值"
       },
-      "stitch": {
-        "name": "拼接"
+      "source_max": {
+        "name": "源最大值"
       },
-      "smoothness": {
-        "name": "羽化"
-      },
-      "bj_image": {
-        "name": "背景底图"
-      },
-      "source": {
-        "name": "来源"
-      },
-      "x": {
-        "name": "X坐标"
-      },
-      "y": {
-        "name": "Y坐标"
-      },
-      "mask": {
-        "name": "遮罩"
-      },
-      "multiplier": {
-        "name": "乘数"
-      },
-      "resize_source": {
-        "name": "调整源大小"
-      },
-      "rescale_algorithm": {
-        "name": "重新缩放算法"
+      "slide": {
+        "name": "滑块值"
       }
     },
     "outputs": {
       "0": {
-        "name": "合成图"
+        "name": "源值"
       },
       "1": {
-        "name": "裁切图"
+        "name": "滑块映射值"
       }
     }
   },
-
 
 "Image_smooth_blur": {
     "display_name": "图像_羽化",
