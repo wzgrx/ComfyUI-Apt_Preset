@@ -66,6 +66,7 @@
 
 集成好的采样器能快速实现常用功能，一般的工作流要实现生成图，修复、放大全流程，需要大量的节点配合，像下面会变的非常简单 
 
+![image](https://github.com/user-attachments/assets/0c62a1f7-e92f-41bc-a6fb-447b3cc7ea48)
 
 ## <font color="#0000FF">4、实用节点：图像、遮罩、数据等大量实用的工具</font>
 
