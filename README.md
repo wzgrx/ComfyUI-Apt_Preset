@@ -68,7 +68,10 @@ As in the example below, operations like secondary sampling repair and refine en
 
 ## 4. Utility Nodes: Image, mask, data processing tools
 
-1. Data types: Data conversion, data creation
+1. Data types: Data conversion, data creation，data operation
+
+<img width="3405" height="1278" alt="image" src="https://github.com/user-attachments/assets/fb743a4b-0406-4a73-b8ae-4e8e0d8e38b2" />
+
 
 2. Image processing: A powerful image processing combination: pre-processing, intermediate generation, and post-recovery
 
