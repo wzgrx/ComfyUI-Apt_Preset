@@ -80,7 +80,7 @@ As in the example below, operations like secondary sampling repair and refine en
 
 3. Mask processing: Creation, conversion, and transformation of masks
 
-   <img width="3346" height="1305" alt="image" src="https://github.com/user-attachments/assets/d9804ac8-7d17-4b77-ad67-753eb82920cb" />
+<img width="3562" height="1079" alt="image" src="https://github.com/user-attachments/assets/8adf81a2-a777-45b2-9e67-19d85fb66855" />
 
 
 # III. Installation
