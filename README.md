@@ -78,7 +78,10 @@ As in the example below, operations like secondary sampling repair and refine en
 <img width="2962" height="1149" alt="PixPin_2025-10-01_08-38-57" src="https://github.com/user-attachments/assets/5d46bfde-bfd9-47a2-966b-1de24acca80c" />
 
 
-3. Mask processing:
+3. Mask processing: Creation, conversion, and transformation of masks
+
+   <img width="3346" height="1305" alt="image" src="https://github.com/user-attachments/assets/d9804ac8-7d17-4b77-ad67-753eb82920cb" />
+
 
 # III. Installation
 Clone the repository to the **custom_nodes** directory and install dependencies
