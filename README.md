@@ -53,7 +53,8 @@ The current workflow connections are becoming increasingly dense, making them di
 
 ⑤ General Control QwenEdit Stack: Multi-image reference, union_controlnet
 
-<img width="1612" height="372" alt="image" src="https://github.com/user-attachments/assets/fa16c55f-d875-421a-badc-ffcf015860e5" />
+<img width="2890" height="715" alt="image" src="https://github.com/user-attachments/assets/27e6733d-4d2e-49d3-8249-8a6f86ff883f" />
+
 
 ## 3. Sampler: Rich sampling methods to eliminate repetitive connections
 
@@ -69,7 +70,10 @@ As in the example below, operations like secondary sampling repair and refine en
 
 1. Data types: Data conversion, data creation
 
-2. Image processing:
+2. Image processing: A powerful image processing combination: pre-processing, intermediate generation, and post-recovery
+
+<img width="2962" height="1149" alt="PixPin_2025-10-01_08-38-57" src="https://github.com/user-attachments/assets/5d46bfde-bfd9-47a2-966b-1de24acca80c" />
+
 
 3. Mask processing:
 
