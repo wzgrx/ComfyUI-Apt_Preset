@@ -76,12 +76,15 @@
 <img width="3405" height="1278" alt="image" src="https://github.com/user-attachments/assets/cf70f053-60a0-42c7-b72f-d7768d393d2b" />
 
 
-2、图像处理：强大的图像处理组合
+2、图像处理：图像处理-->生成-->还原，单图、裁切图、双图组合
 
 <img width="2523" height="984" alt="image" src="https://github.com/user-attachments/assets/0730674b-9370-427b-82cb-ba358cf98eaf" />
 
 
-3、遮罩处理：
+3、遮罩处理：创建、转换、变形、运算，全套遮罩工具
+
+<img width="3562" height="1079" alt="image" src="https://github.com/user-attachments/assets/8adf81a2-a777-45b2-9e67-19d85fb66855" />
+
 
 # <font color="#000000"> 三 、Installation</font>
 将存储库克隆到**custom_nodes**目录并安装依赖项
