@@ -71,9 +71,9 @@
 
 ## <font color="#0000FF">4、实用节点：图像、遮罩、数据处理等工具</font>
 
-1、数据类型：数据转化、数据创建
+1、数据类型：数据转化、数据创建、数据运算
 
-
+<img width="3405" height="1278" alt="image" src="https://github.com/user-attachments/assets/cf70f053-60a0-42c7-b72f-d7768d393d2b" />
 
 
 2、图像处理：强大的图像处理组合
