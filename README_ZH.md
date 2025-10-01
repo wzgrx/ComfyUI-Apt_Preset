@@ -56,8 +56,7 @@
 
 ⑤总控_QwenEdit堆：多图参考，union_controlnet
 
-<img width="1612" height="372" alt="image" src="https://github.com/user-attachments/assets/fa16c55f-d875-421a-badc-ffcf015860e5" />
-
+<img width="2890" height="715" alt="image" src="https://github.com/user-attachments/assets/b96f1cb7-ab84-489e-859b-cb54ff0ab172" />
 
 
 ## <font color="#0000FF">3、采样器 Sampler：丰富的采样方式，省去重复连线</font>
@@ -74,7 +73,13 @@
 
 1、数据类型：数据转化、数据创建
 
-2、图像处理：
+
+
+
+2、图像处理：强大的图像处理组合
+
+<img width="2523" height="984" alt="image" src="https://github.com/user-attachments/assets/0730674b-9370-427b-82cb-ba358cf98eaf" />
+
 
 3、遮罩处理：
 
