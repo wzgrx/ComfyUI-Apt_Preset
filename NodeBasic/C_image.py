@@ -2830,7 +2830,10 @@ class Image_transform_crop:
     RETURN_NAMES = ("composite", "mask", "line_mask",)
     FUNCTION = "process"
     CATEGORY = "Apt_Preset/image"
-  
+    DESCRIPTION = """
+-贴合中心是遮罩本地中心坐标，所以对接裁切节点时，会有偏心问题
+-如果要消除偏心，则取消使用扩展宽等调节
+"""
 
 
     def process( self, x_offset, y_offset, rotation, scale, edge_detection, edge_thickness, edge_color, mask_expand, smoothness,
@@ -3895,6 +3898,7 @@ class Image_Resize_sum_restore:
                 "resized_image": ("IMAGE",),
                 "mask": ("MASK",),
                 "stitch": ("STITCH3",),
+                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "area" }),
             },
             "optional": {}
         }
@@ -3904,7 +3908,7 @@ class Image_Resize_sum_restore:
     RETURN_NAMES = ("restored_image", "restored_mask",)
     FUNCTION = "restore"
 
-    def restore(self, resized_image, stitch, mask=None):
+    def restore(self, resized_image, stitch, mask=None, upscale_method="bicubic"):
         original_h, original_w = stitch["original_shape"]
         target_resized_h, target_resized_w = stitch["resized_shape"]
         crop_x, crop_y = stitch["crop_position"]
@@ -3916,15 +3920,15 @@ class Image_Resize_sum_restore:
         image_pos_x, image_pos_y = stitch["image_position"]
         has_input_mask = stitch.get("has_input_mask", False)
         original_image = stitch.get("original_image", None)
-        
-        # 检查是否需要缩放：仅当当前尺寸与目标尺寸不一致时才执行缩放
+          
+
         current_h, current_w = resized_image.shape[1], resized_image.shape[2]
         if current_w != target_resized_w or current_h != target_resized_h:
             resized_image = common_upscale(
                 resized_image.movedim(-1, 1),
                 target_resized_w,
                 target_resized_h,
-                stitch["upscale_method"],
+                upscale_method,
                 crop="disabled"
             ).movedim(1, -1)
         
@@ -3936,7 +3940,7 @@ class Image_Resize_sum_restore:
                     mask.unsqueeze(1),
                     target_resized_w,
                     target_resized_h,
-                    stitch["upscale_method"],
+                    upscale_method,
                     crop="disabled"
                 ).squeeze(1)
 
@@ -3947,7 +3951,7 @@ class Image_Resize_sum_restore:
                 restored_image = common_upscale(
                     resized_image.movedim(-1, 1), 
                     crop_w, crop_h, 
-                    stitch["upscale_method"], 
+                    upscale_method, 
                     crop="disabled"
                 ).movedim(1, -1)
             else:
@@ -3971,7 +3975,7 @@ class Image_Resize_sum_restore:
                     restored_mask = common_upscale(
                         mask.unsqueeze(1), 
                         crop_w, crop_h, 
-                        stitch["upscale_method"], 
+                        upscale_method, 
                         crop="disabled"
                     ).squeeze(1)
                 else:
@@ -3996,7 +4000,7 @@ class Image_Resize_sum_restore:
                 restored_image = common_upscale(
                     unpadded_image.movedim(-1, 1), 
                     original_w, original_h, 
-                    stitch["upscale_method"], 
+                    upscale_method, 
                     crop="disabled"
                 ).movedim(1, -1)
             else:
@@ -4011,7 +4015,7 @@ class Image_Resize_sum_restore:
                     restored_mask = common_upscale(
                         unpadded_mask.unsqueeze(1), 
                         original_w, original_h, 
-                        stitch["upscale_method"], 
+                        upscale_method, 
                         crop="disabled"
                     ).squeeze(1)
                 else:
@@ -4028,7 +4032,7 @@ class Image_Resize_sum_restore:
                 restored_image = common_upscale(
                     resized_image.movedim(-1, 1), 
                     original_w, original_h, 
-                    stitch["upscale_method"], 
+                    upscale_method, 
                     crop="disabled"
                 ).movedim(1, -1)
             else:
@@ -4041,7 +4045,7 @@ class Image_Resize_sum_restore:
                     restored_mask = common_upscale(
                         mask.unsqueeze(1), 
                         original_w, original_h, 
-                        stitch["upscale_method"], 
+                        upscale_method, 
                         crop="disabled"
                     ).squeeze(1)
                 else:
@@ -4050,6 +4054,7 @@ class Image_Resize_sum_restore:
                 return (restored_image, restored_mask)
             else:
                 return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+
 
 
 
@@ -4216,452 +4221,275 @@ class color_balance_adv:
 
 
 
-class xxImage_solo_stitch:
+class Image_transform_layer:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "bj_image": ("IMAGE",),
-                "inpainted_image": ("IMAGE",),
-                "mask": ("MASK",),
-                "stitch": ("STITCH2",),
-                "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1, "display": "slider"}),
-                "blend_factor": ("FLOAT", {"default": 1.0,"min": 0.0,"max": 1.0,"step": 0.01}),
-                "blend_mode": (["normal", "multiply", "screen", "overlay", "soft_light", "difference"],),
+                "bj_img": ("IMAGE",),  
+                "fj_img": ("IMAGE",),  
+                "mask_expand": ("INT", {"default": 0, "min": -500, "max": 1000, "step": 1}),
+                "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1}),
+                "mask_mode": (["original", "fill", "fill_block", "outline", "outline_block", "circle", "outline_circle"], {"default": "original"}),
+                "x_offset": ("INT", {"default": 0, "min": -10000, "max": 10000, "step": 1}),
+                "y_offset": ("INT", {"default": 0, "min": -10000, "max": 10000, "step": 1}),
+                "rotation": ("FLOAT", {"default": 0, "min": -360, "max": 360, "step": 0.1}),
+                "scale": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 5.0, "step": 0.01}),
+                "edge_detection": ("BOOLEAN", {"default": False}),
+                "edge_thickness": ("INT", {"default": 1, "min": 1, "max": 100, "step": 1}),
+                "edge_color": (["black", "white", "red", "green", "blue", "yellow", "cyan", "magenta"], {"default": "black"}),
                 "opacity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "stitch_mode": (["crop_mask", "crop_image"], {"default": "crop_mask"}),
-            },
-        }
-
-    CATEGORY = "Apt_Preset/image"
-    RETURN_TYPES = ("IMAGE", )  
-    RETURN_NAMES = ("image", )
-    FUNCTION = "inpaint_stitch"
-
-    def create_feather_mask(self, width, height, feather_size):
-        """创建边缘羽化的Alpha蒙版（统一逻辑）"""
-        if feather_size <= 0:
-            return np.ones((height, width), dtype=np.float32)
-        
-        feather = min(feather_size, min(width, height) // 2)
-        mask = np.ones((height, width), dtype=np.float32)
-        
-        # 顶部边缘
-        for y in range(feather):
-            mask[y, :] = y / feather
-        # 底部边缘
-        for y in range(height - feather, height):
-            mask[y, :] = (height - y) / feather
-        # 左侧边缘
-        for x in range(feather):
-            mask[:, x] = np.minimum(mask[:, x], x / feather)
-        # 右侧边缘
-        for x in range(width - feather, width):
-            mask[:, x] = np.minimum(mask[:, x], (width - x) / feather)
-            
-        return mask
-
-    def inpaint_stitch(self, inpainted_image, smoothness, mask, stitch, bj_image, blend_factor, blend_mode, opacity, stitch_mode):
-        original_h, original_w = stitch["original_shape"]
-        crop_x, crop_y = stitch["crop_position"]
-        crop_w, crop_h = stitch["crop_size"]
-        mask_crop_x, mask_crop_y, mask_crop_x2, mask_crop_y2 = stitch["mask_cropped_position"]
-
-        # 透明度处理
-        if opacity < 1.0:
-            inpainted_image = inpainted_image * opacity
-
-        # 确保mask尺寸匹配
-        if inpainted_image.shape[1:3] != mask.shape[1:3]:               
-            mask = F.interpolate(mask.unsqueeze(1), size=(inpainted_image.shape[1], inpainted_image.shape[2]), mode='nearest').squeeze(1)
-
-        # 转换为numpy数组（保留原始数据用于后续处理）
-        inpainted_np = (inpainted_image[0].cpu().numpy() * 255).astype(np.uint8)
-        mask_np = (mask[0].cpu().numpy() * 255).astype(np.uint8)
-        background_np = (bj_image[0].cpu().numpy() * 255).astype(np.uint8)
-
-        # 调整尺寸到裁切大小
-        inpainted_resized = cv2.resize(inpainted_np, (crop_w, crop_h))
-        mask_resized = cv2.resize(mask_np, (crop_w, crop_h))
-        background_resized = cv2.resize(background_np, (original_w, original_h))
-
-        # 初始化带Alpha通道的结果数组（关键：使用RGBA确保透明通道有效）
-        result = np.zeros((original_h, original_w, 4), dtype=np.uint8)
-        result[:, :, :3] = background_resized.copy()
-        result[:, :, 3] = 255  # 背景默认不透明
-
-        # 处理两种模式的羽化与透明
-        if stitch_mode == "crop_mask":
-            # 应用遮罩模式的平滑处理
-            inpainted_image, mask = Image_smooth_blur().apply_smooth_blur(inpainted_image, mask, smoothness, bg_color="Alpha")
-            inpainted_blurred = (inpainted_image[0].cpu().numpy() * 255).astype(np.uint8)
-            mask_blurred = (mask[0].cpu().numpy() * 255).astype(np.uint8)
-            
-            # 调整模糊后的尺寸
-            inpainted_blurred = cv2.resize(inpainted_blurred, (crop_w, crop_h))
-            mask_blurred = cv2.resize(mask_blurred, (crop_w, crop_h))
-            
-            # 提取遮罩内容区域
-            mask_content = mask_blurred[mask_crop_y:mask_crop_y2, mask_crop_x:mask_crop_x2]
-            inpaint_content = inpainted_blurred[mask_crop_y:mask_crop_y2, mask_crop_x:mask_crop_x2]
-            
-            # 计算粘贴位置
-            paste_x_start = max(0, crop_x + mask_crop_x)
-            paste_x_end = min(original_w, crop_x + mask_crop_x2)
-            paste_y_start = max(0, crop_y + mask_crop_y)
-            paste_y_end = min(original_h, crop_y + mask_crop_y2)
-            
-            # 提取对应区域的alpha（来自遮罩）
-            alpha = mask_content / 255.0
-            alpha = alpha[
-                max(0, paste_y_start - (crop_y + mask_crop_y)) : max(0, paste_y_end - (crop_y + mask_crop_y)),
-                max(0, paste_x_start - (crop_x + mask_crop_x)) : max(0, paste_x_end - (crop_x + mask_crop_x))
-            ]
-            alpha = np.expand_dims(alpha, axis=-1)
-            
-            # 混合内容（使用相同的alpha逻辑）
-            background_content = result[paste_y_start:paste_y_end, paste_x_start:paste_x_end, :3]
-            blended = (inpaint_content * alpha + background_content * (1 - alpha)).astype(np.uint8)
-            
-            # 更新结果（包括alpha通道）
-            result[paste_y_start:paste_y_end, paste_x_start:paste_x_end, :3] = blended
-            result[paste_y_start:paste_y_end, paste_x_start:paste_x_end, 3] = (alpha * 255).astype(np.uint8).squeeze()
-
-        else:
-            # 创建全图模式的羽化蒙版（与遮罩模式保持一致的alpha逻辑）
-            feather_mask = self.create_feather_mask(crop_w, crop_h, smoothness)
-            
-            # 计算粘贴位置
-            paste_x_start = max(0, crop_x)
-            paste_x_end = min(original_w, crop_x + crop_w)
-            paste_y_start = max(0, crop_y)
-            paste_y_end = min(original_h, crop_y + crop_h)
-            
-            # 提取裁切图中需要贴合的区域
-            inpaint_content = inpainted_resized[
-                max(0, paste_y_start - crop_y) : max(0, paste_y_end - crop_y),
-                max(0, paste_x_start - crop_x) : max(0, paste_x_end - crop_x)
-            ]
-            
-            # 提取对应区域的羽化蒙版
-            alpha_mask = feather_mask[
-                max(0, paste_y_start - crop_y) : max(0, paste_y_end - crop_y),
-                max(0, paste_x_start - crop_x) : max(0, paste_x_end - crop_x)
-            ]
-            alpha = np.expand_dims(alpha_mask, axis=-1)
-            
-            # 混合内容（与遮罩模式使用完全相同的混合公式）
-            background_content = result[paste_y_start:paste_y_end, paste_x_start:paste_x_end, :3]
-            blended = (inpaint_content * alpha + background_content * (1 - alpha)).astype(np.uint8)
-            
-            # 更新结果（包括alpha通道，确保透明逻辑一致）
-            result[paste_y_start:paste_y_end, paste_x_start:paste_x_end, :3] = blended
-            result[paste_y_start:paste_y_end, paste_x_start:paste_x_end, 3] = (alpha * 255).astype(np.uint8).squeeze()
-
-        # 转换回RGB并应用最终混合
-        final_rgb = result[:, :, :3]
-        final_image_tensor = torch.from_numpy(final_rgb / 255.0).float().unsqueeze(0)
-        fimage = Blend().blend_images(bj_image, final_image_tensor, blend_factor, blend_mode)[0]
-
-        return (fimage, )
-    
-
-
-
-class xxImage_solo_crop:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "image": ("IMAGE",),
-                "crop_mode": (["遮罩裁切", "裁切图_缩放", "背景图_缩放"],),
-                "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
-                "upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
-                "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
-                "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
-                "divisible_by": ("INT", {"default": 2, "min": 0, "max": 128, "step": 2}),
+                "blending_mode": (BLEND_METHODS , {"default": "normal"}),
+                "blend_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
             },
             "optional": {
-                "mask": ("MASK",),
-                "mask_stack": ("MASK_STACK2",),
-                "crop_img_bj": (
-                    ["image", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
-                    {"default": "image"}
-                ),
+                "mask": ("MASK",),      
             }
         }
-
+    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE",  "MASK", )
+    RETURN_NAMES = ( "bj_composite", "mask", "composite","line_mask",)
+    FUNCTION = "process"
     CATEGORY = "Apt_Preset/image"
-    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "MASK", "STITCH2")
-    RETURN_NAMES = ("bj_image", "bj_mask", "cropped_image", "cropped_mask", "stitch")
-    FUNCTION = "inpaint_crop"
-
-    def get_mask_bounding_box(self, mask):
-        mask_np = (mask[0].cpu().numpy() * 255).astype(np.uint8)
-        coords = cv2.findNonZero(mask_np)
-        if coords is None:
-            raise ValueError("Mask is empty")
-        x, y, w, h = cv2.boundingRect(coords)
-        return w, h
-
-    def process_resize(self, image, mask, crop_mode, long_side, divisible_by, upscale_method="bicubic"):
-        batch_size, img_height, img_width, channels = image.shape
-        image_ratio = img_width / img_height
-        mask_w, mask_h = self.get_mask_bounding_box(mask)
-        mask_ratio = mask_w / mask_h
-        new_width, new_height = img_width, img_height
+  
+    def process( self, x_offset, y_offset, rotation, scale, edge_detection, edge_thickness, edge_color, mask_expand, smoothness,
+                opacity, blending_mode, blend_strength, bj_img=None, fj_img=None,mask_mode="fill", mask=None ):
         
-        if crop_mode == "背景图_缩放":
-            if img_width >= img_height:
-                new_width = long_side
-                new_height = int(new_width / image_ratio)
-            else:
-                new_height = long_side
-                new_width = int(new_height * image_ratio)
-        elif crop_mode == "裁切图_缩放":
-            if mask_w >= mask_h:
-                new_mask_width = long_side
-                new_mask_height = int(new_mask_width / mask_ratio)
-                mask_scale = new_mask_width / mask_w
-            else:
-                new_mask_height = long_side
-                new_mask_width = int(new_mask_height * mask_ratio)
-                mask_scale = new_mask_height / mask_h
-            new_width = int(img_width * mask_scale)
-            new_height = int(img_height * mask_scale)
-        elif crop_mode == "不裁切":
-            new_width, new_height = img_width, img_height
-            if mask_w >= mask_h:
-                new_mask_width = long_side
-                new_mask_height = int(new_mask_width / mask_ratio)
-            else:
-                new_mask_height = long_side
-                new_mask_width = int(new_mask_height * mask_ratio)
-        
-        if divisible_by > 1:
-            remainder_w = new_width % divisible_by
-            if remainder_w != 0:
-                new_width += (divisible_by - remainder_w)
-            new_width = max(new_width, divisible_by)
-            
-            remainder_h = new_height % divisible_by
-            if remainder_h != 0:
-                new_height += (divisible_by - remainder_h)
-            new_height = max(new_height, divisible_by)
-        else:
-            if new_width % 2 != 0:
-                new_width += 1
-            if new_height % 2 != 0:
-                new_height += 1
-        
-        resample_filters = {
-            "nearest": Image.NEAREST,
-            "bilinear": Image.BILINEAR,
-            "bicubic": Image.BICUBIC,
-            "lanczos": Image.LANCZOS,
-            "area": Image.BOX
+        color_mapping = {
+            "black": (0, 0, 0),
+            "white": (255, 255, 255),
+            "red": (255, 0, 0),
+            "green": (0, 255, 0),
+            "blue": (0, 0, 255),
+            "yellow": (255, 255, 0),
+            "cyan": (0, 255, 255),
+            "magenta": (255, 0, 255),
         }
-        resample_filter = resample_filters.get(upscale_method, Image.LANCZOS)
+        if fj_img is None: raise ValueError("前景图像(fj_img)是必需的输入")
+        if bj_img is None: raise ValueError("背景图像(bj_img)是必需的输入")
         
-        resized_images = []
-        for img in image:
-            pil_img = Image.fromarray((img.numpy() * 255).astype(np.uint8))
-            resized_pil = pil_img.resize((new_width, new_height), resample_filter)
-            resized_tensor = torch.from_numpy(np.array(resized_pil).astype(np.float32) / 255.0)
-            resized_images.append(resized_tensor)
-        crop_image = torch.stack(resized_images)
+        bj_np = bj_img[0].cpu().numpy()
+        fj_np = fj_img[0].cpu().numpy()
+        bj_pil = Image.fromarray((bj_np * 255).astype(np.uint8)).convert("RGBA")
+        fj_pil = Image.fromarray((fj_np * 255).astype(np.uint8)).convert("RGBA")
         
-        resized_masks = []
-        for m in mask:
-            pil_mask = Image.fromarray((m.numpy() * 255).astype(np.uint8))
-            resized_pil_mask = pil_mask.resize((new_width, new_height), Image.NEAREST)
-            resized_tensor_mask = torch.from_numpy(np.array(resized_pil_mask).astype(np.float32) / 255.0).unsqueeze(0)
-            resized_masks.append(resized_tensor_mask)
-        crop_mask = torch.cat(resized_masks, dim=0)
+        # 画布尺寸应该严格按照背景图和前景图的最大尺寸来确定
+        canvas_width = max(bj_pil.size[0], fj_pil.size[0])
+        canvas_height = max(bj_pil.size[1], fj_pil.size[1])
+        canvas_center_x, canvas_center_y = canvas_width // 2, canvas_height // 2
         
-        return (crop_image, crop_mask)
-
-    def inpaint_crop(self, image, crop_mode, long_side, upscale_method="bicubic", 
-                     expand_width=0, expand_height=0, divisible_by=2,
-                     mask=None, mask_stack=None, crop_img_bj="image"):
-        colors = {
-            "white": (1.0, 1.0, 1.0),
-            "black": (0.0, 0.0, 0.0),
-            "red": (1.0, 0.0, 0.0),
-            "green": (0.0, 1.0, 0.0),
-            "blue": (0.0, 0.0, 1.0),
-            "yellow": (1.0, 1.0, 0.0),
-            "cyan": (0.0, 1.0, 1.0),
-            "magenta": (1.0, 0.0, 1.0),
-            "gray": (0.5, 0.5, 0.5)
-        }
-        
+        # 当没有输入遮罩时，默认赋值一个fj_img全遮罩
         if mask is None:
-            batch_size, height, width, _ = image.shape
-            mask = torch.ones((batch_size, height, width), dtype=torch.float32)
+            mask = torch.ones((1, fj_pil.size[1], fj_pil.size[0]), dtype=torch.float32)
 
-        if mask_stack is not None:
-            mask_mode, smoothness, mask_expand, mask_min, mask_max = mask_stack            
-        else:
-            mask_mode, smoothness, mask_expand, mask_min, mask_max = "original", 0, 0, 0, 1
-
-        processed_mask = mask
-        if mask_stack and mask is not None:
+        mask_tensor = None
+        if mask is not None: 
             if hasattr(mask, 'convert'):
                 mask_tensor = pil2tensor(mask.convert('L'))
-            else:
+            else:  
                 if isinstance(mask, torch.Tensor):
                     mask_tensor = mask if len(mask.shape) <= 3 else mask.squeeze(-1) if mask.shape[-1] == 1 else mask
                 else:
                     mask_tensor = mask
-          
-            separated_result = Mask_transform_sum().separate(  
-                bg_mode="crop_image", 
-                mask_mode=mask_mode,
-                ignore_threshold=0, 
-                opacity=1, 
-                outline_thickness=1, 
-                smoothness=smoothness,
-                mask_expand=mask_expand,
-                expand_width=0,
-                expand_height=0,
-                rescale_crop=1.0,
-                tapered_corners=True,
-                mask_min=mask_min, 
-                mask_max=mask_max,
-                base_image=image, 
-                mask=mask_tensor, 
-                crop_to_mask=False,
-                divisible_by=1
-            )
 
-            processed_mask = separated_result[1]
+        separated_result = Mask_transform_sum().separate(  
+            bg_mode="crop_image", 
+            mask_mode=mask_mode,
+            ignore_threshold=0, 
+            opacity=1, 
+            outline_thickness=1, 
+            smoothness=smoothness,
+            mask_expand=mask_expand,
+            expand_width=0, 
+            expand_height=0,
+            rescale_crop=1.0,
+            tapered_corners=True,
+            mask_min=0, 
+            mask_max=1,
+            base_image=fj_img, 
+            mask=mask_tensor, 
+            crop_to_mask=False,
+            divisible_by=1
+        )
+
+        fj_img = separated_result[0]
+        mask = separated_result[1]
         
-        crop_image, original_crop_mask = self.process_resize(
-            image, processed_mask, crop_mode, long_side, divisible_by, upscale_method)
-        
-        bj_mask_tensor = original_crop_mask
-        bj_image = crop_image.clone()
-        
-        if crop_img_bj != "image" and crop_img_bj in colors:
-            r, g, b = colors[crop_img_bj]
-            h, w, _ = crop_image.shape[1:]
-            background = torch.zeros((crop_image.shape[0], h, w, 3))
-            background[:, :, :, 0] = r
-            background[:, :, :, 1] = g
-            background[:, :, :, 2] = b
+        # 处理遮罩和前景图，保持它们的相对位置关系
+        if mask is not None:
+            mask_np = mask[0].cpu().numpy()
+            mask_pil = Image.fromarray((mask_np * 255).astype(np.uint8)).convert("L")
             
-            if crop_image.shape[3] >= 4:
-                alpha = crop_image[:, :, :, 3].unsqueeze(3)
-                image_rgb = crop_image[:, :, :, :3]
-                crop_image = image_rgb * alpha + background * (1 - alpha)
+            # 确保遮罩尺寸与前景图一致
+            if mask_pil.size != fj_pil.size:
+                mask_pil = mask_pil.resize(fj_pil.size, Image.LANCZOS)
+            
+            fj_with_mask = fj_pil.copy()
+            fj_with_mask.putalpha(mask_pil)
+            
+            # 不再进行裁剪，保持原始位置关系
+            fj_processed = fj_with_mask
+            mask_processed = mask_pil
+        else:
+            # 没有遮罩时，使用整个前景图
+            mask_processed = Image.new("L", fj_pil.size, 255)
+            fj_processed = fj_pil.copy()
+            fj_processed.putalpha(mask_processed)
+        
+        # 获取处理后图像的尺寸
+        processed_width, processed_height = fj_processed.size
+        # 使用图像中心作为旋转中心
+        center_x, center_y = processed_width // 2, processed_height // 2
+        
+        adjusted_fj = fj_processed
+        adjusted_mask = mask_processed
+
+        rotation = float(rotation)
+        
+        # 应用旋转和缩放
+        if rotation != 0 or scale != 1.0:
+            adjusted_fj = adjusted_fj.rotate(rotation, center=(center_x, center_y), resample=Image.BICUBIC, expand=True)
+            adjusted_mask = adjusted_mask.rotate(rotation, center=(center_x, center_y), resample=Image.BICUBIC, expand=True)
+            
+            if scale != 1.0:
+                new_size = (int(adjusted_fj.size[0] * scale), int(adjusted_fj.size[1] * scale))
+                adjusted_fj = adjusted_fj.resize(new_size, Image.LANCZOS)
+                adjusted_mask = adjusted_mask.resize(new_size, Image.LANCZOS)
+            
+            # 更新中心点
+            center_x, center_y = adjusted_fj.size[0] // 2, adjusted_fj.size[1] // 2
+        
+        # 计算背景图的中心点
+        bj_center_x, bj_center_y = bj_pil.size[0] // 2, bj_pil.size[1] // 2
+        
+        # 计算前景图应该放置的位置（相对于画布中心）
+        x_position = canvas_center_x - center_x + x_offset
+        y_position = canvas_center_y - center_y + y_offset
+        
+        paste_x = int(x_position)
+        paste_y = int(y_position)
+        
+        # 应用透明度
+        if opacity < 1.0:
+            r, g, b, a = adjusted_fj.split()
+            a = a.point(lambda p: p * opacity)
+            adjusted_fj = Image.merge("RGBA", (r, g, b, a))
+        
+        # 创建画布并放置背景图
+        composite_pil = Image.new("RGBA", (canvas_width, canvas_height), (0, 0, 0, 255))
+        # 背景图居中放置
+        bj_x = (canvas_width - bj_pil.size[0]) // 2
+        bj_y = (canvas_height - bj_pil.size[1]) // 2
+        composite_pil.paste(bj_pil, (bj_x, bj_y))
+        
+        # 应用混合模式并粘贴前景图
+        if blending_mode != "normal":
+            temp_img = Image.new('RGBA', composite_pil.size, (0, 0, 0, 0))
+            temp_img.paste(adjusted_fj, (paste_x, paste_y), adjusted_fj)
+            blended_pil = Image.new('RGBA', composite_pil.size, (0, 0, 0, 0))
+            
+            for x in range(max(0, paste_x), min(canvas_width, paste_x + adjusted_fj.size[0])):
+                for y in range(max(0, paste_y), min(canvas_height, paste_y + adjusted_fj.size[1])):
+                    if temp_img.getpixel((x, y))[3] > 0:
+                        bg_pixel = composite_pil.getpixel((x, y))
+                        fg_pixel = temp_img.getpixel((x, y))
+                        bg_pixel_img = Image.new('RGBA', (1, 1), bg_pixel)
+                        fg_pixel_img = Image.new('RGBA', (1, 1), fg_pixel)
+                        blended_pixel_img = apply_blending_mode(
+                            bg_pixel_img, fg_pixel_img, blending_mode, blend_strength
+                        )
+                        blended_pil.putpixel((x, y), blended_pixel_img.getpixel((0, 0)))
+            composite_pil = Image.alpha_composite(composite_pil, blended_pil)
+        else:
+            composite_pil.paste(adjusted_fj, (paste_x, paste_y), adjusted_fj)
+        
+        # 处理边缘检测
+        if edge_detection:
+            if edge_color in color_mapping:
+                r, g, b = color_mapping[edge_color]
             else:
-                alpha = original_crop_mask.unsqueeze(3)
-                image_rgb = crop_image[:, :, :, :3]
-                crop_image = image_rgb * alpha + background * (1 - alpha)
-        
-        image_np = (crop_image[0].cpu().numpy() * 255).astype(np.uint8)
-        mask_np = (original_crop_mask[0].cpu().numpy() * 255).astype(np.uint8)
-        original_h, original_w = image_np.shape[0], image_np.shape[1]
-        
-        coords = cv2.findNonZero(mask_np)
-        if coords is None:
-            raise ValueError("Mask is empty after processing")
-        x, y, w, h = cv2.boundingRect(coords)
-        
-        half_expand_width = (expand_width // 2) // 2 * 2
-        half_expand_height = (expand_height // 2) // 2 * 2
-        
-        x_new = max(0, x - half_expand_width)
-        y_new = max(0, y - half_expand_height)
-        x_end = min(original_w, x + w + half_expand_width)
-        y_end = min(original_h, y + h + half_expand_height)
-        
-        if divisible_by > 1:
-            current_w = x_end - x_new
-            remainder_w = current_w % divisible_by
-            if remainder_w != 0:
-                if x_end + (divisible_by - remainder_w) <= original_w:
-                    x_end += (divisible_by - remainder_w)
-                elif x_new - (divisible_by - remainder_w) >= 0:
-                    x_new -= (divisible_by - remainder_w)
-                else:
-                    current_w -= remainder_w
-                    x_end = x_new + current_w
-            current_w = x_end - x_new
+                r, g, b = 0, 0, 0
             
-            current_h = y_end - y_new
-            remainder_h = current_h % divisible_by
-            if remainder_h != 0:
-                if y_end + (divisible_by - remainder_h) <= original_h:
-                    y_end += (divisible_by - remainder_h)
-                elif y_new - (divisible_by - remainder_h) >= 0:
-                    y_new -= (divisible_by - remainder_h)
-                else:
-                    current_h -= remainder_h
-                    y_end = y_new + current_h
-            current_h = y_end - y_new
+            threshold = 128
+            full_size_mask = Image.new("L", composite_pil.size, 0)
+            
+            # 正确放置遮罩到完整画布上
+            mask_left = max(0, paste_x)
+            mask_top = max(0, paste_y)
+            mask_right = min(paste_x + adjusted_mask.size[0], canvas_width)
+            mask_bottom = min(paste_y + adjusted_mask.size[1], canvas_height)
+            
+            if mask_right > mask_left and mask_bottom > mask_top:
+                crop_left = max(0, -paste_x)
+                crop_top = max(0, -paste_y)
+                crop_right = crop_left + (mask_right - mask_left)
+                crop_bottom = crop_top + (mask_bottom - mask_top)
+                
+                if crop_right <= adjusted_mask.size[0] and crop_bottom <= adjusted_mask.size[1]:
+                    mask_crop = adjusted_mask.crop((crop_left, crop_top, crop_right, crop_bottom))
+                    full_size_mask.paste(mask_crop, (mask_left, mask_top, mask_right, mask_bottom))
+            
+            mask_array = np.array(full_size_mask)
+            binary_mask = np.where(mask_array > threshold, 255, 0).astype(np.uint8)
+            binary_mask_pil = Image.fromarray(binary_mask)
+            
+            edge_image = Image.new("RGBA", composite_pil.size, (0, 0, 0, 0))
+            edge_draw = ImageDraw.Draw(edge_image)
+            mask_cv = np.array(binary_mask_pil)
+            contours, _ = cv2.findContours(mask_cv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            for contour in contours:
+                for i in range(edge_thickness):
+                    points = [tuple(point[0]) for point in contour]
+                    edge_draw.line(points, fill=(r, g, b, int(opacity * 255)), width=edge_thickness-i+1)
+            
+            composite_pil = Image.alpha_composite(composite_pil, edge_image)
+            edge_mask = np.zeros_like(mask_cv)
+            cv2.drawContours(edge_mask, contours, -1, 255, edge_thickness)
+            line_mask_pil = Image.fromarray(edge_mask)
         else:
-            current_w = x_end - x_new
-            if current_w % 2 != 0:
-                if x_end < original_w:
-                    x_end += 1
-                elif x_new > 0:
-                    x_new -= 1
-                current_w = x_end - x_new
-
-            current_h = y_end - y_new
-            if current_h % 2 != 0:
-                if y_end < original_h:
-                    y_end += 1
-                elif y_new > 0:
-                    y_new -= 1
-                current_h = y_end - y_new
-
-        # 关键修复：提前初始化mask相关变量，确保所有分支都有定义
-        mask_x_start = 0
-        mask_y_start = 0
-        mask_x_end = 0
-        mask_y_end = 0
-
-        if crop_mode == "不裁切":  #
-            cropped_image = image_np.copy()
-            new_mask = np.zeros((original_h, original_w), dtype=np.uint8)
-            new_mask[y:y+h, x:x+w] = mask_np[y:y+h, x:x+w]
-            current_crop_position = (x, y)
-            current_crop_size = (original_w, original_h)
-            # 为“不裁切”模式赋值mask位置（遮罩在原始图像中的位置，与裁切图位置一致）
-            mask_x_start = x
-            mask_y_start = y
-            mask_x_end = x + w
-            mask_y_end = y + h
-        else:
-            cropped_image = image_np[y_new:y_end, x_new:x_end]
-            mask_x_start = max(0, x - x_new)
-            mask_y_start = max(0, y - y_new)
-            mask_x_end = min(current_w, (x + w) - x_new)
-            mask_y_end = min(current_h, (y + h) - y_new)
-            new_mask = np.zeros((current_h, current_w), dtype=np.uint8)
-            if mask_x_start < mask_x_end and mask_y_start < mask_y_end:
-                new_mask[mask_y_start:mask_y_end, mask_x_start:mask_x_end] = mask_np[y:y+h, x:x+w]
-            current_crop_position = (x_new, y_new)
-            current_crop_size = (current_w, current_h)
+            # 创建完整尺寸的遮罩
+            full_size_mask = Image.new("L", composite_pil.size, 0)
+            
+            # 正确放置遮罩到完整画布上
+            mask_left = max(0, paste_x)
+            mask_top = max(0, paste_y)
+            mask_right = min(paste_x + adjusted_mask.size[0], canvas_width)
+            mask_bottom = min(paste_y + adjusted_mask.size[1], canvas_height)
+            
+            if mask_right > mask_left and mask_bottom > mask_top:
+                crop_left = max(0, -paste_x)
+                crop_top = max(0, -paste_y)
+                crop_right = crop_left + (mask_right - mask_left)
+                crop_bottom = crop_top + (mask_bottom - mask_top)
+                
+                if crop_right <= adjusted_mask.size[0] and crop_bottom <= adjusted_mask.size[1]:
+                    mask_crop = adjusted_mask.crop((crop_left, crop_top, crop_right, crop_bottom))
+                    full_size_mask.paste(mask_crop, (mask_left, mask_top))
+            
+            line_mask_pil = Image.new("L", composite_pil.size, 0)
         
-        cropped_image_tensor = torch.from_numpy(cropped_image / 255.0).float().unsqueeze(0)
-        cropped_mask_tensor = torch.from_numpy(new_mask / 255.0).float().unsqueeze(0)
+        composite_pil = composite_pil.convert("RGB")
         
-        stitch = {
-            "original_shape": (original_h, original_w),
-            "crop_position": current_crop_position,
-            "crop_size": current_crop_size,
-            "expand_width": expand_width,
-            "expand_height": expand_height,
-            "expanded_region": (x_new, y_new, x_end, y_end),
-            "mask_original_position": (x, y, w, h),
-            "mask_cropped_position": (mask_x_start, mask_y_start, mask_x_end, mask_y_end)
-        }
-
-        return (bj_image, bj_mask_tensor, cropped_image_tensor, cropped_mask_tensor, stitch)
+        composite_np = np.array(composite_pil).astype(np.float32) / 255.0
+        mask_np = np.array(full_size_mask).astype(np.float32) / 255.0
+        line_mask_np = np.array(line_mask_pil).astype(np.float32) / 255.0
+        
+        if len(composite_np.shape) == 2:
+            composite_np = np.stack([composite_np] * 3, axis=-1)
+        
+        composite_tensor = torch.from_numpy(composite_np).unsqueeze(0)
+        mask_tensor = torch.from_numpy(mask_np).unsqueeze(0).unsqueeze(0)
+        line_mask_tensor = torch.from_numpy(line_mask_np).unsqueeze(0).unsqueeze(0)
+        
+        # 创建裁剪后的输出（仅包含背景图尺寸范围）
+        bj_x_start = (canvas_width - bj_pil.size[0]) // 2
+        bj_y_start = (canvas_height - bj_pil.size[1]) // 2
+        bj_x_end = bj_x_start + bj_pil.size[0]
+        bj_y_end = bj_y_start + bj_pil.size[1]
+        
+        cropped_composite = composite_tensor[:, bj_y_start:bj_y_end, bj_x_start:bj_x_end, :]
+        
+        return ( cropped_composite, mask_tensor,composite_tensor, line_mask_tensor, )
 
 
 
@@ -5176,276 +5004,6 @@ class Image_solo_stitch:
         return (fimage, )
 
 
-
-class Image_transform_layer:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "bj_img": ("IMAGE",),  
-                "fj_img": ("IMAGE",),  
-                "mask_expand": ("INT", {"default": 0, "min": -500, "max": 1000, "step": 1}),
-                "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1}),
-                "mask_mode": (["original", "fill", "fill_block", "outline", "outline_block", "circle", "outline_circle"], {"default": "original"}),
-                "x_offset": ("INT", {"default": 0, "min": -10000, "max": 10000, "step": 1}),
-                "y_offset": ("INT", {"default": 0, "min": -10000, "max": 10000, "step": 1}),
-                "rotation": ("FLOAT", {"default": 0, "min": -360, "max": 360, "step": 0.1}),
-                "scale": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 5.0, "step": 0.01}),
-                "edge_detection": ("BOOLEAN", {"default": False}),
-                "edge_thickness": ("INT", {"default": 1, "min": 1, "max": 100, "step": 1}),
-                "edge_color": (["black", "white", "red", "green", "blue", "yellow", "cyan", "magenta"], {"default": "black"}),
-                "opacity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "blending_mode": (BLEND_METHODS , {"default": "normal"}),
-                "blend_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-            },
-            "optional": {
-                "mask": ("MASK",),      
-            }
-        }
-    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE",  "MASK", )
-    RETURN_NAMES = ( "bj_composite", "mask", "composite","line_mask",)
-    FUNCTION = "process"
-    CATEGORY = "Apt_Preset/image"
-  
-    def process( self, x_offset, y_offset, rotation, scale, edge_detection, edge_thickness, edge_color, mask_expand, smoothness,
-                opacity, blending_mode, blend_strength, bj_img=None, fj_img=None,mask_mode="fill", mask=None ):
-        
-        color_mapping = {
-            "black": (0, 0, 0),
-            "white": (255, 255, 255),
-            "red": (255, 0, 0),
-            "green": (0, 255, 0),
-            "blue": (0, 0, 255),
-            "yellow": (255, 255, 0),
-            "cyan": (0, 255, 255),
-            "magenta": (255, 0, 255),
-        }
-        if fj_img is None: raise ValueError("前景图像(fj_img)是必需的输入")
-        if bj_img is None: raise ValueError("背景图像(bj_img)是必需的输入")
-        
-        bj_np = bj_img[0].cpu().numpy()
-        fj_np = fj_img[0].cpu().numpy()
-        bj_pil = Image.fromarray((bj_np * 255).astype(np.uint8)).convert("RGBA")
-        fj_pil = Image.fromarray((fj_np * 255).astype(np.uint8)).convert("RGBA")
-        
-        # 画布尺寸应该严格按照背景图和前景图的最大尺寸来确定
-        canvas_width = max(bj_pil.size[0], fj_pil.size[0])
-        canvas_height = max(bj_pil.size[1], fj_pil.size[1])
-        canvas_center_x, canvas_center_y = canvas_width // 2, canvas_height // 2
-        
-        # 当没有输入遮罩时，默认赋值一个fj_img全遮罩
-        if mask is None:
-            mask = torch.ones((1, fj_pil.size[1], fj_pil.size[0]), dtype=torch.float32)
-
-        mask_tensor = None
-        if mask is not None: 
-            if hasattr(mask, 'convert'):
-                mask_tensor = pil2tensor(mask.convert('L'))
-            else:  
-                if isinstance(mask, torch.Tensor):
-                    mask_tensor = mask if len(mask.shape) <= 3 else mask.squeeze(-1) if mask.shape[-1] == 1 else mask
-                else:
-                    mask_tensor = mask
-
-        separated_result = Mask_transform_sum().separate(  
-            bg_mode="crop_image", 
-            mask_mode=mask_mode,
-            ignore_threshold=0, 
-            opacity=1, 
-            outline_thickness=1, 
-            smoothness=smoothness,
-            mask_expand=mask_expand,
-            expand_width=0, 
-            expand_height=0,
-            rescale_crop=1.0,
-            tapered_corners=True,
-            mask_min=0, 
-            mask_max=1,
-            base_image=fj_img, 
-            mask=mask_tensor, 
-            crop_to_mask=False,
-            divisible_by=1
-        )
-
-        fj_img = separated_result[0]
-        mask = separated_result[1]
-        
-        # 处理遮罩和前景图，保持它们的相对位置关系
-        if mask is not None:
-            mask_np = mask[0].cpu().numpy()
-            mask_pil = Image.fromarray((mask_np * 255).astype(np.uint8)).convert("L")
-            
-            # 确保遮罩尺寸与前景图一致
-            if mask_pil.size != fj_pil.size:
-                mask_pil = mask_pil.resize(fj_pil.size, Image.LANCZOS)
-            
-            fj_with_mask = fj_pil.copy()
-            fj_with_mask.putalpha(mask_pil)
-            
-            # 不再进行裁剪，保持原始位置关系
-            fj_processed = fj_with_mask
-            mask_processed = mask_pil
-        else:
-            # 没有遮罩时，使用整个前景图
-            mask_processed = Image.new("L", fj_pil.size, 255)
-            fj_processed = fj_pil.copy()
-            fj_processed.putalpha(mask_processed)
-        
-        # 获取处理后图像的尺寸
-        processed_width, processed_height = fj_processed.size
-        # 使用图像中心作为旋转中心
-        center_x, center_y = processed_width // 2, processed_height // 2
-        
-        adjusted_fj = fj_processed
-        adjusted_mask = mask_processed
-
-        rotation = float(rotation)
-        
-        # 应用旋转和缩放
-        if rotation != 0 or scale != 1.0:
-            adjusted_fj = adjusted_fj.rotate(rotation, center=(center_x, center_y), resample=Image.BICUBIC, expand=True)
-            adjusted_mask = adjusted_mask.rotate(rotation, center=(center_x, center_y), resample=Image.BICUBIC, expand=True)
-            
-            if scale != 1.0:
-                new_size = (int(adjusted_fj.size[0] * scale), int(adjusted_fj.size[1] * scale))
-                adjusted_fj = adjusted_fj.resize(new_size, Image.LANCZOS)
-                adjusted_mask = adjusted_mask.resize(new_size, Image.LANCZOS)
-            
-            # 更新中心点
-            center_x, center_y = adjusted_fj.size[0] // 2, adjusted_fj.size[1] // 2
-        
-        # 计算背景图的中心点
-        bj_center_x, bj_center_y = bj_pil.size[0] // 2, bj_pil.size[1] // 2
-        
-        # 计算前景图应该放置的位置（相对于画布中心）
-        x_position = canvas_center_x - center_x + x_offset
-        y_position = canvas_center_y - center_y + y_offset
-        
-        paste_x = int(x_position)
-        paste_y = int(y_position)
-        
-        # 应用透明度
-        if opacity < 1.0:
-            r, g, b, a = adjusted_fj.split()
-            a = a.point(lambda p: p * opacity)
-            adjusted_fj = Image.merge("RGBA", (r, g, b, a))
-        
-        # 创建画布并放置背景图
-        composite_pil = Image.new("RGBA", (canvas_width, canvas_height), (0, 0, 0, 255))
-        # 背景图居中放置
-        bj_x = (canvas_width - bj_pil.size[0]) // 2
-        bj_y = (canvas_height - bj_pil.size[1]) // 2
-        composite_pil.paste(bj_pil, (bj_x, bj_y))
-        
-        # 应用混合模式并粘贴前景图
-        if blending_mode != "normal":
-            temp_img = Image.new('RGBA', composite_pil.size, (0, 0, 0, 0))
-            temp_img.paste(adjusted_fj, (paste_x, paste_y), adjusted_fj)
-            blended_pil = Image.new('RGBA', composite_pil.size, (0, 0, 0, 0))
-            
-            for x in range(max(0, paste_x), min(canvas_width, paste_x + adjusted_fj.size[0])):
-                for y in range(max(0, paste_y), min(canvas_height, paste_y + adjusted_fj.size[1])):
-                    if temp_img.getpixel((x, y))[3] > 0:
-                        bg_pixel = composite_pil.getpixel((x, y))
-                        fg_pixel = temp_img.getpixel((x, y))
-                        bg_pixel_img = Image.new('RGBA', (1, 1), bg_pixel)
-                        fg_pixel_img = Image.new('RGBA', (1, 1), fg_pixel)
-                        blended_pixel_img = apply_blending_mode(
-                            bg_pixel_img, fg_pixel_img, blending_mode, blend_strength
-                        )
-                        blended_pil.putpixel((x, y), blended_pixel_img.getpixel((0, 0)))
-            composite_pil = Image.alpha_composite(composite_pil, blended_pil)
-        else:
-            composite_pil.paste(adjusted_fj, (paste_x, paste_y), adjusted_fj)
-        
-        # 处理边缘检测
-        if edge_detection:
-            if edge_color in color_mapping:
-                r, g, b = color_mapping[edge_color]
-            else:
-                r, g, b = 0, 0, 0
-            
-            threshold = 128
-            full_size_mask = Image.new("L", composite_pil.size, 0)
-            
-            # 正确放置遮罩到完整画布上
-            mask_left = max(0, paste_x)
-            mask_top = max(0, paste_y)
-            mask_right = min(paste_x + adjusted_mask.size[0], canvas_width)
-            mask_bottom = min(paste_y + adjusted_mask.size[1], canvas_height)
-            
-            if mask_right > mask_left and mask_bottom > mask_top:
-                crop_left = max(0, -paste_x)
-                crop_top = max(0, -paste_y)
-                crop_right = crop_left + (mask_right - mask_left)
-                crop_bottom = crop_top + (mask_bottom - mask_top)
-                
-                if crop_right <= adjusted_mask.size[0] and crop_bottom <= adjusted_mask.size[1]:
-                    mask_crop = adjusted_mask.crop((crop_left, crop_top, crop_right, crop_bottom))
-                    full_size_mask.paste(mask_crop, (mask_left, mask_top, mask_right, mask_bottom))
-            
-            mask_array = np.array(full_size_mask)
-            binary_mask = np.where(mask_array > threshold, 255, 0).astype(np.uint8)
-            binary_mask_pil = Image.fromarray(binary_mask)
-            
-            edge_image = Image.new("RGBA", composite_pil.size, (0, 0, 0, 0))
-            edge_draw = ImageDraw.Draw(edge_image)
-            mask_cv = np.array(binary_mask_pil)
-            contours, _ = cv2.findContours(mask_cv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            for contour in contours:
-                for i in range(edge_thickness):
-                    points = [tuple(point[0]) for point in contour]
-                    edge_draw.line(points, fill=(r, g, b, int(opacity * 255)), width=edge_thickness-i+1)
-            
-            composite_pil = Image.alpha_composite(composite_pil, edge_image)
-            edge_mask = np.zeros_like(mask_cv)
-            cv2.drawContours(edge_mask, contours, -1, 255, edge_thickness)
-            line_mask_pil = Image.fromarray(edge_mask)
-        else:
-            # 创建完整尺寸的遮罩
-            full_size_mask = Image.new("L", composite_pil.size, 0)
-            
-            # 正确放置遮罩到完整画布上
-            mask_left = max(0, paste_x)
-            mask_top = max(0, paste_y)
-            mask_right = min(paste_x + adjusted_mask.size[0], canvas_width)
-            mask_bottom = min(paste_y + adjusted_mask.size[1], canvas_height)
-            
-            if mask_right > mask_left and mask_bottom > mask_top:
-                crop_left = max(0, -paste_x)
-                crop_top = max(0, -paste_y)
-                crop_right = crop_left + (mask_right - mask_left)
-                crop_bottom = crop_top + (mask_bottom - mask_top)
-                
-                if crop_right <= adjusted_mask.size[0] and crop_bottom <= adjusted_mask.size[1]:
-                    mask_crop = adjusted_mask.crop((crop_left, crop_top, crop_right, crop_bottom))
-                    full_size_mask.paste(mask_crop, (mask_left, mask_top))
-            
-            line_mask_pil = Image.new("L", composite_pil.size, 0)
-        
-        composite_pil = composite_pil.convert("RGB")
-        
-        composite_np = np.array(composite_pil).astype(np.float32) / 255.0
-        mask_np = np.array(full_size_mask).astype(np.float32) / 255.0
-        line_mask_np = np.array(line_mask_pil).astype(np.float32) / 255.0
-        
-        if len(composite_np.shape) == 2:
-            composite_np = np.stack([composite_np] * 3, axis=-1)
-        
-        composite_tensor = torch.from_numpy(composite_np).unsqueeze(0)
-        mask_tensor = torch.from_numpy(mask_np).unsqueeze(0).unsqueeze(0)
-        line_mask_tensor = torch.from_numpy(line_mask_np).unsqueeze(0).unsqueeze(0)
-        
-        # 创建裁剪后的输出（仅包含背景图尺寸范围）
-        bj_x_start = (canvas_width - bj_pil.size[0]) // 2
-        bj_y_start = (canvas_height - bj_pil.size[1]) // 2
-        bj_x_end = bj_x_start + bj_pil.size[0]
-        bj_y_end = bj_y_start + bj_pil.size[1]
-        
-        cropped_composite = composite_tensor[:, bj_y_start:bj_y_end, bj_x_start:bj_x_end, :]
-        
-        return ( cropped_composite, mask_tensor,composite_tensor, line_mask_tensor, )
 
 
 
