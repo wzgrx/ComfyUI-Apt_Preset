@@ -1723,9 +1723,11 @@
       "x_offset": {
         "name": "X偏移量"
       },
-
       "mask_expand": {
         "name": "遮罩扩展"
+      },
+      "mask_mode": {
+        "name": "遮罩形状"
       },
       "y_offset": {
         "name": "Y偏移量"
