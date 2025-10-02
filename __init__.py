@@ -352,31 +352,30 @@ NODE_CLASS_MAPPINGS= {
 #----------------image------------------------
 
 "Image_pad_outfill": Image_pad_outfill,  #N
-
-"Image_transform_solo": Image_transform_solo,  
-"Image_transform_layer":Image_transform_layer,   
-
 "Image_Upscaletile": Image_Upscaletile,    
 "Image_Resize_longsize": Image_Resize_longsize,
-"Image_Resize_sum": Image_Resize_sum,    
-"Image_Resize_sum_restore":Image_Resize_sum_restore,
+
 
 "Image_batch_select": Image_batch_select,
 "Image_batch_composite": Image_batch_composite,
 
 
-  
+
+"Image_transform_layer":Image_transform_layer,    
 "Image_solo_crop": Image_solo_crop,  
 "Image_solo_stitch": Image_solo_stitch, 
 
-
+"Image_Resize_sum": Image_Resize_sum,    
+"Image_Resize_sum_restore":Image_Resize_sum_restore,
 
 "Image_Pair_Merge": Image_Pair_Merge,  
 "Image_Pair_crop": Image_Pair_crop, 
 
 
-
 "Image_smooth_blur": Image_smooth_blur,
+"Image_transform_solo": Image_transform_solo,  
+
+
 "Image_Channel_Extract": Image_Channel_Extract,
 "Image_Channel_Apply": Image_Channel_Apply,
 "Image_Channel_RemoveAlpha": Image_Channel_RemoveAlpha,
