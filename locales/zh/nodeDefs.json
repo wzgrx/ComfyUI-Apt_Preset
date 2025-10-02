@@ -1553,7 +1553,7 @@
 
 
 "Image_Resize_sum": {
-    "display_name": "图像尺寸_调整(总)",
+    "display_name": "尺寸_调整(总)",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1610,7 +1610,7 @@
 
 
 "Image_Resize_sum_restore": {
-    "display_name": "图像尺寸_调整还原",
+    "display_name": "尺寸_调整还原",
     "inputs": {
       "resized_image": {
         "name": "调整图像"
@@ -1676,7 +1676,7 @@
   },
 
   "Image_transform_solo": {
-    "display_name": "图像变换_单图",
+    "display_name": "单图_变换",
     "inputs": {
       "image": {
         "name": "图像"
@@ -1712,14 +1712,20 @@
       }
     }
   },
+
+
   "Image_transform_layer": {
-    "display_name": "图像图层_变换",
+    "display_name": "图层_变换",
     "inputs": {
       "align_mode": {
         "name": "对齐模式"
       },
       "x_offset": {
         "name": "X偏移量"
+      },
+
+      "mask_expand": {
+        "name": "遮罩扩展"
       },
       "y_offset": {
         "name": "Y偏移量"
@@ -1769,20 +1775,23 @@
     },
     "outputs": {
       "0": {
-        "name": "合成图像"
+        "name": "合成图"
       },
       "1": {
         "name": "合成遮罩"
       },
       "2": {
-        "name": "线条遮罩"
+        "name": "总预览图"
       },
       "3": {
-        "name": "box2"
+        "name": "线条遮罩"
       }
     }
   },
 
+
+
+ 
 
 "Image_Upscaletile": {
     "display_name": "图像尺寸_模型放大",
@@ -3325,7 +3334,7 @@
     }
   },
   "Image_Pair_Merge": {
-    "display_name": "图像_双图合并",
+    "display_name": "双图_合并",
     "inputs": {
       "layout_mode": {
         "name": "布局模式"
@@ -3380,7 +3389,7 @@
     }
   },
   "Image_Pair_crop": {
-    "display_name": "图像_双图裁切",
+    "display_name": "双图_裁切",
     "inputs": {
       "image": {
         "name": "图像"
@@ -9149,7 +9158,7 @@
     }
   },
   "Image_solo_crop": {
-    "display_name": "图像图层_裁切",
+    "display_name": "单图_裁切",
     "inputs": {
       "image": {
         "name": "图像"
@@ -9208,7 +9217,7 @@
 
 
   "Image_solo_stitch": {
-    "display_name": "图像图层_粘合",
+    "display_name": "单图_粘合",
         "inputs": {
             "bj_image": {
                 "name": "背景图像"
@@ -9272,7 +9281,7 @@
   },
 
 "Image_smooth_blur": {
-    "display_name": "图像_羽化",
+    "display_name": "单图_羽化",
     "inputs": {
       "image": {
         "name": "图像"
