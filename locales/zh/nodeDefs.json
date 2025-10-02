@@ -1715,7 +1715,7 @@
 
 
   "Image_transform_layer": {
-    "display_name": "双图_变换",
+    "display_name": "双图_图层变换",
     "inputs": {
       "align_mode": {
         "name": "对齐模式"
@@ -1794,7 +1794,7 @@
 
 
   "Image_transform_crop": {
-    "display_name": "单图_变换",
+    "display_name": "单图_裁切_变换",
     "inputs": {
       "align_mode": {
         "name": "对齐模式"
@@ -9297,7 +9297,7 @@
 
 
   "Image_solo_stitch": {
-    "display_name": "单图_粘合",
+    "display_name": "单图_裁切_粘合",
         "inputs": {
             "bj_image": {
                 "name": "背景图像"
