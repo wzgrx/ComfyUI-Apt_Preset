@@ -2801,7 +2801,7 @@ class chx_Ksampler_Kontext_inpaint:
 
 
 
-class Image_transform_layer:
+class XXXImage_transform_layer:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -5177,10 +5177,6 @@ class Image_solo_stitch:
 
 
 
-
-
-
-
 class Image_transform_layer:
     @classmethod
     def INPUT_TYPES(cls):
@@ -5188,6 +5184,9 @@ class Image_transform_layer:
             "required": {
                 "bj_img": ("IMAGE",),  
                 "fj_img": ("IMAGE",),  
+                "mask_expand": ("INT", {"default": 0, "min": -500, "max": 1000, "step": 1}),
+                "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1}),
+                "mask_mode": (["original", "fill", "fill_block", "outline", "outline_block", "circle", "outline_circle"], {"default": "original"}),
                 "x_offset": ("INT", {"default": 0, "min": -10000, "max": 10000, "step": 1}),
                 "y_offset": ("INT", {"default": 0, "min": -10000, "max": 10000, "step": 1}),
                 "rotation": ("FLOAT", {"default": 0, "min": -360, "max": 360, "step": 0.1}),
@@ -5201,7 +5200,6 @@ class Image_transform_layer:
             },
             "optional": {
                 "mask": ("MASK",),      
-                "mask_stack": ("MASK_STACK2",),
             }
         }
     RETURN_TYPES = ("IMAGE", "MASK", "IMAGE",  "MASK", )
@@ -5209,8 +5207,8 @@ class Image_transform_layer:
     FUNCTION = "process"
     CATEGORY = "Apt_Preset/image"
   
-    def process( self, x_offset, y_offset, rotation, scale, edge_detection, edge_thickness, edge_color, 
-                opacity, blending_mode, blend_strength, mask_stack=None, bj_img=None, fj_img=None, mask=None ):
+    def process( self, x_offset, y_offset, rotation, scale, edge_detection, edge_thickness, edge_color, mask_expand, smoothness,
+                opacity, blending_mode, blend_strength, bj_img=None, fj_img=None,mask_mode="fill", mask=None ):
         
         color_mapping = {
             "black": (0, 0, 0),
@@ -5239,13 +5237,6 @@ class Image_transform_layer:
         if mask is None:
             mask = torch.ones((1, fj_pil.size[1], fj_pil.size[0]), dtype=torch.float32)
 
-
-
-        if mask_stack is not None:
-            mask_mode, smoothness, mask_expand, mask_min, mask_max = mask_stack            
-        else:
-            mask_mode, smoothness, mask_expand, mask_min, mask_max = "original", 0, 0, 0, 1
-
         mask_tensor = None
         if mask is not None: 
             if hasattr(mask, 'convert'):
@@ -5258,7 +5249,7 @@ class Image_transform_layer:
 
         separated_result = Mask_transform_sum().separate(  
             bg_mode="crop_image", 
-            mask_mode= mask_mode,
+            mask_mode=mask_mode,
             ignore_threshold=0, 
             opacity=1, 
             outline_thickness=1, 
@@ -5268,8 +5259,8 @@ class Image_transform_layer:
             expand_height=0,
             rescale_crop=1.0,
             tapered_corners=True,
-            mask_min=mask_min, 
-            mask_max=mask_max,
+            mask_min=0, 
+            mask_max=1,
             base_image=fj_img, 
             mask=mask_tensor, 
             crop_to_mask=False,
@@ -5283,43 +5274,37 @@ class Image_transform_layer:
         if mask is not None:
             mask_np = mask[0].cpu().numpy()
             mask_pil = Image.fromarray((mask_np * 255).astype(np.uint8)).convert("L")
+            
+            # 确保遮罩尺寸与前景图一致
             if mask_pil.size != fj_pil.size:
                 mask_pil = mask_pil.resize(fj_pil.size, Image.LANCZOS)
             
             fj_with_mask = fj_pil.copy()
             fj_with_mask.putalpha(mask_pil)
             
-            # 获取遮罩的边界框，用于裁剪
-            bbox = mask_pil.getbbox()
-            if bbox:
-                # 只裁剪前景图和遮罩，但保持它们的相对位置
-                fj_cropped = fj_with_mask.crop(bbox)
-                mask_cropped = mask_pil.crop(bbox)
-                # 保存裁剪的偏移量，以便后续正确放置
-                crop_offset_x, crop_offset_y = bbox[0], bbox[1]
-            else:
-                fj_cropped = fj_with_mask
-                mask_cropped = mask_pil
-                crop_offset_x, crop_offset_y = 0, 0
+            # 不再进行裁剪，保持原始位置关系
+            fj_processed = fj_with_mask
+            mask_processed = mask_pil
         else:
             # 没有遮罩时，使用整个前景图
-            mask_cropped = Image.new("L", fj_pil.size, 255)
-            fj_cropped = fj_pil.copy()
-            fj_cropped.putalpha(mask_cropped)
-            crop_offset_x, crop_offset_y = 0, 0
+            mask_processed = Image.new("L", fj_pil.size, 255)
+            fj_processed = fj_pil.copy()
+            fj_processed.putalpha(mask_processed)
         
-        cropped_width, cropped_height = fj_cropped.size
-        # 使用裁剪后的图像中心作为旋转中心
-        mask_center_x, mask_center_y = cropped_width // 2, cropped_height // 2
-        adjusted_fj = fj_cropped
-        adjusted_mask = mask_cropped
+        # 获取处理后图像的尺寸
+        processed_width, processed_height = fj_processed.size
+        # 使用图像中心作为旋转中心
+        center_x, center_y = processed_width // 2, processed_height // 2
+        
+        adjusted_fj = fj_processed
+        adjusted_mask = mask_processed
 
         rotation = float(rotation)
         
         # 应用旋转和缩放
         if rotation != 0 or scale != 1.0:
-            adjusted_fj = adjusted_fj.rotate(rotation, center=(mask_center_x, mask_center_y), resample=Image.BICUBIC, expand=True)
-            adjusted_mask = adjusted_mask.rotate(rotation, center=(mask_center_x, mask_center_y), resample=Image.BICUBIC, expand=True)
+            adjusted_fj = adjusted_fj.rotate(rotation, center=(center_x, center_y), resample=Image.BICUBIC, expand=True)
+            adjusted_mask = adjusted_mask.rotate(rotation, center=(center_x, center_y), resample=Image.BICUBIC, expand=True)
             
             if scale != 1.0:
                 new_size = (int(adjusted_fj.size[0] * scale), int(adjusted_fj.size[1] * scale))
@@ -5327,15 +5312,14 @@ class Image_transform_layer:
                 adjusted_mask = adjusted_mask.resize(new_size, Image.LANCZOS)
             
             # 更新中心点
-            mask_center_x, mask_center_y = adjusted_fj.size[0] // 2, adjusted_fj.size[1] // 2
+            center_x, center_y = adjusted_fj.size[0] // 2, adjusted_fj.size[1] // 2
         
         # 计算背景图的中心点
         bj_center_x, bj_center_y = bj_pil.size[0] // 2, bj_pil.size[1] // 2
         
         # 计算前景图应该放置的位置（相对于画布中心）
-        # 考虑裁剪偏移量、旋转缩放后的中心点以及用户指定的偏移量
-        x_position = canvas_center_x - mask_center_x + x_offset
-        y_position = canvas_center_y - mask_center_y + y_offset
+        x_position = canvas_center_x - center_x + x_offset
+        y_position = canvas_center_y - center_y + y_offset
         
         paste_x = int(x_position)
         paste_y = int(y_position)
@@ -5462,9 +5446,6 @@ class Image_transform_layer:
         cropped_composite = composite_tensor[:, bj_y_start:bj_y_end, bj_x_start:bj_x_end, :]
         
         return ( cropped_composite, mask_tensor,composite_tensor, line_mask_tensor, )
-
-
-
 
 
 
