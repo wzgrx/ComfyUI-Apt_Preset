@@ -361,13 +361,14 @@ NODE_CLASS_MAPPINGS= {
 
 
 
-"Image_transform_layer":Image_transform_layer,    
+"Image_transform_crop":Image_transform_crop,  
 "Image_solo_crop": Image_solo_crop,  
 "Image_solo_stitch": Image_solo_stitch, 
 
 "Image_Resize_sum": Image_Resize_sum,    
 "Image_Resize_sum_restore":Image_Resize_sum_restore,
 
+"Image_transform_layer":Image_transform_layer,   
 "Image_Pair_Merge": Image_Pair_Merge,  
 "Image_Pair_crop": Image_Pair_crop, 
 
