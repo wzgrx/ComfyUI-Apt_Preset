@@ -2801,7 +2801,7 @@ class chx_Ksampler_Kontext_inpaint:
 
 
 
-class XXXImage_transform_layer:
+class Image_transform_crop:
     @classmethod
     def INPUT_TYPES(cls):
         return {
