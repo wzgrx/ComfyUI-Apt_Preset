@@ -10,6 +10,7 @@ The current workflow connections are becoming increasingly dense, making them di
 
 
 # I. Update Record
+2025.10.2 Improve the functions of some nodes and fix some bugs
 
 # II. Usage Guide
 
