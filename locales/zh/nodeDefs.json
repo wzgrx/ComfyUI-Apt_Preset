@@ -1715,7 +1715,7 @@
 
 
   "Image_transform_layer": {
-    "display_name": "图层_变换",
+    "display_name": "双图_变换",
     "inputs": {
       "align_mode": {
         "name": "对齐模式"
@@ -1791,6 +1791,84 @@
     }
   },
 
+
+
+  "Image_transform_crop": {
+    "display_name": "单图_变换",
+    "inputs": {
+      "align_mode": {
+        "name": "对齐模式"
+      },
+      "x_offset": {
+        "name": "X偏移量"
+      },
+      "mask_expand": {
+        "name": "遮罩扩展"
+      },
+      "mask_mode": {
+        "name": "遮罩形状"
+      },
+      "y_offset": {
+        "name": "Y偏移量"
+      },
+      "rotation": {
+        "name": "旋转角度"
+      },
+      "scale": {
+        "name": "缩放比例"
+      },
+      "smoothness": {
+        "name": "羽化"
+      },
+      "stitch": {
+        "name": "拼接"
+      },
+      "edge_detection": {
+        "name": "边缘检测"
+      },
+      "edge_thickness": {
+        "name": "边缘厚度"
+      },
+      "edge_color": {
+        "name": "边缘颜色"
+      },
+      "opacity": {
+        "name": "不透明度"
+      },
+      "blending_mode": {
+        "name": "混合模式"
+      },
+      "blend_strength": {
+        "name": "混合强度"
+      },
+      "bj_img": {
+        "name": "背景图"
+      },
+      "fj_img": {
+        "name": "裁切图"
+      },
+      "mask": {
+        "name": "裁切遮罩"
+      },
+      "mask_stack": {
+        "name": "遮罩控制"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "合成图"
+      },
+      "1": {
+        "name": "合成遮罩"
+      },
+      "2": {
+        "name": "总预览图"
+      },
+      "3": {
+        "name": "线条遮罩"
+      }
+    }
+  },
 
 
  
