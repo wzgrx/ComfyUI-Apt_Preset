@@ -3230,64 +3230,42 @@ class Mask_transform_sum:
         crop_params = None
 
         if coords is not None:
-            # 获取掩码边界框
             x, y, w, h = cv2.boundingRect(coords)
-            
-            # 计算原始边界框的中心点（使用浮点数保持精度）
             center_x = x + w / 2.0
             center_y = y + h / 2.0
-            
-            # 计算在各个方向上可以扩展的最大距离
-            max_expand_left = center_x - 0          # 到左边界的距离
-            max_expand_right = original_w - center_x  # 到右边界的距离
-            max_expand_top = center_y - 0           # 到上边界的距离
-            max_expand_bottom = original_h - center_y # 到下边界的距离
-            
-            # 计算实际可以应用的扩展量（取对称限制）
+            max_expand_left = center_x - 0
+            max_expand_right = original_w - center_x
+            max_expand_top = center_y - 0
+            max_expand_bottom = original_h - center_y
             actual_expand_x = min(expand_width, max_expand_left, max_expand_right)
             actual_expand_y = min(expand_height, max_expand_top, max_expand_bottom)
-            
-            # 基于实际扩展量计算最终边界（确保绝对对称）
             x_start = int(round(center_x - (w / 2.0) - actual_expand_x))
             x_end = int(round(center_x + (w / 2.0) + actual_expand_x))
             y_start = int(round(center_y - (h / 2.0) - actual_expand_y))
             y_end = int(round(center_y + (h / 2.0) + actual_expand_y))
-            
-            # 确保坐标在有效范围内
             x_start = max(0, x_start)
             y_start = max(0, y_start)
             x_end = min(original_w, x_end)
             y_end = min(original_h, y_end)
-            
-            # 确保最终区域尺寸为偶数，保持绝对对称
             width = x_end - x_start
             height = y_end - y_start
-            
             if width % 2 != 0:
-                # 如果宽度是奇数，优先调整右边或下边
                 if x_end < original_w:
                     x_end += 1
                 elif x_start > 0:
                     x_start -= 1
-                    
             if height % 2 != 0:
-                # 如果高度是奇数，优先调整下边
                 if y_end < original_h:
                     y_end += 1
                 elif y_start > 0:
                     y_start -= 1
-            
-            # 再次确保坐标在有效范围内
             x_start = max(0, x_start)
             y_start = max(0, y_start)
             x_end = min(original_w, x_end)
             y_end = min(original_h, y_end)
-            
             crop_params = (x_start, y_start, x_end, y_end)
         else:
             crop_params = (0, 0, original_w, original_h)
-
-
 
         if base_image is None:
             base_image_np = np.zeros((original_h, original_w, 3), dtype=np.float32)
@@ -3303,19 +3281,8 @@ class Mask_transform_sum:
             if rescale_crop != 1.0:
                 scaled_w = int(cropped_final_mask.shape[1] * rescale_crop)
                 scaled_h = int(cropped_final_mask.shape[0] * rescale_crop)
-                
-                cropped_final_mask = cv2.resize(
-                    cropped_final_mask, 
-                    (scaled_w, scaled_h), 
-                    interpolation=cv2.INTER_LINEAR
-                )
-                
-                cropped_base_image = cv2.resize(
-                    cropped_base_image, 
-                    (scaled_w, scaled_h), 
-                    interpolation=cv2.INTER_LINEAR
-                )
-            
+                cropped_final_mask = cv2.resize(cropped_final_mask, (scaled_w, scaled_h), interpolation=cv2.INTER_LINEAR)
+                cropped_base_image = cv2.resize(cropped_base_image, (scaled_w, scaled_h), interpolation=cv2.INTER_LINEAR)
             final_mask = cropped_final_mask
             base_image_np = cropped_base_image
         else:
@@ -3328,24 +3295,32 @@ class Mask_transform_sum:
             background[:] = self.colors[bg_mode]
         elif bg_mode == "image" and base_image is not None:
             background = base_image_np.copy()
+        elif bg_mode == "transparent":
+            background = np.zeros((h, w, 3), dtype=np.float32)
         
         if background.shape[:2] != (h, w):
             background = cv2.resize(background, (w, h), interpolation=cv2.INTER_LINEAR)
         
         if bg_mode == "crop_image":
             combined_image = base_image_np.copy()
-        else:
+        elif bg_mode in ["white", "black", "red", "green", "blue", "transparent"]:
+            mask_float = final_mask.astype(np.float32) / 255.0
+            if mask_float.ndim == 3:
+                mask_float = mask_float.squeeze()
+            mask_max_val = np.max(mask_float) if np.max(mask_float) > 0 else 1
+            mask_float = (mask_float / mask_max_val) * (mask_max - mask_min) + mask_min
+            mask_float = np.clip(mask_float, 0.0, 1.0)
+            mask_float = mask_float[:, :, np.newaxis]
+            combined_image = mask_float * base_image_np + (1 - mask_float) * background
+        elif bg_mode == "image":
             combined_image = background.copy()
             mask_float = final_mask.astype(np.float32) / 255.0
             if mask_float.ndim == 3:
                 mask_float = mask_float.squeeze()
-            
             mask_max_val = np.max(mask_float) if np.max(mask_float) > 0 else 1
             mask_float = (mask_float / mask_max_val) * (mask_max - mask_min) + mask_min
             mask_float = np.clip(mask_float, 0.0, 1.0)
-            
             color = np.array(self.colors["white"], dtype=np.float32)
-            
             for c in range(3):
                 combined_image[:, :, c] = (mask_float * (opacity * color[c] + (1 - opacity) * combined_image[:, :, c]) + 
                                          (1 - mask_float) * combined_image[:, :, c])
@@ -3357,26 +3332,20 @@ class Mask_transform_sum:
             h, w = combined_image.shape[:2]
             new_h = ((h + divisible_by - 1) // divisible_by) * divisible_by
             new_w = ((w + divisible_by - 1) // divisible_by) * divisible_by
-            
             if new_h != h or new_w != w:
                 padded_image = np.zeros((new_h, new_w, 3), dtype=combined_image.dtype)
                 padded_image[:h, :w, :] = combined_image
-                
                 padded_mask = np.zeros((new_h, new_w), dtype=final_mask.dtype)
                 padded_mask[:h, :w] = final_mask
-                
                 combined_image = padded_image
                 final_mask = padded_mask
         
         combined_image_tensor = torch.from_numpy(combined_image).float() / 255.0
         combined_image_tensor = combined_image_tensor.unsqueeze(0)
-        
         final_mask_tensor = torch.from_numpy(final_mask).float() / 255.0
         final_mask_tensor = final_mask_tensor.unsqueeze(0)
         
         return (combined_image_tensor, final_mask_tensor)
-    
-
 
 
 #endregion----------------------------合并----------
