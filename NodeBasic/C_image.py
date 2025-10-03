@@ -26,6 +26,9 @@ from nodes import CLIPTextEncode, common_ksampler,InpaintModelConditioning
 from comfy_extras.nodes_upscale_model import ImageUpscaleWithModel,UpscaleModelLoader
 import node_helpers
 
+from typing import Tuple
+
+
 import torch.nn.functional as F
 import comfy.utils
 
@@ -2468,7 +2471,7 @@ class chx_Ksampler_inpaint:
                 "denoise": ("FLOAT", {"default": 1, "min": 0, "max": 1, "step": 0.01}),
                 "work_pattern": (["普通采样", "仅调整遮罩"], {"default": "普通采样"}),
 
-                "crop_mode": (["遮罩裁切", "裁切图_缩放", "背景图_缩放", "不裁切"],),
+                "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),
                 "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
                 "upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
                 "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
@@ -2487,11 +2490,11 @@ class chx_Ksampler_inpaint:
     RETURN_TYPES = ("RUN_CONTEXT", "IMAGE", "IMAGE", "MASK", "STITCH2", "IMAGE")
     RETURN_NAMES = ("context", "bj_image", "image",  "cropped_mask", "stitch", "cropped_image")
     FUNCTION = "run"
-    CATEGORY = "Apt_Preset/Deprecated"
+    CATEGORY = "Apt_Preset/chx_ksample"
 
     def run(self, context, seed, image=None, mask=None, denoise=1, pos="",
             work_pattern="普通采样", sample_stack=None, mask_sampling=False,
-            mask_stack=None,  crop_mode="不裁切", long_side=512,
+            mask_stack=None,  crop_mode="no_crop", long_side=512,
             expand_width=0, expand_height=0, divisible_by=2):
 
         #------------------------------确保输入有效的mask和image----------------------------------------        
@@ -2633,7 +2636,7 @@ class chx_Ksampler_Kontext_inpaint:
                 "denoise": ("FLOAT", {"default": 1, "min": 0, "max": 1, "step": 0.01}),
                 "work_pattern": (["kontext采样", "仅调整遮罩"], {"default": "kontext采样"}),
                 "mask_sampling": ("BOOLEAN", {"default": True, "label_on": "启用", "label_off": "禁用"}),
-                "scale_mode": (["不缩放", "裁切图_缩放", "背景图_缩放"],),
+                "scale_mode": (["不缩放", "scale_crop_image", "scale_bj_image"],),
                 "scale_longside": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 2}),
                 "target_w": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 2}),
                 "target_h": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 2}),
@@ -2806,6 +2809,12 @@ class Image_transform_crop:
     def INPUT_TYPES(cls):
         return {
             "required": {
+
+                "bj_img": ("IMAGE",),  
+                "fj_img": ("IMAGE",),  
+                "mask": ("MASK",),      
+                "stitch": ("STITCH2",),
+
                 "mask_expand": ("INT", {"default": 0, "min": -500, "max": 1000, "step": 1}),
                 "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1}),
                 "x_offset": ("INT", {"default": 0, "min": -10000, "max": 10000, "step": 1}),
@@ -2820,10 +2829,7 @@ class Image_transform_crop:
                 "blend_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
             },
             "optional": {
-                "bj_img": ("IMAGE",),  
-                "fj_img": ("IMAGE",),  
-                "mask": ("MASK",),      
-                "stitch": ("STITCH2",),
+
             }
         }
     RETURN_TYPES = ("IMAGE", "MASK", "MASK", )
@@ -3788,7 +3794,8 @@ class Image_Resize_sum:
             "scale_factor": scale_factor,
             "final_size": (final_width, final_height),
             "image_position": (pad_left, pad_top) if keep_proportion.startswith("pad") else (0, 0),
-            "has_input_mask": mask is not None
+            "has_input_mask": mask is not None,
+            "original_mask": mask.clone() if mask is not None else None
         }
         
         scale_factor = 1/scale_factor
@@ -3856,173 +3863,6 @@ class Image_Resize_sum:
             padding_mask[m, pad_top:pad_top+H, pad_left:pad_left+W] = 0.0
 
         return (out_image, padding_mask)
-
-
-
-class Image_Resize_sum_restore:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "resized_image": ("IMAGE",),
-                "mask": ("MASK",),
-                "stitch": ("STITCH3",),
-                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "area" }),
-            },
-            "optional": {}
-        }
-
-    CATEGORY = "Apt_Preset/image"
-    RETURN_TYPES = ("IMAGE", "MASK",)
-    RETURN_NAMES = ("restored_image", "restored_mask",)
-    FUNCTION = "restore"
-
-    def restore(self, resized_image, stitch, mask=None, upscale_method="bicubic"):
-        original_h, original_w = stitch["original_shape"]
-        target_resized_h, target_resized_w = stitch["resized_shape"]
-        crop_x, crop_y = stitch["crop_position"]
-        crop_w, crop_h = stitch["crop_size"]
-        pad_left, pad_right, pad_top, pad_bottom = stitch["pad_info"]
-        keep_proportion = stitch["keep_proportion"]
-        scale_factor = stitch["scale_factor"]
-        final_width, final_height = stitch["final_size"]
-        image_pos_x, image_pos_y = stitch["image_position"]
-        has_input_mask = stitch.get("has_input_mask", False)
-        original_image = stitch.get("original_image", None)
-          
-
-        current_h, current_w = resized_image.shape[1], resized_image.shape[2]
-        if current_w != target_resized_w or current_h != target_resized_h:
-            resized_image = common_upscale(
-                resized_image.movedim(-1, 1),
-                target_resized_w,
-                target_resized_h,
-                upscale_method,
-                crop="disabled"
-            ).movedim(1, -1)
-        
-        # 对mask执行相同的尺寸检查
-        if mask is not None and mask.numel() > 0 and has_input_mask:
-            current_mask_h, current_mask_w = mask.shape[1], mask.shape[2]
-            if current_mask_w != target_resized_w or current_mask_h != target_resized_h:
-                mask = common_upscale(
-                    mask.unsqueeze(1),
-                    target_resized_w,
-                    target_resized_h,
-                    upscale_method,
-                    crop="disabled"
-                ).squeeze(1)
-
-        if keep_proportion == "crop":
-            # 检查裁剪恢复的尺寸是否匹配
-            current_restored_w, current_restored_h = resized_image.shape[2], resized_image.shape[1]
-            if current_restored_w != crop_w or current_restored_h != crop_h:
-                restored_image = common_upscale(
-                    resized_image.movedim(-1, 1), 
-                    crop_w, crop_h, 
-                    upscale_method, 
-                    crop="disabled"
-                ).movedim(1, -1)
-            else:
-                restored_image = resized_image  # 尺寸匹配，无需缩放
-            
-            if original_image is not None:
-                final_image = original_image.clone()
-            else:
-                final_image = torch.zeros(
-                    (resized_image.shape[0], original_h, original_w, resized_image.shape[3]), 
-                    dtype=resized_image.dtype, 
-                    device=resized_image.device
-                )
-            
-            final_image[:, crop_y:crop_y+crop_h, crop_x:crop_x+crop_w, :] = restored_image
-            
-            if mask is not None and mask.numel() > 0 and has_input_mask:
-                # 检查mask裁剪恢复的尺寸是否匹配
-                current_mask_restored_w, current_mask_restored_h = mask.shape[2], mask.shape[1]
-                if current_mask_restored_w != crop_w or current_mask_restored_h != crop_h:
-                    restored_mask = common_upscale(
-                        mask.unsqueeze(1), 
-                        crop_w, crop_h, 
-                        upscale_method, 
-                        crop="disabled"
-                    ).squeeze(1)
-                else:
-                    restored_mask = mask  # 尺寸匹配，无需缩放
-                    
-                final_mask = torch.zeros(
-                    (mask.shape[0], original_h, original_w), 
-                    dtype=mask.dtype, 
-                    device=mask.device
-                )
-                final_mask[:, crop_y:crop_y+crop_h, crop_x:crop_x+crop_w] = restored_mask
-                return (final_image, final_mask)
-            else:
-                return (final_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
-                
-        elif keep_proportion.startswith("pad"):
-            unpadded_image = resized_image[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width, :]
-            
-            # 检查填充恢复的尺寸是否匹配
-            current_unpadded_w, current_unpadded_h = unpadded_image.shape[2], unpadded_image.shape[1]
-            if current_unpadded_w != original_w or current_unpadded_h != original_h:
-                restored_image = common_upscale(
-                    unpadded_image.movedim(-1, 1), 
-                    original_w, original_h, 
-                    upscale_method, 
-                    crop="disabled"
-                ).movedim(1, -1)
-            else:
-                restored_image = unpadded_image  # 尺寸匹配，无需缩放
-            
-            if mask is not None and mask.numel() > 0 and has_input_mask:
-                unpadded_mask = mask[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width]
-                
-                # 检查mask填充恢复的尺寸是否匹配
-                current_mask_unpadded_w, current_mask_unpadded_h = unpadded_mask.shape[2], unpadded_mask.shape[1]
-                if current_mask_unpadded_w != original_w or current_mask_unpadded_h != original_h:
-                    restored_mask = common_upscale(
-                        unpadded_mask.unsqueeze(1), 
-                        original_w, original_h, 
-                        upscale_method, 
-                        crop="disabled"
-                    ).squeeze(1)
-                else:
-                    restored_mask = unpadded_mask  # 尺寸匹配，无需缩放
-                    
-                return (restored_image, restored_mask)
-            else:
-                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
-                
-        else:
-            # 检查常规恢复的尺寸是否匹配
-            current_regular_w, current_regular_h = resized_image.shape[2], resized_image.shape[1]
-            if current_regular_w != original_w or current_regular_h != original_h:
-                restored_image = common_upscale(
-                    resized_image.movedim(-1, 1), 
-                    original_w, original_h, 
-                    upscale_method, 
-                    crop="disabled"
-                ).movedim(1, -1)
-            else:
-                restored_image = resized_image  # 尺寸匹配，无需缩放
-            
-            if mask is not None and mask.numel() > 0 and has_input_mask:
-                # 检查mask常规恢复的尺寸是否匹配
-                current_mask_regular_w, current_mask_regular_h = mask.shape[2], mask.shape[1]
-                if current_mask_regular_w != original_w or current_mask_regular_h != original_h:
-                    restored_mask = common_upscale(
-                        mask.unsqueeze(1), 
-                        original_w, original_h, 
-                        upscale_method, 
-                        crop="disabled"
-                    ).squeeze(1)
-                else:
-                    restored_mask = mask  # 尺寸匹配，无需缩放
-                    
-                return (restored_image, restored_mask)
-            else:
-                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
 
 
 
@@ -4470,7 +4310,7 @@ class Image_solo_crop:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "crop_mode": (["遮罩裁切", "裁切图_缩放", "背景图_缩放", "不裁切"],),
+                "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),
                 "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
                 "upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
                 "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
@@ -4482,15 +4322,30 @@ class Image_solo_crop:
                 "mask_stack": ("MASK_STACK2",),
                 "crop_img_bj": (
                     ["image", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
-                    {"default": "image"}
-                ),
+                    {"default": "image"},),
+
             }
         }
 
     CATEGORY = "Apt_Preset/image"
     RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "MASK", "STITCH2")
-    RETURN_NAMES = ("bj_image", "bj_mask", "cropped_image", "cropped_mask", "stitch")
+    RETURN_NAMES = ("bj_image", "bj_mask", "crop_image", "crop_mask", "stitch")
     FUNCTION = "inpaint_crop"
+    DESCRIPTION = """
+        裁剪模式 (Crop Modes):
+        - no_scale_crop: 原始裁切图。 不支持缩放
+        - scale_crop_image: 原始裁切图的长边缩放。 
+        - scale_bj_image: 背景图的长边缩放。 不支持扩展
+        - no_crop: 不进行裁剪，仅处理遮罩。        
+        - 遮罩控制: 微调尺寸【目标尺寸相差2~8个像素时】
+        Crop Modes:
+        - no_scale_crop: Original crop image. No scaling supported.
+        - scale_crop_image: Scale the long side of the original crop image.
+        - scale_bj_image: Scale the long side of the background image. No expansion supported.
+        - no_crop: No cropping, process mask only.
+        - Mask Control: Fine-tune dimensions [when target size differs by 2-8 pixels].
+    """
+
 
     def get_mask_bounding_box(self, mask):
         mask_np = (mask[0].cpu().numpy() * 255).astype(np.uint8)
@@ -4507,14 +4362,14 @@ class Image_solo_crop:
         mask_ratio = mask_w / mask_h
         new_width, new_height = img_width, img_height
         
-        if crop_mode == "背景图_缩放":
+        if crop_mode == "scale_bj_image":
             if img_width >= img_height:
                 new_width = long_side
                 new_height = int(new_width / image_ratio)
             else:
                 new_height = long_side
                 new_width = int(new_height * image_ratio)
-        elif crop_mode == "裁切图_缩放":
+        elif crop_mode == "scale_crop_image":
             if mask_w >= mask_h:
                 new_mask_width = long_side
                 new_mask_height = int(new_mask_width / mask_ratio)
@@ -4525,7 +4380,7 @@ class Image_solo_crop:
                 mask_scale = new_mask_height / mask_h
             new_width = int(img_width * mask_scale)
             new_height = int(img_height * mask_scale)
-        elif crop_mode == "不裁切":
+        elif crop_mode == "no_crop":
             new_width, new_height = img_width, img_height
             if mask_w >= mask_h:
                 new_mask_width = long_side
@@ -4636,6 +4491,7 @@ class Image_solo_crop:
         crop_image, original_crop_mask = self.process_resize(
             image, processed_mask, crop_mode, long_side, divisible_by, upscale_method)
         
+
         bj_mask_tensor = original_crop_mask
         bj_image = crop_image.clone()
         
@@ -4721,11 +4577,11 @@ class Image_solo_crop:
         mask_y_end = 0
 
 
-        if crop_mode == "不裁切":
+        if crop_mode == "no_crop":
             cropped_image = image_np.copy()
             new_mask = np.zeros((original_h, original_w), dtype=np.uint8)
             new_mask[y:y+h, x:x+w] = mask_np[y:y+h, x:x+w]
-            # 对于不裁切模式，crop_position应该是(0, 0)，因为没有实际的裁切操作
+            # 对于no_crop模式，crop_position应该是(0, 0)，因为没有实际的裁切操作
             current_crop_position = (0, 0)
             # current_crop_size应该是原始图像的尺寸
             current_crop_size = (original_w, original_h)
@@ -4971,6 +4827,474 @@ class Image_solo_stitch:
         fimage = Blend().blend_images(bj_image, final_image_tensor, blend_factor, blend_mode)[0]
 
         return (fimage, )
+
+
+
+
+
+
+
+
+
+
+
+
+class Image_Resize_sum_Stitch:
+    @classmethod
+    def INPUT_TYPES(cls) -> dict:
+        return {
+            "required": {
+                "stitch": ("STITCH3",),
+            },
+            "optional": {
+                "image": ("IMAGE",),  # 用于计算缩放因子的图像输入
+            }
+        }
+
+    RETURN_TYPES = ("INT", "INT", "INT", "INT", "INT", "INT", "INT", "INT", "INT", "INT", "FLOAT")
+    RETURN_NAMES = (
+        "width",          # 排除填充的有效宽度（final_width * scale_factor）
+        "height",         # 排除填充的有效高度（final_height * scale_factor）
+        "x_offset",       # pad模式时有效图像左上角X坐标 * scale_factor
+        "y_offset",       # pad模式时有效图像左上角Y坐标 * scale_factor
+        "pad_left",       # 左侧填充像素数 * scale_factor
+        "pad_right",      # 右侧填充像素数 * scale_factor
+        "pad_top",        # 顶部填充像素数 * scale_factor
+        "pad_bottom",     # 底部填充像素数 * scale_factor
+        "full_width",     # 包含填充的输出图像实际宽度 * scale_factor
+        "full_height",    # 包含填充的输出图像实际高度 * scale_factor
+        "scale_factor"    # 计算得到的缩放因子（image宽度 / full_width）
+    )
+    FUNCTION = "extract_info"
+    CATEGORY = "Apt_Preset/image"
+    DESCRIPTION = """
+    从Image_Resize_sum输出的stitch信息中提取关键参数，并根据输入图像自动计算缩放因子：
+    1. 缩放因子 = 输入图像宽度 / 原始全宽（包含填充）
+    2. 所有输出参数会乘以缩放因子后取整
+    3. 若未提供输入图像，缩放因子默认为1.0
+    """
+
+    def extract_info(self, stitch: dict, image: torch.Tensor = None) -> Tuple[int, int, int, int, int, int, int, int, int, int, float]:
+        # 提取基础信息
+        valid_width = stitch.get("final_size", (0, 0))[0]
+        valid_height = stitch.get("final_size", (0, 0))[1]
+        
+        pad_left = stitch.get("pad_info", (0, 0, 0, 0))[0]
+        pad_right = stitch.get("pad_info", (0, 0, 0, 0))[1]
+        pad_top = stitch.get("pad_info", (0, 0, 0, 0))[2]
+        pad_bottom = stitch.get("pad_info", (0, 0, 0, 0))[3]
+        
+        full_width = valid_width + pad_left + pad_right
+        full_height = valid_height + pad_top + pad_bottom
+        
+        x_offset, y_offset = stitch.get("image_position", (0, 0))
+
+        # 计算缩放因子：image宽度 / full_width（若image存在且full_width不为0）
+        if image is not None and full_width > 0:
+            # 获取输入图像的宽度（处理批次和单张图像情况）
+            if len(image.shape) == 4:  # 批次图像：(B, H, W, C)
+                img_width = image.shape[2]
+            else:  # 单张图像：(H, W, C)
+                img_width = image.shape[1]
+            scale_factor = img_width / full_width
+        else:
+            scale_factor = 1.0  # 默认缩放因子
+
+        # 应用缩放并取整（四舍五入）
+        scaled = lambda x: int(round(x * scale_factor))
+        
+        return (
+            scaled(valid_width),
+            scaled(valid_height),
+            scaled(x_offset),
+            scaled(y_offset),
+            scaled(pad_left),
+            scaled(pad_right),
+            scaled(pad_top),
+            scaled(pad_bottom),
+            scaled(full_width),
+            scaled(full_height),
+            round(scale_factor, 6)  # 保留6位小数，避免精度问题
+        )
+    
+
+
+
+class Image_pad_restore:
+    @classmethod
+    def INPUT_TYPES(cls) -> dict:
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "stitch": ("STITCH3",),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", )
+    RETURN_NAMES = ("image", )
+    FUNCTION = "image_crop"
+    CATEGORY = "Apt_Preset/image"
+
+
+    def calculate_scale_factor(self, image: torch.Tensor, stitch: dict) -> float:
+        pad_left = stitch.get("pad_info", (0, 0, 0, 0))[0]
+        pad_right = stitch.get("pad_info", (0, 0, 0, 0))[1]
+        valid_width = stitch.get("final_size", (0, 0))[0]
+        full_width = valid_width + pad_left + pad_right
+        
+        if full_width <= 0:
+            return 1.0
+            
+        if len(image.shape) == 4:
+            img_width = image.shape[2]
+        else:
+            img_width = image.shape[1]
+            
+        return img_width / full_width
+
+
+    def extract_info(self, stitch: dict, scale_factor: float) -> Tuple[int, int, int, int, int, int, int, int, int, int]:
+        valid_width = stitch.get("final_size", (0, 0))[0]
+        valid_height = stitch.get("final_size", (0, 0))[1]
+        
+        pad_left = stitch.get("pad_info", (0, 0, 0, 0))[0]
+        pad_right = stitch.get("pad_info", (0, 0, 0, 0))[1]
+        pad_top = stitch.get("pad_info", (0, 0, 0, 0))[2]
+        pad_bottom = stitch.get("pad_info", (0, 0, 0, 0))[3]
+        
+        full_width = valid_width + pad_left + pad_right
+        full_height = valid_height + pad_top + pad_bottom
+        
+        x_offset, y_offset = stitch.get("image_position", (0, 0))
+
+        scaled = lambda x: int(round(x * scale_factor))
+        
+        return (
+            scaled(valid_width),
+            scaled(valid_height),
+            scaled(x_offset),
+            scaled(y_offset),
+            scaled(pad_left),
+            scaled(pad_right),
+            scaled(pad_top),
+            scaled(pad_bottom),
+            scaled(full_width),
+            scaled(full_height)
+        )
+    
+
+    def image_crop(self, image, stitch):
+        scale_factor = self.calculate_scale_factor(image, stitch)
+        valid_width, valid_height, x_offset, y_offset, _, _, _, _, _, _ = self.extract_info(stitch, scale_factor)
+
+        x = min(x_offset, image.shape[2] - 1)
+        y = min(y_offset, image.shape[1] - 1)
+        to_x = valid_width + x
+        to_y = valid_height + y
+        
+        to_x = min(to_x, image.shape[2])
+        to_y = min(to_y, image.shape[1])
+        
+        img = image[:, y:to_y, x:to_x, :]
+     
+
+        return (img,)
+    
+
+
+
+
+class XXXImage_Resize_sum_restore:#未移除遮罩
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "resized_image": ("IMAGE",),
+                "mask": ("MASK",),
+                "stitch": ("STITCH3",),
+                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "area" }),
+            },
+            "optional": {
+                "enable_pad_crop": ("BOOLEAN", {"default": False, "label_on": "启用pad裁切", "label_off": "禁用pad裁切"}),
+            }
+        }
+
+    CATEGORY = "Apt_Preset/image"
+    RETURN_TYPES = ("IMAGE", "MASK",)
+    RETURN_NAMES = ("restored_image", "restored_mask",)
+    FUNCTION = "restore"
+
+    def restore(self, resized_image, stitch, mask=None, upscale_method="bicubic", enable_pad_crop=False):
+        # 如果启用了pad裁切模式，直接使用Image_pad_restore的逻辑
+        if enable_pad_crop and stitch.get("keep_proportion", "").startswith("pad"):
+            pad_restorer = Image_pad_restore()
+            restored_image = pad_restorer.image_crop(resized_image, stitch)[0]
+            
+            # 对mask也应用相同的裁切逻辑（如果存在）
+            if mask is not None and mask.numel() > 0:
+                restored_mask = pad_restorer.image_crop(mask.unsqueeze(-1), stitch)[0].squeeze(-1)
+                return (restored_image, restored_mask)
+            else:
+                # 创建一个与恢复图像匹配的空mask
+                restored_mask = torch.zeros(
+                    (restored_image.shape[0], restored_image.shape[1], restored_image.shape[2]), 
+                    dtype=torch.float32,
+                    device=restored_image.device
+                )
+                return (restored_image, restored_mask)
+
+        # 原有逻辑保持不变
+        original_h, original_w = stitch["original_shape"]
+        target_resized_h, target_resized_w = stitch["resized_shape"]
+        crop_x, crop_y = stitch["crop_position"]
+        crop_w, crop_h = stitch["crop_size"]
+        pad_left, pad_right, pad_top, pad_bottom = stitch["pad_info"]
+        keep_proportion = stitch["keep_proportion"]
+        scale_factor = stitch["scale_factor"]
+        final_width, final_height = stitch["final_size"]
+        image_pos_x, image_pos_y = stitch["image_position"]
+        has_input_mask = stitch.get("has_input_mask", False)
+        original_image = stitch.get("original_image", None)
+          
+        resized_image = common_upscale(
+            resized_image.movedim(-1, 1),
+            target_resized_w,
+            target_resized_h,
+            upscale_method,
+            crop="disabled"
+        ).movedim(1, -1)
+        
+        if mask is not None and mask.numel() > 0 and has_input_mask:
+            mask = common_upscale(
+                mask.unsqueeze(1),
+                target_resized_w,
+                target_resized_h,
+                upscale_method,
+                crop="disabled"
+            ).squeeze(1)
+
+        if keep_proportion == "crop":
+            restored_image = common_upscale(
+                resized_image.movedim(-1, 1), 
+                crop_w, crop_h, 
+                upscale_method, 
+                crop="disabled"
+            ).movedim(1, -1)
+            
+            if original_image is not None:
+                final_image = original_image.clone()
+            else:
+                final_image = torch.zeros(
+                    (resized_image.shape[0], original_h, original_w, resized_image.shape[3]), 
+                    dtype=resized_image.dtype, 
+                    device=resized_image.device
+                )
+            
+            final_image[:, crop_y:crop_y+crop_h, crop_x:crop_x+crop_w, :] = restored_image
+            
+            if mask is not None and mask.numel() > 0 and has_input_mask:
+                restored_mask = common_upscale(
+                    mask.unsqueeze(1), 
+                    crop_w, crop_h, 
+                    upscale_method, 
+                    crop="disabled"
+                ).squeeze(1)
+                    
+                final_mask = torch.zeros(
+                    (mask.shape[0], original_h, original_w), 
+                    dtype=mask.dtype, 
+                    device=mask.device
+                )
+                final_mask[:, crop_y:crop_y+crop_h, crop_x:crop_x+crop_w] = restored_mask
+                return (final_image, final_mask)
+            else:
+                return (final_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+                
+        elif keep_proportion.startswith("pad"):
+            unpadded_image = resized_image[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width, :]
+            
+            restored_image = common_upscale(
+                unpadded_image.movedim(-1, 1), 
+                original_w, original_h, 
+                upscale_method, 
+                crop="disabled"
+            ).movedim(1, -1)
+            
+            if mask is not None and mask.numel() > 0 and has_input_mask:
+                unpadded_mask = mask[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width]
+                
+                restored_mask = common_upscale(
+                    unpadded_mask.unsqueeze(1), 
+                    original_w, original_h, 
+                    upscale_method, 
+                    crop="disabled"
+                ).squeeze(1)
+                    
+                return (restored_image, restored_mask)
+            else:
+                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+                
+        else:
+            restored_image = common_upscale(
+                resized_image.movedim(-1, 1), 
+                original_w, original_h, 
+                upscale_method, 
+                crop="disabled"
+            ).movedim(1, -1)
+            
+            if mask is not None and mask.numel() > 0 and has_input_mask:
+                restored_mask = common_upscale(
+                    mask.unsqueeze(1), 
+                    original_w, original_h, 
+                    upscale_method, 
+                    crop="disabled"
+                ).squeeze(1)
+                    
+                return (restored_image, restored_mask)
+            else:
+                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+
+
+
+
+class Image_Resize_sum_restore:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "resized_image": ("IMAGE",),
+                "mask": ("MASK",),
+                "stitch": ("STITCH3",),
+                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "area" }),
+            },
+            "optional": {
+                "enable_pad_crop": ("BOOLEAN", {"default": False, }),
+            }
+        }
+
+    CATEGORY = "Apt_Preset/image"
+    RETURN_TYPES = ("IMAGE", "MASK",)
+    RETURN_NAMES = ("restored_image", "restored_mask",)
+    FUNCTION = "restore"
+
+    def restore(self, resized_image, stitch, mask=None, upscale_method="bicubic", enable_pad_crop=False):
+        # 如果启用了pad裁切模式，直接使用Image_pad_restore的逻辑
+        if enable_pad_crop and stitch.get("keep_proportion", "").startswith("pad"):
+            pad_restorer = Image_pad_restore()
+            restored_image = pad_restorer.image_crop(resized_image, stitch)[0]
+            
+            # 对mask也应用相同的裁切逻辑（如果存在）
+            if mask is not None and mask.numel() > 0:
+                restored_mask = pad_restorer.image_crop(mask.unsqueeze(-1), stitch)[0].squeeze(-1)
+                return (restored_image, restored_mask)
+            else:
+                # 创建一个与恢复图像匹配的空mask
+                restored_mask = torch.zeros(
+                    (restored_image.shape[0], restored_image.shape[1], restored_image.shape[2]), 
+                    dtype=torch.float32,
+                    device=restored_image.device
+                )
+                return (restored_image, restored_mask)
+
+        # 原有逻辑保持不变
+        original_h, original_w = stitch["original_shape"]
+        target_resized_h, target_resized_w = stitch["resized_shape"]
+        crop_x, crop_y = stitch["crop_position"]
+        crop_w, crop_h = stitch["crop_size"]
+        pad_left, pad_right, pad_top, pad_bottom = stitch["pad_info"]
+        keep_proportion = stitch["keep_proportion"]
+        scale_factor = stitch["scale_factor"]
+        final_width, final_height = stitch["final_size"]
+        image_pos_x, image_pos_y = stitch["image_position"]
+        has_input_mask = stitch.get("has_input_mask", False)
+        original_image = stitch.get("original_image", None)
+        # 直接获取原始mask
+        original_mask = stitch.get("original_mask", None)
+          
+        resized_image = common_upscale(
+            resized_image.movedim(-1, 1),
+            target_resized_w,
+            target_resized_h,
+            upscale_method,
+            crop="disabled"
+        ).movedim(1, -1)
+        
+        if keep_proportion == "crop":
+            restored_image = common_upscale(
+                resized_image.movedim(-1, 1), 
+                crop_w, crop_h, 
+                upscale_method, 
+                crop="disabled"
+            ).movedim(1, -1)
+            
+            if original_image is not None:
+                final_image = original_image.clone()
+            else:
+                final_image = torch.zeros(
+                    (resized_image.shape[0], original_h, original_w, resized_image.shape[3]), 
+                    dtype=resized_image.dtype, 
+                    device=resized_image.device
+                )
+            
+            final_image[:, crop_y:crop_y+crop_h, crop_x:crop_x+crop_w, :] = restored_image
+            
+            # 直接使用original_mask作为restored_mask
+            if original_mask is not None and has_input_mask:
+                return (final_image, original_mask)
+            else:
+                return (final_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+                
+        elif keep_proportion.startswith("pad"):
+            unpadded_image = resized_image[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width, :]
+            
+            restored_image = common_upscale(
+                unpadded_image.movedim(-1, 1), 
+                original_w, original_h, 
+                upscale_method, 
+                crop="disabled"
+            ).movedim(1, -1)
+            
+            # 直接使用original_mask作为restored_mask
+            if original_mask is not None and has_input_mask:
+                return (restored_image, original_mask)
+            else:
+                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+                
+        else:
+            restored_image = common_upscale(
+                resized_image.movedim(-1, 1), 
+                original_w, original_h, 
+                upscale_method, 
+                crop="disabled"
+            ).movedim(1, -1)
+            
+            # 直接使用original_mask作为restored_mask
+            if original_mask is not None and has_input_mask:
+                return (restored_image, original_mask)
+            else:
+                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
