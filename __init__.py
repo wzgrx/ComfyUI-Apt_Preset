@@ -104,7 +104,7 @@ NODE_CLASS_MAPPINGS= {
 
 "chx_Ksampler_refine": chx_Ksampler_refine,
 "chx_ksampler_tile": chx_ksampler_tile,   
-      
+"chx_Ksampler_inpaint": chx_Ksampler_inpaint,         
 
 "chx_Ksampler_highAndLow":chx_Ksampler_highAndLow,
 "chx_Ksampler_dual_paint": chx_Ksampler_dual_paint,     
@@ -360,11 +360,13 @@ NODE_CLASS_MAPPINGS= {
 "Image_batch_composite": Image_batch_composite,
 
 
-
-"Image_transform_crop":Image_transform_crop,  
 "Image_solo_crop": Image_solo_crop,  
 "Image_solo_stitch": Image_solo_stitch, 
+"Image_transform_crop":Image_transform_crop,  
 
+
+
+"Image_Resize_sum_Stitch":Image_Resize_sum_Stitch,
 "Image_Resize_sum": Image_Resize_sum,    
 "Image_Resize_sum_restore":Image_Resize_sum_restore,
 
@@ -505,7 +507,7 @@ NODE_CLASS_MAPPINGS= {
 
 
 #------------------------准备废弃-------------------------
-"chx_Ksampler_inpaint": chx_Ksampler_inpaint,   
+
 
 
 "load_FLUX": load_FLUX,   #TITLE = "load_FLUX (Deprecated)"    CATEGORY = "Apt_Preset/Deprecated"
