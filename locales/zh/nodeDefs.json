@@ -1620,7 +1620,13 @@
       },
       "stitch": {
         "name": "拼接"
-      }
+      },
+        "upscale_method": {
+            "name": "放大方法"
+        },
+        "enable_pad_crop": {
+            "name": "启用填充裁剪"
+        }      
     },
     "outputs": {
       "0": {
@@ -1631,6 +1637,7 @@
       }
     }
   },
+
 
 
   "Image_Resize2": {
@@ -9237,6 +9244,7 @@
       }
     }
   },
+
   "Image_solo_crop": {
     "display_name": "单图_裁切",
     "inputs": {
@@ -9323,6 +9331,7 @@
             "opacity": {
                 "name": "不透明度"
             },
+            
             "stitch_mode": {
                 "name": "拼接模式"
             }
@@ -9386,7 +9395,54 @@
     }
   },
 
+"Image_Resize_sum_Stitch": {
+    "display_name": "图像_调整大小总和_拼接",
+    "inputs": {
+        "stitch": {
+            "name": "拼接"
+        },
+        "image": {
+            "name": "图像"
+        }
+    },
+    "outputs": {
+        "width": {
+            "name": "裁切宽度"
+        },
+        "height": {
+            "name": "采取高度"
+        },
+        "x_offset": {
+            "name": "X偏移量"
+        },
+        "y_offset": {
+            "name": "Y偏移量"
+        },
+        "pad_left": {
+            "name": "左侧填充"
+        },
+        "pad_right": {
+            "name": "右侧填充"
+        },
+        "pad_top": {
+            "name": "顶部填充"
+        },
+        "pad_bottom": {
+            "name": "底部填充"
+        },
+        "full_width": {
+            "name": "完整宽度"
+        },
+        "full_height": {
+            "name": "完整高度"
+        },
+        "scale_factor": {
+            "name": "缩放因子"
+        }
+    }
+},
 
+  
   "Data_chx_Merge": {
     "display_name": "管道数据_合并",
     "inputs": {
