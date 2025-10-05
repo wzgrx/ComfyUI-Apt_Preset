@@ -2618,7 +2618,7 @@ class chx_Ksampler_inpaint:
 
                 "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),
                 "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
-                "upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
+                #"upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
                 "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
                 "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
 
@@ -2780,10 +2780,13 @@ class chx_Ksampler_Kontext_inpaint:
                 "denoise": ("FLOAT", {"default": 1, "min": 0, "max": 1, "step": 0.01}),
                 "work_pattern": (["kontext采样", "仅调整遮罩"], {"default": "kontext采样"}),
                 "mask_sampling": ("BOOLEAN", {"default": True, "label_on": "启用", "label_off": "禁用"}),
-                "scale_mode": (["不缩放", "scale_crop_image", "scale_bj_image"],),
-                "scale_longside": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 2}),
-                "target_w": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 2}),
-                "target_h": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 2}),
+                "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),               
+                "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
+                #"upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
+                "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
+                "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
+
+
                 "divisible_by": ("INT", {"default": 2, "min": 1, "max": 128, "step": 2}),
             },
             "optional": {
@@ -2801,8 +2804,8 @@ class chx_Ksampler_Kontext_inpaint:
 
     def run(self, context, seed, image=None, mask=None, denoise=1, prompt_weight=0.5, pos="",
             work_pattern="kontext采样", sample_stack=None, mask_sampling=False,
-            mask_stack=None, scale_mode="不缩放", scale_longside=512,
-            target_w=0, target_h=0, divisible_by=2):
+            mask_stack=None, crop_mode="no_crop", long_side=512,
+            expand_width=0, expand_height=0, divisible_by=2):
 
         #------------------------------确保输入有效的mask和image----------------------------------------        
         if mask is None:
@@ -2847,12 +2850,12 @@ class chx_Ksampler_Kontext_inpaint:
         if image is not None and mask is not None :
             background_tensor, background_mask_tensor, cropped_image_tensor, cropped_mask_tensor, stitch = Image_solo_crop().inpaint_crop(
                     image=image,
-                    scale_mode=scale_mode,
-                    scale_longside=scale_longside,  # 修复拼写错误
-                    upscale_method="bicubic", 
-                    target_w=target_w, 
-                    target_h=target_h, 
-                    divisible_by=divisible_by,
+                    crop_mode = crop_mode,
+                    long_side = long_side,  
+                    upscale_method ="bicubic", 
+                    expand_width = expand_width, 
+                    expand_height = expand_height, 
+                    divisible_by = divisible_by,
                     mask=mask, 
                     mask_stack=mask_stack, 
                     crop_img_bj="image")
