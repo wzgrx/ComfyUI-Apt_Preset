@@ -2616,13 +2616,13 @@ class chx_Ksampler_inpaint:
                 "denoise": ("FLOAT", {"default": 1, "min": 0, "max": 1, "step": 0.01}),
                 "work_pattern": (["普通采样", "仅调整遮罩"], {"default": "普通采样"}),
 
-                "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),
+                "crop_mode": (["no_scale_crop", "scale_crop_image", "no_crop"],),
                 "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
-                #"upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
-                "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
-                "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
 
-                "divisible_by": ("INT", {"default": 2, "min": 1, "max": 128, "step": 2}),
+                "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
+                "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),     
+
+                "out_smoothness": ("INT", {"default": 2, "min": 0, "max": 150, "step": 1}),
             },
             "optional": {
                 "mask": ("MASK", ),
@@ -2632,16 +2632,17 @@ class chx_Ksampler_inpaint:
             },
         }
 
-    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE", "IMAGE", "MASK", "STITCH2", "IMAGE")
-    RETURN_NAMES = ("context", "bj_image", "image",  "cropped_mask", "stitch", "cropped_image")
+    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE", "IMAGE", "MASK", "IMAGE")
+    RETURN_NAMES = ("context", "bj_image", "image",  "cropped_mask","cropped_image")
     FUNCTION = "run"
     CATEGORY = "Apt_Preset/chx_ksample"
 
     def run(self, context, seed, image=None, mask=None, denoise=1, pos="",
-            work_pattern="普通采样", sample_stack=None, mask_sampling=False,
+            work_pattern="普通采样", sample_stack=None, mask_sampling=False,out_smoothness=0.0,
             mask_stack=None,  crop_mode="no_crop", long_side=512,
-            expand_width=0, expand_height=0, divisible_by=2):
-
+            expand_width=0, expand_height=0, ):
+        
+        divisible_by=1
         #------------------------------确保输入有效的mask和image----------------------------------------        
         if mask is None:
             batch_size, height, width, _ = image.shape
@@ -2762,9 +2763,23 @@ class chx_Ksampler_inpaint:
             result = common_ksampler(model, seed, steps, cfg, sampler, scheduler, positive, negative, latent3, denoise=denoise)
             latent_result = result[0]
             output_image = decode(vae, latent_result)[0]
+
+
+            paint_image, output_image = Image_solo_stitch().inpaint_stitch(
+                inpainted_image=output_image,
+                smoothness=out_smoothness, 
+                mask=cropped_mask_tensor, 
+                stitch=stitch, 
+                blend_factor=1.0, 
+                blend_mode="normal", 
+                opacity=1.0, 
+                stitch_mode="crop_mask", 
+                recover_method="bicubic")
+
+
             context = new_context(context, latent=latent_result, images=output_image)
 
-            return (context, background_tensor, output_image, cropped_mask_tensor, stitch, cropped_image_tensor)
+            return (context, background_tensor, output_image, cropped_mask_tensor, cropped_image_tensor)
 
 
 
@@ -2779,15 +2794,12 @@ class chx_Ksampler_Kontext_inpaint:
                 "prompt_weight": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.01}),
                 "denoise": ("FLOAT", {"default": 1, "min": 0, "max": 1, "step": 0.01}),
                 "work_pattern": (["kontext采样", "仅调整遮罩"], {"default": "kontext采样"}),
-                "mask_sampling": ("BOOLEAN", {"default": True, "label_on": "启用", "label_off": "禁用"}),
-                "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),               
+                "mask_sampling": ("BOOLEAN", {"default": True, }),
+                "crop_mode": (["no_scale_crop", "scale_crop_image", "no_crop"],),               
                 "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
-                #"upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
                 "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
                 "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
-
-
-                "divisible_by": ("INT", {"default": 2, "min": 1, "max": 128, "step": 2}),
+                "out_smoothness": ("INT", {"default": 2, "min": 0, "max": 150, "step": 1}),
             },
             "optional": {
                 "mask": ("MASK", ),
@@ -2797,16 +2809,17 @@ class chx_Ksampler_Kontext_inpaint:
             },
         }
 
-    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE", "IMAGE", "MASK", "STITCH2", "IMAGE")
-    RETURN_NAMES = ("context", "bj_image", "image",  "cropped_mask", "stitch", "cropped_image")
+    RETURN_TYPES = ("RUN_CONTEXT", "IMAGE", "IMAGE", "MASK", "IMAGE")
+    RETURN_NAMES = ("context", "bj_image", "image",  "cropped_mask", "cropped_image")
     FUNCTION = "run"
     CATEGORY = "Apt_Preset/Deprecated"
 
     def run(self, context, seed, image=None, mask=None, denoise=1, prompt_weight=0.5, pos="",
-            work_pattern="kontext采样", sample_stack=None, mask_sampling=False,
+            work_pattern="kontext采样", sample_stack=None, mask_sampling=False,out_smoothness=2,
             mask_stack=None, crop_mode="no_crop", long_side=512,
-            expand_width=0, expand_height=0, divisible_by=2):
-
+            expand_width=0, expand_height=0, ):
+        
+        divisible_by=1
         #------------------------------确保输入有效的mask和image----------------------------------------        
         if mask is None:
             batch_size, height, width, _ = image.shape
@@ -2947,7 +2960,18 @@ class chx_Ksampler_Kontext_inpaint:
             output_image = decode(vae, latent_result)[0]
             context = new_context(context, latent=latent_result, images=output_image)
 
-            return (context, background_tensor, output_image, cropped_mask_tensor, stitch, cropped_image_tensor)
+            paint_image, output_image = Image_solo_stitch().inpaint_stitch(
+                inpainted_image=output_image,
+                smoothness=out_smoothness, 
+                mask=cropped_mask_tensor, 
+                stitch=stitch, 
+                blend_factor=1.0, 
+                blend_mode="normal", 
+                opacity=1.0, 
+                stitch_mode="crop_mask", 
+                recover_method="bicubic")
+
+            return (context, background_tensor, output_image, cropped_mask_tensor, cropped_image_tensor)
 
 
 
@@ -5539,13 +5563,6 @@ class Image_Solo_data:
     )
     FUNCTION = "extract_info"
     CATEGORY = "Apt_Preset/image"
-    DESCRIPTION = """
-    从Image_solo_crop的STITCH2中提取信息：
-    - valid_width/valid_height：裁切图有效尺寸
-    - x_offset/y_offset：裁切图在原图的左上角坐标
-    - full_width/full_height：原图尺寸
-    - scale_factor：Image_solo_crop输入的长边 / 原始裁切图长边
-    """
 
 
     def extract_info(self, stitch: dict) -> Tuple[int, int, int, int, int, int, float]:
