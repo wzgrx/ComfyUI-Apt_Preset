@@ -8724,164 +8724,140 @@
   "chx_Ksampler_inpaint": {
     "display_name": "采样器_局部重绘",
     "inputs": {
-      "context": {
-        "name": "context"
-      },
-      "seed": {
-        "name": "种子"
-      },
-      "prompt_weight": {
-        "name": "kontext提示词权重"
-      },
-      "steps": {
-        "name": "步数"
-      },
-      "denoise": {
-        "name": "降噪强度"
-      },
-      "work_pattern": {
-        "name": "工作模式"
-      },
-      "mask_sampling": {
-        "name": "遮罩采样"
-      },
-      "scale_mode": {
-        "name": "缩放模式"
-      },
-      "scale_longside": {
-        "name": "长边缩放"
-      },
-      "target_w": {
-        "name": "裁切图宽"
-      },
-      "target_h": {
-        "name": "裁切图高"
-      },
-      "divisible_by": {
-        "name": "尺寸整除"
-      },
-      "smoothness": {
-        "name": "平滑度"
-      },
-      "image": {
-        "name": "图像"
-      },
-      "mask": {
-        "name": "遮罩"
-      },
-      "pos": {
-        "name": "正向提示词"
-      },
-      "mask_stack": {
-        "name": "遮罩控制"
-      },
-      "sample_stack": {
-        "name": "采样控制"
-      }
+        "context": {
+            "name": "context"
+        },
+        "image": {
+            "name": "图像"
+        },
+        "seed": {
+            "name": "种子"
+        },
+        "denoise": {
+            "name": "去噪强度"
+        },
+        "work_pattern": {
+            "name": "工作模式"
+        },
+        "crop_mode": {
+            "name": "裁剪模式"
+        },
+        "long_side": {
+            "name": "长边尺寸"
+        },
+        "expand_width": {
+            "name": "扩展宽度"
+        },
+        "expand_height": {
+            "name": "扩展高度"
+        },
+        "out_smoothness": {
+            "name": "输出羽化"
+        },
+        "mask": {
+            "name": "遮罩"
+        },
+        "pos": {
+            "name": "正向词"
+        },
+        "mask_stack": {
+            "name": "遮罩控制"
+        },
+        "sample_stack": {
+            "name": "采样系数"
+        }
     },
     "outputs": {
-      "0": {
-        "name": "context"
-      },
-      "1": {
-        "name": "背景图"
-      },
-      "2": {
-        "name": "生成图"
-      },
-      "3": {
-        "name": "裁切遮罩"
-      },
-      "4": {
-        "name": "裁切位置"
-      },
-      "5": {
-        "name": "采样图"
-      }
+        "0": {
+            "name": "context"
+        },
+        "1": {
+            "name": "背景图像"
+        },
+        "2": {
+            "name": "图像"
+        },
+        "3": {
+            "name": "裁剪遮罩"
+        },
+        "4": {
+            "name": "裁剪图像"
+        }
     }
-  },
+}, 
 
-  
-  "chx_Ksampler_Kontext_inpaint": {
+
+"chx_Ksampler_Kontext_inpaint": {
     "display_name": "采样器_kontext_局部重绘",
     "inputs": {
-      "context": {
-        "name": "context"
-      },
-      "seed": {
-        "name": "种子"
-      },
-      "prompt_weight": {
-        "name": "kontext提示词权重"
-      },
-      "steps": {
-        "name": "步数"
-      },
-      "denoise": {
-        "name": "降噪强度"
-      },
-      "work_pattern": {
-        "name": "工作模式"
-      },
-      "mask_sampling": {
-        "name": "遮罩采样"
-      },
-      "scale_mode": {
-        "name": "缩放模式"
-      },
-
-      "scale_longside": {
-        "name": "长边缩放"
-      },
-      "target_w": {
-        "name": "裁切图宽"
-      },
-      "target_h": {
-        "name": "裁切图高"
-      },
-      "divisible_by": {
-        "name": "尺寸整除"
-      },
-      "smoothness": {
-        "name": "平滑度"
-      },
-      "image": {
-        "name": "图像"
-      },
-      "mask": {
-        "name": "遮罩"
-      },
-      "pos": {
-        "name": "正向提示词"
-      },
-      "mask_stack": {
-        "name": "遮罩控制"
-      },
-      "sample_stack": {
-        "name": "采样控制"
-      }
+        "context": {
+            "name": "context"
+        },
+        "image": {
+            "name": "图像"
+        },
+        "seed": {
+            "name": "种子"
+        },
+        "prompt_weight": {
+            "name": "提示词权重"
+        },
+        "denoise": {
+            "name": "去噪强度"
+        },
+        "work_pattern": {
+            "name": "工作模式"
+        },
+        "mask_sampling": {
+            "name": "遮罩采样"
+        },
+        "crop_mode": {
+            "name": "裁剪模式"
+        },
+        "long_side": {
+            "name": "长边尺寸"
+        },
+        "expand_width": {
+            "name": "扩展宽度"
+        },
+        "expand_height": {
+            "name": "扩展高度"
+        },
+        "out_smoothness": {
+            "name": "输出羽化"
+        },
+        "mask": {
+            "name": "遮罩"
+        },
+        "pos": {
+            "name": "正向词"
+        },
+        "mask_stack": {
+            "name": "遮罩控制"
+        },
+        "sample_stack": {
+            "name": "采样系数"
+        }
     },
     "outputs": {
-      "0": {
-        "name": "context"
-      },
-      "1": {
-        "name": "背景图像"
-      },
-      "2": {
-        "name": "生成图像"
-      },
-      "3": {
-        "name": "裁切遮罩"
-      },
-      "4": {
-        "name": "裁切位置"
-      },
-      "5": {
-        "name": "采样原图"
-      }
+        "0": {
+            "name": "context"
+        },
+        "1": {
+            "name": "背景图像"
+        },
+        "2": {
+            "name": "图像"
+        },
+        "3": {
+            "name": "裁剪遮罩"
+        },
+        "4": {
+            "name": "裁剪图像"
+        }
     }
-  },
+},
+
 
 
 "chx_Ksampler_QwenEdit": {
@@ -9398,14 +9374,50 @@
     }
   },
 
+
+"Image_Solo_data": {
+    "display_name": "单图_裁切_数据",
+    "inputs": {
+        "stitch": {
+            "name": "拼接"
+        }
+    },
+    "outputs": {
+        "valid_width": {
+            "name": "有效宽度"
+        },
+        "valid_height": {
+            "name": "有效高度"
+        },
+        "x_offset": {
+            "name": "X偏移量"
+        },
+        "y_offset": {
+            "name": "Y偏移量"
+        },
+        "full_width": {
+            "name": "全图宽度"
+        },
+        "full_height": {
+            "name": "全图高度"
+        },
+        "scale_factor": {
+            "name": "缩放因子"
+        }
+    }
+},
+
+
+
+
 "Image_Resize_sum_data": {
-    "display_name": "图像_调整大小总和_拼接",
+    "display_name": "图像_调整尺寸数据",
     "inputs": {
         "stitch": {
             "name": "拼接"
         },
         "image": {
-            "name": "图像"
+            "name": "图像(倍数)"
         }
     },
     "outputs": {
