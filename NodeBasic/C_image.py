@@ -4450,6 +4450,7 @@ class Image_Resize_sum_restore:
 #region--------------------裁切组合------------
 
 
+
 class Image_transform_crop:
     @classmethod
     def INPUT_TYPES(cls):
@@ -4478,8 +4479,8 @@ class Image_transform_crop:
 
             }
         }
-    RETURN_TYPES = ("IMAGE", "MASK", "MASK", )
-    RETURN_NAMES = ("composite", "mask", "line_mask",)
+    RETURN_TYPES = ("IMAGE","IMAGE", "MASK", "MASK", )
+    RETURN_NAMES = ("composite","recover_img", "mask", "line_mask",)
     FUNCTION = "process"
     CATEGORY = "Apt_Preset/image"
     DESCRIPTION = """
@@ -4526,7 +4527,8 @@ class Image_transform_crop:
             original_shape = stitch.get("original_shape", (canvas_height, canvas_width))
             crop_position = stitch.get("crop_position", (0, 0))
             crop_size = stitch.get("crop_size", (canvas_width, canvas_height))
-            
+            original_image_h, original_image_w = stitch["original_image_shape"]
+
             original_center_x = crop_position[0] + (crop_size[0] // 2)
             original_center_y = crop_position[1] + (crop_size[1] // 2)
             
@@ -4755,7 +4757,22 @@ class Image_transform_crop:
         mask_tensor = torch.from_numpy(mask_np).unsqueeze(0).unsqueeze(0)
         line_mask_tensor = torch.from_numpy(line_mask_np).unsqueeze(0).unsqueeze(0)
         
-        return (composite_tensor, mask_tensor, line_mask_tensor, )
+
+        recover_img, Fina_mask, stitch_info, scale_factor = Image_Resize_sum().resize(
+            image=composite_tensor,
+            width=original_image_w, 
+            height=original_image_h, 
+            keep_proportion="stretch",
+            upscale_method= "area", 
+            divisible_by=1,  
+            pad_color="black", 
+            crop_position="center", 
+            get_image_size=None, 
+            mask=None, 
+            mask_stack=None,
+            pad_mask_remove=True
+        )
+        return (composite_tensor,recover_img, mask_tensor, line_mask_tensor, )
 
 
 
