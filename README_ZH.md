@@ -9,6 +9,7 @@
 
 # <font color="#000000"> 一、Update record更新记录</font>
 
+2025.10.6 修复还原节点连续生成，图层调节时，出现怪异像素问题
 
 
 # <font color="#000000">二、Usage Guide使用指南</font> 
