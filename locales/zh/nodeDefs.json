@@ -1866,10 +1866,10 @@
         "name": "合成图"
       },
       "1": {
-        "name": "合成遮罩"
+        "name": "原图尺寸"
       },
       "2": {
-        "name": "总预览图"
+        "name": "合成遮罩"
       },
       "3": {
         "name": "线条遮罩"
@@ -2196,6 +2196,7 @@
       }
     }
   },
+
   "Image_Channel_Extract": {
     "display_name": "图像通道_提取",
     "inputs": {
@@ -2247,6 +2248,27 @@
 
 
   },
+
+"Image_tensor_Converter": {
+    "display_name": "图像_张量转换",
+    "inputs": {
+        "image": {
+            "name": "图像"
+        },
+        "convert_to_pil": {
+            "name": "转换为PIL"
+        },
+        "multiple": {
+            "name": "整除"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "图像"
+        }
+    }
+},
+
   "img_effect_Load": {
     "display_name": "图效_加载",
     "inputs": {
