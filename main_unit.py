@@ -43,7 +43,26 @@ except ImportError:
 
 
 
+
 #endregion------------------导入库----------------------------------------------------#
+
+
+from server import PromptServer
+
+def flow_sch_control_auto_increment(json_data):
+    prompt = json_data['prompt']
+    for k, v in prompt.items():
+        if v.get('class_type') == 'flow_sch_control':
+            if v['inputs'].get('mode', False):
+                count = v['inputs'].get('count', 0)
+                total = v['inputs'].get('total', 1)
+                if count < total - 1:
+                    v['inputs']['count'] = count + 1
+                else:
+                    v['inputs']['count'] = 0
+    return json_data
+
+PromptServer.instance.add_on_prompt_handler(flow_sch_control_auto_increment)
 
 
 
@@ -955,6 +974,17 @@ def handle_batch(       #输入张量进行批量处理，将指定的转换函�
 
 
 #region------------------图像处理----------------------------------------------------#
+
+def convert_pil_image(image):     
+    batch_size = image.shape[0]
+    converted_images = []       
+    for i in range(batch_size):
+        single_image = image[i]  # (H, W, C)     
+        pil_image = tensor2pil(single_image)
+        converted_image = pil2tensor(pil_image)       
+        converted_images.append(converted_image)
+    image = torch.cat(converted_images, dim=0) 
+    return image
 
 
 def latentrepeat(samples, amount):
