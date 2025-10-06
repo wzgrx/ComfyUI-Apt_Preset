@@ -52,10 +52,8 @@ from .NodeBasic.C_test import *
 #-load------------------------------------------#
 
 
+
 NODE_CLASS_MAPPINGS= {
-
-
-#-save-------------------------------------------#
 
 
 
@@ -351,7 +349,8 @@ NODE_CLASS_MAPPINGS= {
 
 #----------------image------------------------
 
-"Image_pad_outfill": Image_pad_outfill,  #N
+
+"Image_pad_outfill": Image_pad_outfill,  
 "Image_Upscaletile": Image_Upscaletile,    
 "Image_Resize_longsize": Image_Resize_longsize,
 
@@ -380,12 +379,10 @@ NODE_CLASS_MAPPINGS= {
 
 "Image_smooth_blur": Image_smooth_blur,
 "Image_transform_solo": Image_transform_solo,  
-
-
 "Image_Channel_Extract": Image_Channel_Extract,
 "Image_Channel_Apply": Image_Channel_Apply,
 "Image_Channel_RemoveAlpha": Image_Channel_RemoveAlpha,
-
+"Image_tensor_Converter":Image_tensor_Converter,  
 
 
 "color_tool": color_tool,
