@@ -3622,7 +3622,7 @@ class Image_Resize_sum:
                 "image": ("IMAGE",),
                 "width": ("INT", { "default": 512, "min": 0, "max": 9999, "step": 1, }),
                 "height": ("INT", { "default": 512, "min": 0, "max": 9999, "step": 1, }),
-                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic",], { "default": "bicubic" }),
+                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic",], {"default": "area" }),
                 "keep_proportion": (["resize", "stretch", "pad", "pad_edge", "crop"], ),
                 "pad_color": (["black", "white", "red", "green", "blue", "gray"], { "default": "black" }),
                 "crop_position": (["center", "top", "bottom", "left", "right"], { "default": "center" }),
@@ -4166,7 +4166,7 @@ class Image_Resize_sum_restore:
                 "resized_image": ("IMAGE",),
                 "mask": ("MASK",),
                 "stitch": ("STITCH3",),
-                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic",], { "default": "bicubic" }),
+                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic",], {"default": "area" }),
             },
         }
 
@@ -4635,7 +4635,7 @@ class xxxxImage_solo_stitch:
                 "stitch_mode": (["crop_mask", "crop_image"], {"default": "crop_mask"}),
 
 
-            "recover_method": (["nearest-exact", "bilinear", "area", "bicubic", ], { "default": "bicubic" }),
+            "recover_method": (["nearest-exact", "bilinear", "area", "bicubic", ], { "default": "area" }),
  
 
             },
@@ -4867,7 +4867,7 @@ class Image_solo_stitch:
                 "blend_mode": (["normal", "multiply", "screen", "overlay", "soft_light", "difference"],),
                 "opacity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "stitch_mode": (["crop_mask", "crop_image"], {"default": "crop_mask"}),
-                "recover_method": (["nearest-exact", "bilinear", "area", "bicubic", ], { "default": "bicubic" }),
+                "recover_method": (["nearest-exact", "bilinear", "area", "bicubic", ], {"default": "area" }),
             },
         }
 
