@@ -411,7 +411,7 @@ class Image_transform_solo:
                 "border_handling": (["edge", "constant", "reflect", "symmetric"], {"default": "edge"}),
             },
             "optional": {
-                "scale_mode": ([ "box", "bilinear", "hamming", "bicubic","nearest", "lanczos"], {"default": "bilinear"}),
+                "scale_mode": ([ "box", "bilinear", "hamming", "bicubic","nearest", ], {"default": "bilinear"}),
                 "constant_color": ("STRING", {"default": "#000000"}),
             },
         }
@@ -525,7 +525,7 @@ class Image_Upscaletile:
                      "mode": (["rescale", "resize"],),
                      "rescale_factor": ("FLOAT", {"default": 2, "min": 0.01, "max": 16.0, "step": 0.01}),
                      "resize_width": ("INT", {"default": 1024, "min": 1, "max": 48000, "step": 1}),
-                     "resampling_method": ( ["lanczos", "nearest", "bilinear", "bicubic"],),                     
+                     "resampling_method": ( ["nearest", "bilinear", "bicubic"],),                     
                      "rounding_modulus": ("INT", {"default": 8, "min": 0, "max": 1024, "step": 2}),
                      }
                 }
@@ -554,7 +554,7 @@ class Image_Upscaletile:
         
         return resized_image  
 
-    def upscale(self, image, upscale_model, rounding_modulus=8, loops=1, mode="rescale",  resampling_method="lanczos", rescale_factor=2, resize_width=1024):
+    def upscale(self, image, upscale_model, rounding_modulus=8, loops=1, mode="rescale",  resampling_method="bilinear", rescale_factor=2, resize_width=1024):
 
         up_model = load_upscale_model(upscale_model)  
         up_image = upscale_with_model(up_model, image)  
@@ -2126,7 +2126,6 @@ class Pair_Merge:
                 "size_mode": (["auto", "输出宽度", "输出高度"],),
                 "target_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 8}),
                 "divider_thickness": ("INT", {"default": 0, "min": 0, "max": 20, "step": 1}),
-                #"resize_mode": (["nearest", "bilinear", "bicubic", "lanczos"], {"default": "lanczos"}),
             },
             "optional": {
                 "image1": ("IMAGE",), 
@@ -3488,7 +3487,7 @@ class Image_transform_layer:
 
 
 class Image_Resize2:
-    upscale_methods = ["nearest-exact", "bilinear", "area", "bicubic", "lanczos"]
+    upscale_methods = ["nearest-exact", "bilinear", "area", "bicubic",]
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -3496,7 +3495,7 @@ class Image_Resize2:
                 "image": ("IMAGE",),
 
                 "model_scale": (["None"] +folder_paths.get_filename_list("upscale_models"), {"default": "None"}  ),                
-                "pixel_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"],  {"default": "lanczos"} ,),
+                "pixel_method": (["nearest-exact", "bilinear", "area", "bicubic", ],  {"default": "area"} ,),
 
                 "width_max": ("INT", { "default": 512, "min": 0, "max": 99999, "step": 1, }),
                 "height_max": ("INT", { "default": 512, "min": 0, "max": 99999, "step": 1, }),
@@ -3514,7 +3513,7 @@ class Image_Resize2:
     FUNCTION = "resize"
     CATEGORY = "Apt_Preset/Deprecated"
 
-    def resize(self, image, width_max, height_max, keep_ratio, divisible_by,pixel_method="lanczos", model_scale=None, get_image_size=None,):
+    def resize(self, image, width_max, height_max, keep_ratio, divisible_by,pixel_method="bilinear", model_scale=None, get_image_size=None,):
 
         if len(image.shape) == 3:
             H, W, C = image.shape
@@ -3623,7 +3622,7 @@ class Image_Resize_sum:
                 "image": ("IMAGE",),
                 "width": ("INT", { "default": 512, "min": 0, "max": 9999, "step": 1, }),
                 "height": ("INT", { "default": 512, "min": 0, "max": 9999, "step": 1, }),
-                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "bicubic" }),
+                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic",], { "default": "bicubic" }),
                 "keep_proportion": (["resize", "stretch", "pad", "pad_edge", "crop"], ),
                 "pad_color": (["black", "white", "red", "green", "blue", "gray"], { "default": "black" }),
                 "crop_position": (["center", "top", "bottom", "left", "right"], { "default": "center" }),
@@ -3956,7 +3955,7 @@ class Image_Resize_sum:
 
         if target_width is not None and target_height is not None:
             if extra_padding > 0:
-                image = common_upscale(image.movedim(-1, 1), W - extra_padding, H - extra_padding, "lanczos", "disabled").movedim(1, -1)
+                image = common_upscale(image.movedim(-1, 1), W - extra_padding, H - extra_padding, "bilinear", "disabled").movedim(1, -1)
                 B, H, W, C = image.shape
 
             pad_left = (target_width - W) // 2
@@ -4159,164 +4158,6 @@ class Image_pad_restore:
     
 
 
-
-class XXXImage_Resize_sum_restore:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "resized_image": ("IMAGE",),
-                "mask": ("MASK",),
-                "stitch": ("STITCH3",),
-                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "area" }),
-            },
-            "optional": {
-                "improve_by_same_scale": ("BOOLEAN", {"default": False, }),
-            }
-        }
-
-    CATEGORY = "Apt_Preset/image"
-    RETURN_TYPES = ("IMAGE", "MASK",)
-    RETURN_NAMES = ("restored_image", "restored_mask",)
-    FUNCTION = "restore"
-
-    def restore(self, resized_image, stitch, mask=None, upscale_method="bicubic", improve_by_same_scale=False, ):
-        original_mask = stitch.get("original_mask", None)
-        has_input_mask = stitch.get("has_input_mask", False)
-        original_image = stitch.get("original_image", None)
-
-        if improve_by_same_scale and stitch.get("keep_proportion", "").startswith("pad"):
-            pad_restorer = Image_pad_restore()
-            restored_image = pad_restorer.image_crop(resized_image, stitch)[0]
-            
-            if original_mask is not None and has_input_mask:
-                return (restored_image, original_mask)
-            else:
-                restored_mask = torch.zeros(
-                    (restored_image.shape[0], restored_image.shape[1], restored_image.shape[2]), 
-                    dtype=torch.float32,
-                    device=restored_image.device)
-                return (restored_image, restored_mask)
-
-
-        if improve_by_same_scale and stitch.get("keep_proportion", "").startswith("resize"):
-            restored_image, Fina_mask, stitch_info, scale_factor = Image_Resize_sum().resize(
-                image=resized_image,
-                width=1024, 
-                height=1024, 
-                keep_proportion="resize",
-                upscale_method= upscale_method, 
-                divisible_by=1, 
-                pad_color="black", 
-                crop_position="center", 
-                get_image_size=original_image,  )
-            return (restored_image, original_mask)
-
-
-        if improve_by_same_scale and stitch.get("keep_proportion", "").startswith("crop"):
-            restored_image, Fina_mask, stitch_info, scale_factor = Image_Resize_sum().resize(
-                image=resized_image,
-                width=1024, 
-                height=1024, 
-                keep_proportion="crop",
-                upscale_method= upscale_method, 
-                divisible_by=1, 
-                pad_color="black", 
-                crop_position="center", 
-                get_image_size=original_image,  )
-            return (restored_image, original_mask)
-
-
-        if improve_by_same_scale and stitch.get("keep_proportion", "").startswith("stretch"):
-            restored_image, Fina_mask, stitch_info, scale_factor = Image_Resize_sum().resize(
-                image=resized_image,
-                width=1024, 
-                height=1024, 
-                keep_proportion="stretch",
-                upscale_method= upscale_method, 
-                divisible_by=1, 
-                pad_color="black", 
-                crop_position="center", 
-                get_image_size=original_image,  )
-            return (restored_image, original_mask)
-
-
-
-
-        original_h, original_w = stitch["original_shape"]
-        target_resized_h, target_resized_w = stitch["resized_shape"]
-        crop_x, crop_y = stitch["crop_position"]
-        crop_w, crop_h = stitch["crop_size"]
-        pad_left, pad_right, pad_top, pad_bottom = stitch["pad_info"]
-        keep_proportion = stitch["keep_proportion"]
-        scale_factor = stitch["scale_factor"]
-        final_width, final_height = stitch["final_size"]
-        image_pos_x, image_pos_y = stitch["image_position"]
-
-          
-        resized_image = common_upscale(
-            resized_image.movedim(-1, 1),
-            target_resized_w,
-            target_resized_h,
-            upscale_method,
-            crop="disabled"
-        ).movedim(1, -1)
-        
-        if keep_proportion == "crop":
-            restored_image = common_upscale(
-                resized_image.movedim(-1, 1), 
-                crop_w, crop_h, 
-                upscale_method, 
-                crop="disabled"
-            ).movedim(1, -1)
-            
-            if original_image is not None:
-                final_image = original_image.clone()
-            else:
-                final_image = torch.zeros(
-                    (resized_image.shape[0], original_h, original_w, resized_image.shape[3]), 
-                    dtype=resized_image.dtype, 
-                    device=resized_image.device
-                )
-            
-            final_image[:, crop_y:crop_y+crop_h, crop_x:crop_x+crop_w, :] = restored_image
-            
-            if original_mask is not None and has_input_mask:
-                return (final_image, original_mask)
-            else:
-                return (final_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
-                
-        elif keep_proportion.startswith("pad"):
-            unpadded_image = resized_image[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width, :]
-            
-            restored_image = common_upscale(
-                unpadded_image.movedim(-1, 1), 
-                original_w, original_h, 
-                upscale_method, 
-                crop="disabled"
-            ).movedim(1, -1)
-            
-            if original_mask is not None and has_input_mask:
-                return (restored_image, original_mask)
-            else:
-                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
-                
-        else:
-            restored_image = common_upscale(
-                resized_image.movedim(-1, 1), 
-                original_w, original_h, 
-                upscale_method, 
-                crop="disabled"
-            ).movedim(1, -1)
-            
-            if original_mask is not None and has_input_mask:
-                return (restored_image, original_mask)
-            else:
-                return (restored_image, torch.zeros((resized_image.shape[0], original_h, original_w), dtype=torch.float32))
-
-
-
-
 class Image_Resize_sum_restore:
     @classmethod
     def INPUT_TYPES(cls):
@@ -4325,7 +4166,7 @@ class Image_Resize_sum_restore:
                 "resized_image": ("IMAGE",),
                 "mask": ("MASK",),
                 "stitch": ("STITCH3",),
-                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "bicubic" }),
+                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic",], { "default": "bicubic" }),
             },
         }
 
@@ -4435,6 +4276,8 @@ class Image_Resize_sum_restore:
         restored_mask = original_mask if (original_mask is not None and has_input_mask) else (
             torch.zeros((current_b, original_h, original_w), dtype=torch.float32, device=resized_image.device)
         )
+       
+        restored_image= convert_pil_image(restored_image)     
 
         return (restored_image.cpu(), restored_mask.cpu(),)
 
@@ -4786,13 +4629,13 @@ class xxxxImage_solo_stitch:
                 "mask": ("MASK",),
                 "stitch": ("STITCH2",),
                 "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1, "display": "slider"}),
-                "blend_factor": ("FLOAT", {"default": 1.0,"min": 0.0,"max": 1.0,"step": 0.01}),
+                "blend_factor": ("FLOAT", {"default": 0.0,"min": 0.0,"max": 1.0,"step": 0.01}),
                 "blend_mode": (["normal", "multiply", "screen", "overlay", "soft_light", "difference"],),
                 "opacity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "stitch_mode": (["crop_mask", "crop_image"], {"default": "crop_mask"}),
 
 
-            "recover_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "bicubic" }),
+            "recover_method": (["nearest-exact", "bilinear", "area", "bicubic", ], { "default": "bicubic" }),
  
 
             },
@@ -5024,7 +4867,7 @@ class Image_solo_stitch:
                 "blend_mode": (["normal", "multiply", "screen", "overlay", "soft_light", "difference"],),
                 "opacity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "stitch_mode": (["crop_mask", "crop_image"], {"default": "crop_mask"}),
-                "recover_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], { "default": "bicubic" }),
+                "recover_method": (["nearest-exact", "bilinear", "area", "bicubic", ], { "default": "bicubic" }),
             },
         }
 
@@ -5236,6 +5079,9 @@ class Image_solo_stitch:
             mask_stack=None,
             pad_mask_remove=True)
 
+        fimage = convert_pil_image(fimage)
+        recover_img = convert_pil_image(recover_img)
+
         return (fimage, recover_img)
 
 
@@ -5248,7 +5094,7 @@ class Image_solo_crop:
                 "image": ("IMAGE",),
                 "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),
                 "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
-                "upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
+                "upscale_method": (["bilinear", "area", "bicubic",  "nearest"], {"default": "area"}),
                 "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
                 "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
                 "divisible_by": ("INT", {"default": 2, "min": 0, "max": 128, "step": 2}),
@@ -5620,27 +5466,324 @@ class Image_Solo_data:
 #endregion----------------裁切组合--------------
 
 
+#------------精度优化-------
+
+
+import torch.nn.functional as F
 
 
 
+class Image_solo_crop:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),
+                "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
+                "upscale_method": (["bilinear", "area", "bicubic",  "nearest"], {"default": "bicubic"}),
+                "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
+                "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
+                "divisible_by": ("INT", {"default": 2, "min": 0, "max": 128, "step": 2}),
+            },
+            "optional": {
+                "mask": ("MASK",),
+                "mask_stack": ("MASK_STACK2",),
+                "crop_img_bj": (
+                    ["image", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
+                    {"default": "image"},),
+            }
+        }
+
+    CATEGORY = "Apt_Preset/image"
+    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "MASK", "STITCH2")
+    RETURN_NAMES = ("bj_image", "bj_mask", "crop_image", "crop_mask", "stitch")
+    FUNCTION = "inpaint_crop"
+    DESCRIPTION = """
+        裁剪模式 (Crop Modes):
+        - no_scale_crop: 原始裁切图。 不支持缩放
+        - scale_crop_image: 原始裁切图的长边缩放。 
+        - scale_bj_image: 背景图的长边缩放。 不支持扩展
+        - no_crop: 不进行裁剪，仅处理遮罩。        
+        - 遮罩控制: 微调尺寸【目标尺寸相差2~8个像素时】
+    """
+
+    def get_mask_bounding_box(self, mask):
+        mask_np = (mask[0].cpu().numpy() > 0.5).astype(np.uint8)
+        coords = cv2.findNonZero(mask_np)
+        if coords is None:
+            raise ValueError("Mask is empty")
+        x, y, w, h = cv2.boundingRect(coords)
+        return w, h, x, y
+
+    def process_resize(self, image, mask, crop_mode, long_side, divisible_by, upscale_method="bilinear"):
+        batch_size, img_height, img_width, channels = image.shape
+        image_ratio = img_width / img_height
+        mask_w, mask_h, mask_x, mask_y = self.get_mask_bounding_box(mask)
+        mask_ratio = mask_w / mask_h
+        new_width, new_height = img_width, img_height
+
+        if crop_mode == "scale_bj_image":
+            if img_width >= img_height:
+                new_width = long_side
+                new_height = int(new_width / image_ratio)
+            else:
+                new_height = long_side
+                new_width = int(new_height * image_ratio)
+        elif crop_mode == "scale_crop_image":
+            if mask_w >= mask_h:
+                new_mask_width = long_side
+                new_mask_height = int(new_mask_width / mask_ratio)
+                mask_scale = new_mask_width / mask_w
+            else:
+                new_mask_height = long_side
+                new_mask_width = int(new_mask_height * mask_ratio)
+                mask_scale = new_mask_height / mask_h
+            new_width = int(img_width * mask_scale)
+            new_height = int(img_height * mask_scale)
+        elif crop_mode == "no_crop":
+            new_width, new_height = img_width, img_height
+
+        if divisible_by > 1:
+            if new_width % divisible_by != 0:
+                new_width += (divisible_by - new_width % divisible_by)
+            if new_height % divisible_by != 0:
+                new_height += (divisible_by - new_height % divisible_by)
+        else:
+            if new_width % 2 != 0:
+                new_width += 1
+            if new_height % 2 != 0:
+                new_height += 1
+
+        # 直接用F.interpolate缩放，不转PIL
+        image_t = image.permute(0, 3, 1, 2)  # (B, C, H, W)
+        crop_image = F.interpolate(image_t, size=(new_height, new_width), mode=upscale_method, align_corners=False if upscale_method in ["bilinear", "bicubic"] else None)
+        crop_image = crop_image.permute(0, 2, 3, 1)  # (B, H, W, C)
+
+        mask_t = mask.unsqueeze(1) if mask.ndim == 3 else mask  # (B, 1, H, W)
+        crop_mask = F.interpolate(mask_t, size=(new_height, new_width), mode="nearest")
+        crop_mask = crop_mask.squeeze(1)  # (B, H, W)
+
+        return (crop_image, crop_mask)
+
+    def inpaint_crop(self, image, crop_mode, long_side, upscale_method="bilinear", 
+                     expand_width=0, expand_height=0, divisible_by=2,
+                     mask=None, mask_stack=None, crop_img_bj="image"):
+        colors = {
+            "white": (1.0, 1.0, 1.0),
+            "black": (0.0, 0.0, 0.0),
+            "red": (1.0, 0.0, 0.0),
+            "green": (0.0, 1.0, 0.0),
+            "blue": (0.0, 0.0, 1.0),
+            "yellow": (1.0, 1.0, 0.0),
+            "cyan": (0.0, 1.0, 1.0),
+            "magenta": (1.0, 0.0, 1.0),
+            "gray": (0.5, 0.5, 0.5)
+        }
+        batch_size, height, width, _ = image.shape
+        if mask is None:
+            mask = torch.ones((batch_size, height, width), dtype=torch.float32, device=image.device)
+
+        if mask_stack is not None:
+            mask_mode, smoothness, mask_expand, mask_min, mask_max = mask_stack            
+            if hasattr(mask, 'convert'):
+                mask_tensor = pil2tensor(mask.convert('L'))
+            else:
+                if isinstance(mask, torch.Tensor):
+                    mask_tensor = mask if len(mask.shape) <= 3 else mask.squeeze(-1) if mask.shape[-1] == 1 else mask
+                else:
+                    mask_tensor = mask
+            separated_result = Mask_transform_sum().separate(  
+                bg_mode="crop_image", 
+                mask_mode=mask_mode,
+                ignore_threshold=0, 
+                opacity=1, 
+                outline_thickness=1, 
+                smoothness=smoothness,
+                mask_expand=mask_expand,
+                expand_width=0,
+                expand_height=0,
+                rescale_crop=1.0,
+                tapered_corners=True,
+                mask_min=mask_min, 
+                mask_max=mask_max,
+                base_image=image, 
+                mask=mask_tensor, 
+                crop_to_mask=False,
+                divisible_by=1
+            )
+            processed_mask = separated_result[1]
+        else:
+            processed_mask = mask
+
+        crop_image, original_crop_mask = self.process_resize(
+            image, processed_mask, crop_mode, long_side, divisible_by, upscale_method)
+
+        bj_mask_tensor = original_crop_mask
+        bj_image = crop_image.clone()
+
+        if crop_img_bj != "image" and crop_img_bj in colors:
+            r, g, b = colors[crop_img_bj]
+            h, w, _ = crop_image.shape[1:]
+            background = torch.zeros((crop_image.shape[0], h, w, 3), device=crop_image.device)
+            background[:, :, :, 0] = r
+            background[:, :, :, 1] = g
+            background[:, :, :, 2] = b
+            if crop_image.shape[3] >= 4:
+                alpha = crop_image[:, :, :, 3].unsqueeze(3)
+                image_rgb = crop_image[:, :, :, :3]
+                crop_image = image_rgb * alpha + background * (1 - alpha)
+            else:
+                alpha = original_crop_mask.unsqueeze(3)
+                image_rgb = crop_image[:, :, :, :3]
+                crop_image = image_rgb * alpha + background * (1 - alpha)
+
+        # 后续裁剪逻辑（保持原有）
+        image_np = crop_image[0].cpu().numpy()
+        mask_np = original_crop_mask[0].cpu().numpy()
+        original_h, original_w = image_np.shape[0], image_np.shape[1]
+        coords = cv2.findNonZero((mask_np > 0.5).astype(np.uint8))
+        if coords is None:
+            raise ValueError("Mask is empty after processing")
+        x, y, w, h = cv2.boundingRect(coords)
+
+        half_expand_width = (expand_width // 2) // 2 * 2
+        half_expand_height = (expand_height // 2) // 2 * 2
+
+        x_new = max(0, x - half_expand_width)
+        y_new = max(0, y - half_expand_height)
+        x_end = min(original_w, x + w + half_expand_width)
+        y_end = min(original_h, y + h + half_expand_height)
+
+        if divisible_by > 1:
+            current_w = x_end - x_new
+            remainder_w = current_w % divisible_by
+            if remainder_w != 0:
+                if x_end + (divisible_by - remainder_w) <= original_w:
+                    x_end += (divisible_by - remainder_w)
+                elif x_new - (divisible_by - remainder_w) >= 0:
+                    x_new -= (divisible_by - remainder_w)
+                else:
+                    current_w -= remainder_w
+                    x_end = x_new + current_w
+            current_w = x_end - x_new
+
+            current_h = y_end - y_new
+            remainder_h = current_h % divisible_by
+            if remainder_h != 0:
+                if y_end + (divisible_by - remainder_h) <= original_h:
+                    y_end += (divisible_by - remainder_h)
+                elif y_new - (divisible_by - remainder_h) >= 0:
+                    y_new -= (divisible_by - remainder_h)
+                else:
+                    current_h -= remainder_h
+                    y_end = y_new + current_h
+            current_h = y_end - y_new
+        else:
+            current_w = x_end - x_new
+            if current_w % 2 != 0:
+                if x_end < original_w:
+                    x_end += 1
+                elif x_new > 0:
+                    x_new -= 1
+                current_w = x_end - x_new
+
+            current_h = y_end - y_new
+            if current_h % 2 != 0:
+                if y_end < original_h:
+                    y_end += 1
+                elif y_new > 0:
+                    y_new -= 1
+                current_h = y_end - y_new
+
+        mask_x_start = 0
+        mask_y_start = 0
+        mask_x_end = 0
+        mask_y_end = 0
+
+        if crop_mode == "no_crop":
+            cropped_image_tensor = crop_image.clone()
+            cropped_mask_tensor = original_crop_mask.clone()
+            current_crop_position = (0, 0)
+            current_crop_size = (original_w, original_h)
+            mask_x_start = x
+            mask_y_start = y
+            mask_x_end = x + w
+            mask_y_end = y + h
+        else:
+            cropped_image_tensor = crop_image[:, y_new:y_end, x_new:x_end, :].clone()
+            cropped_mask_tensor = original_crop_mask[:, y_new:y_end, x_new:x_end].clone()
+            mask_x_start = max(0, x - x_new)
+            mask_y_start = max(0, y - y_new)
+            mask_x_end = min(current_w, (x + w) - x_new)
+            mask_y_end = min(current_h, (y + h) - y_new)
+            current_crop_position = (x_new, y_new)
+            current_crop_size = (current_w, current_h)
+
+        orig_long_side = max(original_w, original_h)
+        crop_long_side = max(current_crop_size[0], current_crop_size[1])
+        original_image_h, original_image_w = image.shape[1], image.shape[2]
+        stitch = {
+            "original_shape": (original_h, original_w),
+            "original_image_shape": (original_image_h, original_image_w),
+            "crop_position": current_crop_position,
+            "crop_size": current_crop_size,
+            "expand_width": expand_width,
+            "expand_height": expand_height,
+            "expanded_region": (x_new, y_new, x_end, y_end),
+            "mask_original_position": (x, y, w, h),
+            "mask_cropped_position": (mask_x_start, mask_y_start, mask_x_end, mask_y_end),
+            "original_long_side": orig_long_side,
+            "crop_long_side": crop_long_side,
+            "input_long_side": long_side,
+            "bj_image": bj_image
+        }
+
+        return (bj_image, bj_mask_tensor, cropped_image_tensor, cropped_mask_tensor, stitch)
 
 
 
+class Image_tensor_Converter:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "convert_to_pil": ("BOOLEAN", {"default": True, "label_on": "启用", "label_off": "禁用"}),
+                "multiple": ("INT", {"default": 8, "min": 1, "max": 128, "step": 1}),
+            }
+        }
 
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "convert_precision"
+    CATEGORY = "Apt_Preset/image"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+    def convert_precision(self, image, convert_to_pil=True, multiple=8):
+        batch_size = image.shape[0]
+        converted_images = []
+        
+        for i in range(batch_size):
+            single_image = image[i]
+            
+            h, w = single_image.shape[:2]
+            new_h = ((h + multiple - 1) // multiple) * multiple
+            new_w = ((w + multiple - 1) // multiple) * multiple
+            
+            if new_h != h or new_w != w:
+                pil_image = tensor2pil(single_image)
+                pil_image = pil_image.resize((new_w, new_h), Image.LANCZOS)
+                single_image = pil2tensor(pil_image)
+            
+            if convert_to_pil:
+                pil_image = tensor2pil(single_image)
+                single_image = pil2tensor(pil_image)
+            
+            converted_images.append(single_image.unsqueeze(0))
+        
+        result = torch.cat(converted_images, dim=0)
+        
+        return (result,)
 
 
 
