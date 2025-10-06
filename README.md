@@ -10,8 +10,8 @@ The current workflow connections are becoming increasingly dense, making them di
 
 
 # I. Update Record
-2025.10.2 Improve the functions of some nodes and fix some bugs
-2025.10.6 Fix the issue of strange pixels appearing when continuously generating restore nodes and adjusting layers.
+2025.10.6 fix image node.Image_Resize_sum,Image_Resize_sum_restore
+
 
 # II. Usage Guide
 
