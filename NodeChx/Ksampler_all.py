@@ -2993,7 +2993,7 @@ class chx_Ksampler_Kontext_adv:
                 height = img.shape[1]
                 aspect_ratio = width / height
                 _, target_width, target_height = min((abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS)
-                scaled_image = comfy.utils.common_upscale(img.movedim(-1, 1), target_width, target_height, "lanczos", "center").movedim(1, -1)
+                scaled_image = comfy.utils.common_upscale(img.movedim(-1, 1), target_width, target_height, "bicubic", "center").movedim(1, -1)
                 pixels = scaled_image[:, :, :, :3].clamp(0, 1)
             
             encoded_latent = vae.encode(pixels)[0]
@@ -3133,7 +3133,7 @@ class chx_Ksampler_Kontext:   #0803仅遮罩数据处理
             height = image.shape[1]
             aspect_ratio = width / height
             _, target_width, target_height = min((abs(aspect_ratio - w / h), w, h) for w, h in PREFERED_KONTEXT_RESOLUTIONS)
-            scaled_image = comfy.utils.common_upscale(image.movedim(-1, 1), target_width, target_height, "lanczos", "center").movedim(1, -1)
+            scaled_image = comfy.utils.common_upscale(image.movedim(-1, 1), target_width, target_height, "bicubic", "center").movedim(1, -1)
             pixels = scaled_image[:, :, :, :3].clamp(0, 1)
         
         encoded_latent = vae.encode(pixels)[0]        
