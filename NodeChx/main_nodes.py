@@ -2464,7 +2464,7 @@ class chx_Ksampler_refine:
             "required": {
                 "context": ("RUN_CONTEXT",),
                 "upscale_model": (["None"] +folder_paths.get_filename_list("upscale_models"), {"default": "1xDeJPG_OmniSR.pth"}),
-                "upscale_method": (["bilinear", "area", "bicubic", "lanczos", "nearest"], {"default": "lanczos"}),
+                "upscale_method": (["bilinear", "area", "bicubic", "nearest"], {"default": "area"}),
                 "Add_img_scale": ("FLOAT", {"default": 2, "min": 1, "max": 16.0, "step": 0.1}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                 "denoise": ("FLOAT", {"default": 0.3, "min": 0.0, "max": 1.0, "step": 0.01}),
