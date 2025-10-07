@@ -5320,325 +5320,6 @@ class Image_solo_stitch:
 
 
 
-class XXXImage_solo_crop:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "image": ("IMAGE",),
-                "crop_mode": (["no_scale_crop", "scale_crop_image", "scale_bj_image", "no_crop"],),
-                "long_side": ("INT", {"default": 512, "min": 16, "max": 2048, "step": 2}),
-                "upscale_method": (["bilinear", "area", "bicubic",  "nearest"], {"default": "area"}),
-                "expand_width": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
-                "expand_height": ("INT", {"default": 0, "min": 0, "max": 2048, "step": 1}),
-                "divisible_by": ("INT", {"default": 2, "min": 0, "max": 128, "step": 2}),
-            },
-            "optional": {
-                "mask": ("MASK",),
-                "mask_stack": ("MASK_STACK2",),
-                "crop_img_bj": (
-                    ["image", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
-                    {"default": "image"},),
-
-            }
-        }
-
-    CATEGORY = "Apt_Preset/image"
-    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "MASK", "STITCH2")
-    RETURN_NAMES = ("bj_image", "bj_mask", "crop_image", "crop_mask", "stitch")
-    FUNCTION = "inpaint_crop"
-    DESCRIPTION = """
-        裁剪模式 (Crop Modes):
-        - no_scale_crop: 原始裁切图。 不支持缩放
-        - scale_crop_image: 原始裁切图的长边缩放。 
-        - scale_bj_image: 背景图的长边缩放。 不支持扩展
-        - no_crop: 不进行裁剪，仅处理遮罩。        
-        - 遮罩控制: 微调尺寸【目标尺寸相差2~8个像素时】
-    """
-
-
-    def get_mask_bounding_box(self, mask):
-        mask_np = (mask[0].cpu().numpy() * 255).astype(np.uint8)
-        coords = cv2.findNonZero(mask_np)
-        if coords is None:
-            raise ValueError("Mask is empty")
-        x, y, w, h = cv2.boundingRect(coords)
-        return w, h
-
-    def process_resize(self, image, mask, crop_mode, long_side, divisible_by, upscale_method="bicubic"):
-        batch_size, img_height, img_width, channels = image.shape
-        image_ratio = img_width / img_height
-        mask_w, mask_h = self.get_mask_bounding_box(mask)
-        mask_ratio = mask_w / mask_h
-        new_width, new_height = img_width, img_height
-        
-        if crop_mode == "scale_bj_image":
-            if img_width >= img_height:
-                new_width = long_side
-                new_height = int(new_width / image_ratio)
-            else:
-                new_height = long_side
-                new_width = int(new_height * image_ratio)
-        elif crop_mode == "scale_crop_image":
-            if mask_w >= mask_h:
-                new_mask_width = long_side
-                new_mask_height = int(new_mask_width / mask_ratio)
-                mask_scale = new_mask_width / mask_w
-            else:
-                new_mask_height = long_side
-                new_mask_width = int(new_mask_height * mask_ratio)
-                mask_scale = new_mask_height / mask_h
-            new_width = int(img_width * mask_scale)
-            new_height = int(img_height * mask_scale)
-        elif crop_mode == "no_crop":
-            new_width, new_height = img_width, img_height
-            if mask_w >= mask_h:
-                new_mask_width = long_side
-                new_mask_height = int(new_mask_width / mask_ratio)
-            else:
-                new_mask_height = long_side
-                new_mask_width = int(new_mask_height * mask_ratio)
-        
-        if divisible_by > 1:
-            remainder_w = new_width % divisible_by
-            if remainder_w != 0:
-                new_width += (divisible_by - remainder_w)
-            new_width = max(new_width, divisible_by)
-            
-            remainder_h = new_height % divisible_by
-            if remainder_h != 0:
-                new_height += (divisible_by - remainder_h)
-            new_height = max(new_height, divisible_by)
-        else:
-            if new_width % 2 != 0:
-                new_width += 1
-            if new_height % 2 != 0:
-                new_height += 1
-        
-        resample_filters = {
-            "nearest": Image.NEAREST,
-            "bilinear": Image.BILINEAR,
-            "bicubic": Image.BICUBIC,
-            "lanczos": Image.LANCZOS,
-            "area": Image.BOX
-        }
-        resample_filter = resample_filters.get(upscale_method, Image.LANCZOS)
-        
-        resized_images = []
-        for img in image:
-            pil_img = Image.fromarray((img.numpy() * 255).astype(np.uint8))
-            resized_pil = pil_img.resize((new_width, new_height), resample_filter)
-            resized_tensor = torch.from_numpy(np.array(resized_pil).astype(np.float32) / 255.0)
-            resized_images.append(resized_tensor)
-        crop_image = torch.stack(resized_images)
-        
-        resized_masks = []
-        for m in mask:
-            pil_mask = Image.fromarray((m.numpy() * 255).astype(np.uint8))
-            resized_pil_mask = pil_mask.resize((new_width, new_height), Image.NEAREST)
-            resized_tensor_mask = torch.from_numpy(np.array(resized_pil_mask).astype(np.float32) / 255.0).unsqueeze(0)
-            resized_masks.append(resized_tensor_mask)
-        crop_mask = torch.cat(resized_masks, dim=0)
-        
-        return (crop_image, crop_mask)
-
-    def inpaint_crop(self, image, crop_mode, long_side, upscale_method="bicubic", 
-                     expand_width=0, expand_height=0, divisible_by=2,
-                     mask=None, mask_stack=None, crop_img_bj="image"):
-        colors = {
-            "white": (1.0, 1.0, 1.0),
-            "black": (0.0, 0.0, 0.0),
-            "red": (1.0, 0.0, 0.0),
-            "green": (0.0, 1.0, 0.0),
-            "blue": (0.0, 0.0, 1.0),
-            "yellow": (1.0, 1.0, 0.0),
-            "cyan": (0.0, 1.0, 1.0),
-            "magenta": (1.0, 0.0, 1.0),
-            "gray": (0.5, 0.5, 0.5)
-        }
-        
-        if mask is None:
-            batch_size, height, width, _ = image.shape
-            mask = torch.ones((batch_size, height, width), dtype=torch.float32)
-
-        if mask_stack is not None:
-            mask_mode, smoothness, mask_expand, mask_min, mask_max = mask_stack            
-        else:
-            mask_mode, smoothness, mask_expand, mask_min, mask_max = "original", 0, 0, 0, 1
-
-        processed_mask = mask
-        if mask_stack and mask is not None:
-            if hasattr(mask, 'convert'):
-                mask_tensor = pil2tensor(mask.convert('L'))
-            else:
-                if isinstance(mask, torch.Tensor):
-                    mask_tensor = mask if len(mask.shape) <= 3 else mask.squeeze(-1) if mask.shape[-1] == 1 else mask
-                else:
-                    mask_tensor = mask
-          
-            # 假设Mask_transform_sum已定义
-            separated_result = Mask_transform_sum().separate(  
-                bg_mode="crop_image", 
-                mask_mode=mask_mode,
-                ignore_threshold=0, 
-                opacity=1, 
-                outline_thickness=1, 
-                smoothness=smoothness,
-                mask_expand=mask_expand,
-                expand_width=0,
-                expand_height=0,
-                rescale_crop=1.0,
-                tapered_corners=True,
-                mask_min=mask_min, 
-                mask_max=mask_max,
-                base_image=image, 
-                mask=mask_tensor, 
-                crop_to_mask=False,
-                divisible_by=1
-            )
-
-            processed_mask = separated_result[1]
-        
-        crop_image, original_crop_mask = self.process_resize(
-            image, processed_mask, crop_mode, long_side, divisible_by, upscale_method)
-        
-
-        bj_mask_tensor = original_crop_mask
-        bj_image = crop_image.clone()
-        
-        if crop_img_bj != "image" and crop_img_bj in colors:
-            r, g, b = colors[crop_img_bj]
-            h, w, _ = crop_image.shape[1:]
-            background = torch.zeros((crop_image.shape[0], h, w, 3))
-            background[:, :, :, 0] = r
-            background[:, :, :, 1] = g
-            background[:, :, :, 2] = b
-            
-            if crop_image.shape[3] >= 4:
-                alpha = crop_image[:, :, :, 3].unsqueeze(3)
-                image_rgb = crop_image[:, :, :, :3]
-                crop_image = image_rgb * alpha + background * (1 - alpha)
-            else:
-                alpha = original_crop_mask.unsqueeze(3)
-                image_rgb = crop_image[:, :, :, :3]
-                crop_image = image_rgb * alpha + background * (1 - alpha)
-        
-        image_np = (crop_image[0].cpu().numpy() * 255).astype(np.uint8)
-        mask_np = (original_crop_mask[0].cpu().numpy() * 255).astype(np.uint8)
-        original_h, original_w = image_np.shape[0], image_np.shape[1]
-        
-        coords = cv2.findNonZero(mask_np)
-        if coords is None:
-            raise ValueError("Mask is empty after processing")
-        x, y, w, h = cv2.boundingRect(coords)
-        
-        half_expand_width = (expand_width // 2) // 2 * 2
-        half_expand_height = (expand_height // 2) // 2 * 2
-        
-        x_new = max(0, x - half_expand_width)
-        y_new = max(0, y - half_expand_height)
-        x_end = min(original_w, x + w + half_expand_width)
-        y_end = min(original_h, y + h + half_expand_height)
-        
-        if divisible_by > 1:
-            current_w = x_end - x_new
-            remainder_w = current_w % divisible_by
-            if remainder_w != 0:
-                if x_end + (divisible_by - remainder_w) <= original_w:
-                    x_end += (divisible_by - remainder_w)
-                elif x_new - (divisible_by - remainder_w) >= 0:
-                    x_new -= (divisible_by - remainder_w)
-                else:
-                    current_w -= remainder_w
-                    x_end = x_new + current_w
-            current_w = x_end - x_new
-            
-            current_h = y_end - y_new
-            remainder_h = current_h % divisible_by
-            if remainder_h != 0:
-                if y_end + (divisible_by - remainder_h) <= original_h:
-                    y_end += (divisible_by - remainder_h)
-                elif y_new - (divisible_by - remainder_h) >= 0:
-                    y_new -= (divisible_by - remainder_h)
-                else:
-                    current_h -= remainder_h
-                    y_end = y_new + current_h
-            current_h = y_end - y_new
-        else:
-            current_w = x_end - x_new
-            if current_w % 2 != 0:
-                if x_end < original_w:
-                    x_end += 1
-                elif x_new > 0:
-                    x_new -= 1
-                current_w = x_end - x_new
-
-            current_h = y_end - y_new
-            if current_h % 2 != 0:
-                if y_end < original_h:
-                    y_end += 1
-                elif y_new > 0:
-                    y_new -= 1
-                current_h = y_end - y_new
-
-        mask_x_start = 0
-        mask_y_start = 0
-        mask_x_end = 0
-        mask_y_end = 0
-
-
-        if crop_mode == "no_crop":
-            cropped_image = image_np.copy()
-            new_mask = np.zeros((original_h, original_w), dtype=np.uint8)
-            new_mask[y:y+h, x:x+w] = mask_np[y:y+h, x:x+w]
-            current_crop_position = (0, 0)
-            current_crop_size = (original_w, original_h)
-            mask_x_start = x
-            mask_y_start = y
-            mask_x_end = x + w
-            mask_y_end = y + h
-        else:
-            cropped_image = image_np[y_new:y_end, x_new:x_end]
-            mask_x_start = max(0, x - x_new)
-            mask_y_start = max(0, y - y_new)
-            mask_x_end = min(current_w, (x + w) - x_new)
-            mask_y_end = min(current_h, (y + h) - y_new)
-            new_mask = np.zeros((current_h, current_w), dtype=np.uint8)
-            if mask_x_start < mask_x_end and mask_y_start < mask_y_end:
-                new_mask[mask_y_start:mask_y_end, mask_x_start:mask_x_end] = mask_np[y:y+h, x:x+w]
-            current_crop_position = (x_new, y_new)
-            current_crop_size = (current_w, current_h)
-        
-        cropped_image_tensor = torch.from_numpy(cropped_image / 255.0).float().unsqueeze(0)
-        cropped_mask_tensor = torch.from_numpy(new_mask / 255.0).float().unsqueeze(0)
-        
-        # 【关键补充】计算原图和裁切图的长边，便于缩放因子计算
-        orig_long_side = max(original_w, original_h)
-        crop_long_side = max(current_crop_size[0], current_crop_size[1])
-
-
-        original_image_h, original_image_w = image.shape[1], image.shape[2]
-        stitch = {
-            "original_shape": (original_h, original_w),  # (高, 宽)
-            "original_image_shape": (original_image_h, original_image_w),  # (高, 宽) - 添加这行
-            "crop_position": current_crop_position,      # (x, y)
-            "crop_size": current_crop_size,              # (宽, 高)
-            "expand_width": expand_width,
-            "expand_height": expand_height,
-            "expanded_region": (x_new, y_new, x_end, y_end),
-            "mask_original_position": (x, y, w, h),
-            "mask_cropped_position": (mask_x_start, mask_y_start, mask_x_end, mask_y_end),
-            # 新增字段
-            "original_long_side": orig_long_side,        # 原图长边长度
-            "crop_long_side": crop_long_side,  
-            "input_long_side": long_side,
-            "bj_image": bj_image                         # 裁切图长边长度
-        }
-
-        return (bj_image, bj_mask_tensor, cropped_image_tensor, cropped_mask_tensor, stitch)
-    
-
-
 class Image_solo_crop:
     @classmethod
     def INPUT_TYPES(cls):
@@ -5678,30 +5359,16 @@ class Image_solo_crop:
         mask_np = (mask[0].cpu().numpy() > 0.5).astype(np.uint8)
         coords = cv2.findNonZero(mask_np)
         if coords is None:
-            # 当mask为空时，返回整个图像的尺寸作为默认边界框
-            if mask.dim() == 3:
-                h, w = mask.shape[1], mask.shape[2]
-            else:
-                h, w = mask.shape[0], mask.shape[1]
-            return w, h, 0, 0  # 返回整个图像的宽高和起始坐标(0,0)
+            raise ValueError("Mask is empty")
         x, y, w, h = cv2.boundingRect(coords)
         return w, h, x, y
 
     def process_resize(self, image, mask, crop_mode, long_side, divisible_by, upscale_method="bilinear"):
         batch_size, img_height, img_width, channels = image.shape
         image_ratio = img_width / img_height
-
-        try:
-            mask_w, mask_h, mask_x, mask_y = self.get_mask_bounding_box(mask)
-            mask_ratio = mask_w / mask_h
-        except ValueError:
-            # 如果仍然出现错误，使用默认值
-            mask_w, mask_h = img_width, img_height
-            mask_x, mask_y = 0, 0
-            mask_ratio = mask_w / mask_h
-        
+        mask_w, mask_h, mask_x, mask_y = self.get_mask_bounding_box(mask)
+        mask_ratio = mask_w / mask_h
         new_width, new_height = img_width, img_height
-
 
         if crop_mode == "scale_bj_image":
             if img_width >= img_height:
@@ -5749,11 +5416,6 @@ class Image_solo_crop:
     def inpaint_crop(self, image, crop_mode, long_side, upscale_method="bilinear", 
                      expand_width=0, expand_height=0, divisible_by=2,
                      mask=None, mask_stack=None, crop_img_bj="image"):
-        
-
-
-
-
         colors = {
             "white": (1.0, 1.0, 1.0),
             "black": (0.0, 0.0, 0.0),
@@ -5829,9 +5491,8 @@ class Image_solo_crop:
         original_h, original_w = image_np.shape[0], image_np.shape[1]
         coords = cv2.findNonZero((mask_np > 0.5).astype(np.uint8))
         if coords is None:
-            x, y, w, h = 0, 0, original_w, original_h
-        else:
-            x, y, w, h = cv2.boundingRect(coords)
+            raise ValueError("Mask is empty after processing")
+        x, y, w, h = cv2.boundingRect(coords)
 
         half_expand_width = (expand_width // 2) // 2 * 2
         half_expand_height = (expand_height // 2) // 2 * 2
@@ -5929,7 +5590,40 @@ class Image_solo_crop:
 
 
 
+
 #endregion----------------裁切组合--------------
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
