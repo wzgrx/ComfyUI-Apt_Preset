@@ -1,0 +1,25 @@
+run_Mode = "basic"
+ckpt_name = "AA\\majicMIX realistic _v1.safetensors"
+clipnum = "-2"
+vae = "A-840000-ema-pruned-real.pt"
+PromptMid = "a girl ,garden ,flowers"
+PromptLora = ""
+
+width = 512
+height = 512
+batch = 1
+steps = 20
+cfg = 8
+sampler = "euler"
+scheduler = "normal"
+
+lora ="None"
+lora_strength = 1.0
+unet_name="None"
+clip1="None"
+clip2="None"
+clip3="None"
+unet_Weight_Dtype="None"
+cache_threshold = "0.0"
+attention = "nunchaku-fp16"
+cpu_offload = "auto"
