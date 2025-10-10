@@ -1240,7 +1240,7 @@ class load_SD35:
 
 
 
-class Data_preset_save:
+class xxData_preset_save:
     @classmethod
     def INPUT_TYPES(s):
         savetype_list = ["new save", "overwrite save"]
@@ -3660,14 +3660,62 @@ class pre_USO:
 #endregion-----------tool--------------------------------------------------------------------------------------#--
 
 
+class Data_preset_save:
+    @classmethod
+    def INPUT_TYPES(s):
+        savetype_list = ["new save", "overwrite save"]
+        return {
+            "required": {
+                "param": ("PDATA", ),
+                "tomlname": ("STRING", {"default": "new_preset"}),
+                "savetype": (savetype_list,),
+            },
+        }
+    RETURN_TYPES = ()
+    OUTPUT_NODE = True
+    FUNCTION = "saveparam"
+    CATEGORY = "Apt_Preset/chx_load"
 
+    def saveparam(self, param, tomlname, savetype):
+        # 初始化 tomltext 为一个空字符串
+        tomltext = ""
 
+        def format_value(value):
+            # 如果是数字类型，直接返回不带引号的字符串
+            if isinstance(value, (int, float)):
+                return str(value)
+            # 如果是字符串类型，处理转义并加上引号
+            elif isinstance(value, str):
+                escaped_value = value.replace('\\', '\\\\')
+                return f'"{escaped_value}"'
+            # 其他类型（包括None）转换为字符串并加上引号
+            else:
+                escaped_value = str(value).replace('\\', '\\\\')
+                return f'"{escaped_value}"'
 
+        # 定义所有需要保存的参数键
+        keys = [
+            "run_Mode", "ckpt_name", "clipnum", "unet_name", "unet_Weight_Dtype",
+            "clip_type", "clip1", "clip2", "guidance", "clip3", "clip4", "vae",
+            "lora", "lora_strength", "width", "height", "batch", "steps", "cfg",
+            "sampler", "scheduler", "positive", "negative", "cache_threshold",
+            "attention", "cpu_offload"
+        ]
 
+        # 逐个处理参数并添加到tomltext中
+        for key in keys:
+            value = param[0].get(key, None)
+            tomltext += f"{key} = {format_value(value)}\n"
 
+        tomlnameExt = getNewTomlnameExt(tomlname, presets_directory_path, savetype)
 
+        check_folder_path = os.path.dirname(f"{presets_directory_path}/{tomlnameExt}")
+        os.makedirs(check_folder_path, exist_ok=True)
 
+        with open(f"{presets_directory_path}/{tomlnameExt}", mode='w', encoding='utf-8') as f:
+            f.write(tomltext)
 
+        return ()
 
 
 
