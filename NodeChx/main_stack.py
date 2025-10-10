@@ -126,8 +126,13 @@ class Apply_latent:
                 latent = VAEEncode().encode(vae, pixels)[0]
 
             if pixels is None and mask is None:
-                raise TypeError("No input pixels")
-            
+                # 如果 latent 已经存在，则直接使用它
+                if latent is not None:
+                    pass  # 继续执行后续逻辑
+                else:
+                    raise TypeError("No input pixels")
+
+
             if mask is not None:
                 mask = tensor2pil(mask)
                 feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
@@ -140,6 +145,8 @@ class Apply_latent:
 
         latent = latentrepeat(latent, batch_size)[0]
         return model, positive, negative, latent
+
+
 
 #endregion--------latent总控-----------------
 
