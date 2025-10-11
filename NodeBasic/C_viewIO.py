@@ -667,6 +667,7 @@ class view_GetLength:
 
 
 
+
 class view_GetShape:
     def __init__(self):
         pass
@@ -693,12 +694,10 @@ class view_GetShape:
 
     @classmethod
     def VALIDATE_INPUTS(cls, input_types):
-        # if input_types["tensor"] not in ("IMAGE", "LATENT", "MASK"):
-        #     return "Input must be an IMAGE or LATENT or MASK type"
         return True
 
     def run(self, tensor, unique_id, prompt, extra_pnginfo):  
-        node_list = extra_pnginfo["workflow"]["nodes"]  # list of dict including id, type
+        node_list = extra_pnginfo["workflow"]["nodes"]
         cur_node = next(n for n in node_list if str(n["id"]) == unique_id)
         link_id = cur_node["inputs"][0]["link"]
         link = next(l for l in extra_pnginfo["workflow"]["links"] if l[0] == link_id)
@@ -707,26 +706,34 @@ class view_GetShape:
         input_type = in_node["outputs"][in_socket_id]["type"]
         
         B, H, W, C = 1, 1, 1, 1
-        # IMAGE: [B,H,W,C]
-        # LATENT: ["samples"][B,C,H,W]
-        # MASK: [H,W] or [B,C,H,W]
+        
         if input_type == "IMAGE":
             B, H, W, C = tensor.shape
         elif input_type == "LATENT" or (type(tensor) is dict and "samples" in tensor):
-            B, C, H, W = tensor["samples"].shape
+            samples_shape = tensor["samples"].shape
+            if len(samples_shape) == 4:
+                B, C, H, W = samples_shape
+            elif len(samples_shape) == 3:
+                B, H, W = samples_shape
+                C = 4
+            else:
+                print(f"Unexpected latent shape: {samples_shape}")
+                B, C, H, W = 1, 4, 64, 64
+            
             H *= 8
             W *= 8
-        else:  # MASK or type deleted IMAGE
+        else:
             shape = tensor.shape
-            if len(shape) == 2:  # MASK
+            if len(shape) == 2:
                 H, W = shape
-            elif len(shape) == 3:  # MASK
+            elif len(shape) == 3:
                 B, H, W = shape
             elif len(shape) == 4:
-                if shape[3] <= 4:  # IMAGE?
+                if shape[3] <= 4:
                     B, H, W, C = tensor.shape
-                else:  # MASK
+                else:
                     B, C, H, W = shape
+        
         return { "ui": {"text": (f"{W}, {H}, {B}, {C}",)}, "result": (W, H, B, C) }
 
 
