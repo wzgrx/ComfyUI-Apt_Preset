@@ -298,7 +298,7 @@ class Image_batch_composite:
 
 
 
-class Image_pad_outfill:
+class Image_pad_adjust:
     def __init__(self):
         pass
 
@@ -418,6 +418,7 @@ class Image_pad_outfill:
                                                             output_width, output_height)
 
         return (scaled_image, scaled_mask)
+
 
 
 class XXXImage_pad_keep:
@@ -1895,89 +1896,6 @@ class Image_smooth_blur:
         final_image = torch.cat(result_images, dim=0)
         final_mask = torch.cat(smoothed_masks, dim=0)
         return (final_image, final_mask)
-
-
-
-class XXXImage_Channel_Apply:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "images": ("IMAGE",),
-                "channel": (["A", "R", "G", "B"],),
-                "invert_channel": ("BOOLEAN", {"default": False}),
-            },
-            "optional": {
-                "channel_data": ("MASK",),
-                "background_color": (
-                    ["none", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
-                    {"default": "none"}
-                ),
-            }
-        }
-
-    RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Apt_Preset/image"
-    FUNCTION = "Image_Channel_Apply"
-
-    def Image_Channel_Apply(self, images: torch.Tensor, channel, invert_channel=False, 
-                           channel_data=None, background_color="none"):
-        colors = {
-            "white": (1.0, 1.0, 1.0),
-            "black": (0.0, 0.0, 0.0),
-            "red": (1.0, 0.0, 0.0),
-            "green": (0.0, 1.0, 0.0),
-            "blue": (0.0, 0.0, 1.0),
-            "yellow": (1.0, 1.0, 0.0),
-            "cyan": (0.0, 1.0, 1.0),
-            "magenta": (1.0, 0.0, 1.0),
-            "gray": (0.5, 0.5, 0.5)  
-        }
-        
-        merged_images = []
-
-        # 如果未提供channel_data，则创建全遮罩（值为1.0）
-        if channel_data is None:
-            # 获取图像尺寸以创建匹配的全遮罩
-            h, w = images.shape[1], images.shape[2]
-            channel_data = torch.ones((h, w))
-
-        if invert_channel:
-            channel_data = 1.0 - channel_data
-
-        for image in images:
-            image = image.cpu().clone()
-
-            if channel == "A":
-                if image.shape[2] < 4:
-                    image = torch.cat([image, torch.ones((image.shape[0], image.shape[1], 1))], dim=2)
-                image[:, :, 3] = channel_data
-            elif channel == "R":
-                image[:, :, 0] = channel_data
-            elif channel == "G":
-                image[:, :, 1] = channel_data
-            else:
-                image[:, :, 2] = channel_data
-
-            if background_color != "none" and background_color in colors:
-                r, g, b = colors[background_color]
-                
-                h, w, _ = image.shape
-                background = torch.zeros((h, w, 3))
-                background[:, :, 0] = r
-                background[:, :, 1] = g
-                background[:, :, 2] = b
-                
-                if image.shape[2] >= 4:
-                    alpha = image[:, :, 3].unsqueeze(2)
-                    image_rgb = image[:, :, :3]
-                    image = image_rgb * alpha + background * (1 - alpha)
-                else:
-                    image = background
-
-            merged_images.append(image)
-
-        return (torch.stack(merged_images),)
 
 
 
@@ -3948,7 +3866,7 @@ class Image_pad_restore:
     
 
 
-class Image_Resize_sum:
+class XXXImage_Resize_sum:  #pad跳过
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -4327,6 +4245,402 @@ class Image_Resize_sum:
             padding_mask[m, pad_top:pad_top+H, pad_left:pad_left+W] = 0.0
 
         return (out_image, padding_mask)
+
+
+
+
+
+
+class Image_Resize_sum:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "width": ("INT", { "default": 512, "min": 0, "max": 9999, "step": 1, }),
+                "height": ("INT", { "default": 512, "min": 0, "max": 9999, "step": 1, }),
+                "upscale_method":  (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], {"default": "bilinear" }),
+                "keep_proportion": (["resize", "stretch", "pad", "pad_edge", "crop"], ),
+                "pad_color": (["black", "white", "red", "green", "blue", "gray"], { "default": "black" }),
+                "crop_position": (["center", "top", "bottom", "left", "right"], { "default": "center" }),
+                "divisible_by": ("INT", { "default": 2, "min": 0, "max": 512, "step": 1, }),
+                "pad_mask_remove": ("BOOLEAN", {"default": True,}),
+            },
+            "optional" : {
+                "mask": ("MASK",),
+                "get_image_size": ("IMAGE",),
+                "mask_stack": ("MASK_STACK2",),
+            },
+
+        }
+
+    # 增加了remove_pad_mask输出
+    RETURN_TYPES = ("IMAGE", "MASK", "STITCH3", "FLOAT", )
+    RETURN_NAMES = ("IMAGE", "mask", "stitch",  "scale_factor", )
+    FUNCTION = "resize"
+    CATEGORY = "Apt_Preset/image"
+
+    DESCRIPTION = """
+    - 输入参数：
+    - resize：按比例缩放图像至宽和高的限制范围，保持宽高比，不填充或裁剪
+    - stretch：拉伸图像以完全匹配指定的宽度和高度，不保持宽高比
+    - pad：按比例缩放图像后，在目标尺寸内居中放置，用指定颜色填充多余区域
+    - pad_edge：与pad类似，但使用图像边缘像素颜色进行填充
+    - crop：按目标尺寸比例裁剪原图像，然后缩放到指定尺寸
+    - -----------------------  
+    - 输出参数：
+    - scale_factor：缩放倍率，用于精准还原，可以减少一次缩放导致的模糊
+    - remove_pad_mask：移除填充部分的遮罩，保持画布尺寸不变
+    """
+
+
+
+    def resize(self, image, width, height, keep_proportion, upscale_method, divisible_by, pad_color, crop_position, get_image_size=None, mask=None, mask_stack=None,pad_mask_remove=True):
+        if len(image.shape) == 3:
+            B, H, W, C = 1, image.shape[0], image.shape[1], image.shape[2]
+            original_image = image.unsqueeze(0)
+        else:  
+            B, H, W, C = image.shape
+            original_image = image.clone()
+            
+        original_H, original_W = H, W
+
+        if width == 0:
+            width = W
+        if height == 0:
+            height = H
+
+        if get_image_size is not None:
+            _, height, width, _ = get_image_size.shape
+        
+        new_width, new_height = width, height
+        pad_left, pad_right, pad_top, pad_bottom = 0, 0, 0, 0
+        crop_x, crop_y, crop_w, crop_h = 0, 0, W, H
+        scale_factor = 1.0
+        
+        processed_mask = mask
+        if mask is not None and mask_stack is not None:
+            mask_mode, smoothness, mask_expand, mask_min, mask_max = mask_stack
+            
+            separated_result = Mask_transform_sum().separate(  
+                bg_mode="crop_image", 
+                mask_mode=mask_mode,
+                ignore_threshold=0, 
+                opacity=1, 
+                outline_thickness=1, 
+                smoothness=smoothness,
+                mask_expand=mask_expand,
+                expand_width=0, 
+                expand_height=0,
+                rescale_crop=1.0,
+                tapered_corners=True,
+                mask_min=mask_min, 
+                mask_max=mask_max,
+                base_image=image.clone(), 
+                mask=mask, 
+                crop_to_mask=False,
+                divisible_by=1
+            )
+            processed_mask = separated_result[1]
+        
+        if keep_proportion == "resize" or keep_proportion.startswith("pad"):
+            if width == 0 and height != 0:
+                scale_factor = height / H
+                new_width = round(W * scale_factor)
+                new_height = height
+            elif height == 0 and width != 0:
+                scale_factor = width / W
+                new_width = width
+                new_height = round(H * scale_factor)
+            elif width != 0 and height != 0:
+                scale_factor = min(width / W, height / H)
+                new_width = round(W * scale_factor)
+                new_height = round(H * scale_factor)
+
+            if keep_proportion.startswith("pad"):
+                if crop_position == "center":
+                    pad_left = (width - new_width) // 2
+                    pad_right = width - new_width - pad_left
+                    pad_top = (height - new_height) // 2
+                    pad_bottom = height - new_height - pad_top
+                elif crop_position == "top":
+                    pad_left = (width - new_width) // 2
+                    pad_right = width - new_width - pad_left
+                    pad_top = 0
+                    pad_bottom = height - new_height
+                elif crop_position == "bottom":
+                    pad_left = (width - new_width) // 2
+                    pad_right = width - new_width - pad_left
+                    pad_top = height - new_height
+                    pad_bottom = 0
+                elif crop_position == "left":
+                    pad_left = 0
+                    pad_right = width - new_width
+                    pad_top = (height - new_height) // 2
+                    pad_bottom = height - new_height - pad_top
+                elif crop_position == "right":
+                    pad_left = width - new_width
+                    pad_right = 0
+                    pad_top = (height - new_height) // 2
+                    pad_bottom = height - new_height - pad_top
+
+        elif keep_proportion == "crop":
+            old_aspect = W / H
+            new_aspect = width / height
+            
+            if old_aspect > new_aspect:
+                crop_h = H
+                crop_w = round(H * new_aspect)
+                scale_factor = height / H
+            else:
+                crop_w = W
+                crop_h = round(W / new_aspect)
+                scale_factor = width / W
+            
+            if crop_position == "center":
+                crop_x = (W - crop_w) // 2
+                crop_y = (H - crop_h) // 2
+            elif crop_position == "top":
+                crop_x = (W - crop_w) // 2
+                crop_y = 0
+            elif crop_position == "bottom":
+                crop_x = (W - crop_w) // 2
+                crop_y = H - crop_h
+            elif crop_position == "left":
+                crop_x = 0
+                crop_y = (H - crop_h) // 2
+            elif crop_position == "right":
+                crop_x = W - crop_w
+                crop_y = (H - crop_h) // 2
+
+        final_width = new_width
+        final_height = new_height
+        if divisible_by > 1:
+            final_width = final_width - (final_width % divisible_by)
+            final_height = final_height - (final_height % divisible_by)
+            if new_width != 0:
+                scale_factor *= (final_width / new_width)
+            if new_height != 0:
+                scale_factor *= (final_height / new_height)
+
+        out_image = image.clone()
+        out_mask = processed_mask.clone() if processed_mask is not None else None
+        padding_mask = None
+
+        if keep_proportion == "crop":
+            out_image = out_image.narrow(-2, crop_x, crop_w).narrow(-3, crop_y, crop_h)
+            if out_mask is not None:
+                out_mask = out_mask.narrow(-1, crop_x, crop_w).narrow(-2, crop_y, crop_h)
+
+        out_image = common_upscale(
+            out_image.movedim(-1, 1),
+            final_width,
+            final_height,
+            upscale_method,
+            crop="disabled"
+        ).movedim(1, -1)
+
+        if out_mask is not None:
+            if upscale_method == "lanczos":
+                out_mask = common_upscale(
+                    out_mask.unsqueeze(1).repeat(1, 3, 1, 1),
+                    final_width,
+                    final_height,
+                    upscale_method,
+                    crop="disabled"
+                ).movedim(1, -1)[:, :, :, 0]
+            else:
+                out_mask = common_upscale(
+                    out_mask.unsqueeze(1),
+                    final_width,
+                    final_height,
+                    upscale_method,
+                    crop="disabled"
+                ).squeeze(1)
+
+        # 保存原始out_mask用于创建remove_pad_mask
+        original_out_mask = out_mask.clone() if out_mask is not None else None
+
+        if keep_proportion.startswith("pad") and (pad_left > 0 or pad_right > 0 or pad_top > 0 or pad_bottom > 0):
+            padded_width = final_width + pad_left + pad_right
+            padded_height = final_height + pad_top + pad_bottom
+            if divisible_by > 1:
+                width_remainder = padded_width % divisible_by
+                height_remainder = padded_height % divisible_by
+                if width_remainder > 0:
+                    extra_width = divisible_by - width_remainder
+                    pad_right += extra_width
+                    padded_width += extra_width
+                if height_remainder > 0:
+                    extra_height = divisible_by - height_remainder
+                    pad_bottom += extra_height
+                    padded_height += extra_height
+            
+            color_map = {
+                "black": "0, 0, 0",
+                "white": "255, 255, 255",
+                "red": "255, 0, 0",
+                "green": "0, 255, 0",
+                "blue": "0, 0, 255",
+                "gray": "128, 128, 128"
+            }
+            pad_color_value = color_map[pad_color]
+            
+            out_image, padding_mask = self.resize_pad(
+                out_image,
+                pad_left,
+                pad_right,
+                pad_top,
+                pad_bottom,
+                0,
+                pad_color_value,
+                "edge" if keep_proportion == "pad_edge" else "color"
+            )
+            
+            if out_mask is not None:
+                out_mask = out_mask.unsqueeze(1).repeat(1, 3, 1, 1).movedim(1, -1)
+                out_mask, _ = self.resize_pad(
+                    out_mask,
+                    pad_left,
+                    pad_right,
+                    pad_top,
+                    pad_bottom,
+                    0,
+                    pad_color_value,
+                    "edge" if keep_proportion == "pad_edge" else "color"
+                )
+                out_mask = out_mask[:, :, :, 0]
+            else:
+                out_mask = torch.ones((B, padded_height, padded_width), dtype=out_image.dtype, device=out_image.device)
+                out_mask[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width] = 0.0
+
+        if out_mask is None:
+            if keep_proportion != "crop":
+                out_mask = torch.zeros((out_image.shape[0], out_image.shape[1], out_image.shape[2]), dtype=torch.float32)
+            else:
+                out_mask = torch.zeros((out_image.shape[0], out_image.shape[1], out_image.shape[2]), dtype=torch.float32)
+
+        if padding_mask is not None:
+            composite_mask = torch.clamp(padding_mask + out_mask, 0, 1)
+        else:
+            composite_mask = out_mask.clone()
+
+        if keep_proportion.startswith("pad") and (pad_left > 0 or pad_right > 0 or pad_top > 0 or pad_bottom > 0):
+            # 获取最终尺寸
+            final_padded_height, final_padded_width = composite_mask.shape[1], composite_mask.shape[2]
+
+            remove_pad_mask = torch.zeros_like(composite_mask)
+            
+            if original_out_mask is not None:
+                if original_out_mask.shape[1] != final_height or original_out_mask.shape[2] != final_width:
+                    resized_original_mask = common_upscale(
+                        original_out_mask.unsqueeze(1),
+                        final_width,
+                        final_height,
+                        upscale_method,
+                        crop="disabled"
+                    ).squeeze(1)
+                else:
+                    resized_original_mask = original_out_mask
+        
+                remove_pad_mask[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width] = resized_original_mask
+            else:
+                remove_pad_mask[:, pad_top:pad_top+final_height, pad_left:pad_left+final_width] = 0.0
+        else:
+            remove_pad_mask = composite_mask.clone()
+
+        stitch_info = {
+            "original_image": original_image,
+            "original_shape": (original_H, original_W),
+            "resized_shape": (out_image.shape[1], out_image.shape[2]),
+            "crop_position": (crop_x, crop_y),
+            "crop_size": (crop_w, crop_h),
+            "pad_info": (pad_left, pad_right, pad_top, pad_bottom),
+            "keep_proportion": keep_proportion,
+            "upscale_method": upscale_method,
+            "scale_factor": scale_factor,
+            "final_size": (final_width, final_height),
+            "image_position": (pad_left, pad_top) if keep_proportion.startswith("pad") else (0, 0),
+            "has_input_mask": mask is not None,
+            "original_mask": mask.clone() if mask is not None else None
+        }
+        
+        scale_factor = 1/scale_factor
+
+        if pad_mask_remove:
+           Fina_mask =  remove_pad_mask.cpu()
+        else:
+           Fina_mask =  composite_mask.cpu()
+
+        return (out_image.cpu(), Fina_mask, stitch_info, scale_factor, )
+
+
+    def resize_pad(self, image, left, right, top, bottom, extra_padding, color, pad_mode, mask=None, target_width=None, target_height=None):
+        B, H, W, C = image.shape
+
+        if mask is not None:
+            BM, HM, WM = mask.shape
+            if HM != H or WM != W:
+                mask = F.interpolate(mask.unsqueeze(1), size=(H, W), mode='nearest-exact').squeeze(1)
+
+        bg_color = [int(x.strip()) / 255.0 for x in color.split(",")]
+        if len(bg_color) == 1:
+            bg_color = bg_color * 3
+        bg_color = torch.tensor(bg_color, dtype=image.dtype, device=image.device)
+
+        # 新增逻辑：判断是否需要跳过缩放
+        should_skip_resize = False
+        if target_width is not None and target_height is not None:
+            # 判断长边是否已经等于目标尺寸
+            current_long_side = max(W, H)
+            target_long_side = max(target_width, target_height)
+            if current_long_side == target_long_side:
+                should_skip_resize = True
+
+        if not should_skip_resize and target_width is not None and target_height is not None:
+            if extra_padding > 0:
+                image = common_upscale(image.movedim(-1, 1), W - extra_padding, H - extra_padding, "bilinear", "disabled").movedim(1, -1)
+                B, H, W, C = image.shape
+
+            pad_left = (target_width - W) // 2
+            pad_right = target_width - W - pad_left
+            pad_top = (target_height - H) // 2
+            pad_bottom = target_height - H - pad_top
+        else:
+            pad_left = left + extra_padding
+            pad_right = right + extra_padding
+            pad_top = top + extra_padding
+            pad_bottom = bottom + extra_padding
+
+        padded_width = W + pad_left + pad_right
+        padded_height = H + pad_top + pad_bottom
+
+        out_image = torch.zeros((B, padded_height, padded_width, C), dtype=image.dtype, device=image.device)
+        for b in range(B):
+            if pad_mode == "edge":
+                top_edge = image[b, 0, :, :]
+                bottom_edge = image[b, H-1, :, :]
+                left_edge = image[b, :, 0, :]
+                right_edge = image[b, :, W-1, :]
+
+                out_image[b, :pad_top, :, :] = top_edge.mean(dim=0)
+                out_image[b, pad_top+H:, :, :] = bottom_edge.mean(dim=0)
+                out_image[b, :, :pad_left, :] = left_edge.mean(dim=0)
+                out_image[b, :, pad_left+W:, :] = right_edge.mean(dim=0)
+                out_image[b, pad_top:pad_top+H, pad_left:pad_left+W, :] = image[b]
+            else:
+                out_image[b, :, :, :] = bg_color.unsqueeze(0).unsqueeze(0)
+                out_image[b, pad_top:pad_top+H, pad_left:pad_left+W, :] = image[b]
+
+        padding_mask = torch.ones((B, padded_height, padded_width), dtype=image.dtype, device=image.device)
+        for m in range(B):
+            padding_mask[m, pad_top:pad_top+H, pad_left:pad_left+W] = 0.0
+
+        return (out_image, padding_mask)
+
+
+
+
 
 
 
@@ -5175,6 +5489,11 @@ class Image_solo_crop:
             if new_height % 2 != 0:
                 new_height += 1
 
+
+        torch_upscale_method = upscale_method
+        if upscale_method == "lanczos":
+            torch_upscale_method = "bicubic"
+
         # 直接用F.interpolate缩放，不转PIL
         image_t = image.permute(0, 3, 1, 2)  # (B, C, H, W)
         crop_image = F.interpolate(image_t, size=(new_height, new_width), mode=upscale_method, align_corners=False if upscale_method in ["bilinear", "bicubic"] else None)
@@ -5445,7 +5764,7 @@ class Mask_simple_adjust:
 
 
 
-class Image_Channel_Apply:
+class XXXImage_Channel_Apply:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -5585,12 +5904,7 @@ class Image_Channel_Apply:
     
 
 
-
-
-
-
-
-class Image_target_adjust:
+class XXXImage_target_adjust:
     def __init__(self):
         pass
     
@@ -5700,6 +6014,566 @@ class Image_target_adjust:
             "lanczos": Image.LANCZOS
         }
         return methods.get(method, Image.BILINEAR)
+
+
+
+
+
+
+
+class Image_pad_adjust:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                # 修改为支持负数，范围调整为-4096到4096
+                "top": ("INT", {"default": 0, "step": 1, "min": -4096, "max": 4096}),
+                "bottom": ("INT", {"default": 0, "step": 1, "min": -4096, "max": 4096}),
+                "left": ("INT", {"default": 0, "step": 1, "min": -4096, "max": 4096}),
+                "right": ("INT", {"default": 0, "step": 1, "min": -4096, "max": 4096}),
+                "bg_color": (["white", "black", "red", "green", "blue", "gray"], {"default": "black"}),
+                "smoothness": ("INT", {"default": 0, "step": 1, "min": 0, "max": 500}),
+            },
+            "optional": {
+                "mask": ("MASK",),
+            }
+        }
+    
+    RETURN_TYPES = ("IMAGE", "MASK")
+    RETURN_NAMES = ("image", "mask")
+    FUNCTION = "process"  # 重命名函数更符合功能
+    CATEGORY = "Apt_Preset/image"
+
+    def process(self, image, left, top, right, bottom, bg_color, smoothness, mask=None):
+        # 处理图像：先裁切（如果参数为负），再填充（如果参数为正）
+        cropped_image, cropped_mask = self.crop_image(image, mask, left, top, right, bottom)
+        padded_image = self.add_padding(cropped_image, max(left, 0), max(top, 0), max(right, 0), max(bottom, 0), bg_color)
+        created_mask = self.create_mask(cropped_image, max(left, 0), max(top, 0), max(right, 0), max(bottom, 0), smoothness, cropped_mask)
+        
+        return (padded_image, created_mask)
+
+    def crop_image(self, image, mask, left, top, right, bottom):
+        """处理负数参数的裁切功能"""
+        # 计算实际裁切量（只取负数部分的绝对值）
+        crop_left = max(-left, 0)
+        crop_top = max(-top, 0)
+        crop_right = max(-right, 0)
+        crop_bottom = max(-bottom, 0)
+        
+        # 转换为PIL图像处理
+        images = [tensor2pil(img) for img in image]
+        cropped_images = []
+        
+        # 处理图像裁切
+        for img in images:
+            width, height = img.size
+            # 计算裁切后的区域
+            new_left = crop_left
+            new_top = crop_top
+            new_right = width - crop_right
+            new_bottom = height - crop_bottom
+            
+            # 确保裁切区域有效
+            new_left = min(max(new_left, 0), width)
+            new_top = min(max(new_top, 0), height)
+            new_right = max(min(new_right, width), new_left)
+            new_bottom = max(min(new_bottom, height), new_top)
+            
+            # 执行裁切
+            cropped_img = img.crop((new_left, new_top, new_right, new_bottom))
+            cropped_images.append(pil2tensor(cropped_img))
+        
+        # 处理掩码裁切
+        cropped_masks = None
+        if mask is not None:
+            masks = [tensor2pil(m) for m in mask] if isinstance(mask, torch.Tensor) and mask.dim() > 3 else [tensor2pil(mask)]
+            cropped_masks = []
+            for m in masks:
+                width, height = m.size
+                new_left = crop_left
+                new_top = crop_top
+                new_right = width - crop_right
+                new_bottom = height - crop_bottom
+                
+                new_left = min(max(new_left, 0), width)
+                new_top = min(max(new_top, 0), height)
+                new_right = max(min(new_right, width), new_left)
+                new_bottom = max(min(new_bottom, height), new_top)
+                
+                cropped_mask = m.crop((new_left, new_top, new_right, new_bottom))
+                cropped_masks.append(pil2tensor(cropped_mask))
+            cropped_masks = torch.cat(cropped_masks, dim=0)
+        
+        return torch.cat(cropped_images, dim=0), cropped_masks
+
+    def add_padding(self, image, left, top, right, bottom, bg_color):
+        # 定义颜色映射
+        color_map = {
+            "white": (255, 255, 255),
+            "black": (0, 0, 0),
+            "red": (255, 0, 0),
+            "green": (0, 255, 0),
+            "blue": (0, 0, 255),
+            "gray": (128, 128, 128)
+        }
+        
+        # 获取选中的颜色
+        color = color_map.get(bg_color, (0, 0, 0))  # 默认黑色
+        
+        padded_images = []
+        image = [tensor2pil(img) for img in image]
+        for img in image:
+            # 只使用正数部分进行填充
+            padded_image = Image.new("RGB", 
+                (img.width + left + right, img.height + top + bottom), 
+                color)
+            padded_image.paste(img, (left, top))
+            padded_images.append(pil2tensor(padded_image))
+        return torch.cat(padded_images, dim=0)
+    
+
+    def create_mask(self, image, left, top, right, bottom, smoothness, mask=None):
+        masks = []
+        image = [tensor2pil(img) for img in image]
+        if mask is not None:
+            mask = [tensor2pil(m) for m in mask] if isinstance(mask, torch.Tensor) and mask.dim() > 3 else [tensor2pil(mask)]
+        for i, img in enumerate(image):
+            # 计算掩码区域
+            shape = (left, top, img.width + left, img.height + top)
+            mask_image = Image.new("L", (img.width + left + right, img.height + top + bottom), 255)
+            draw = ImageDraw.Draw(mask_image)
+            draw.rectangle(shape, fill=0)
+            
+            if mask is not None:
+                # 确保mask索引正确
+                mask_to_paste = mask[i] if len(mask) > 1 else mask[0]
+                mask_image.paste(mask_to_paste, (left, top))
+            
+            # 应用遮罩羽化
+            if smoothness > 0:
+                smoothed_mask_tensor = smoothness_mask(mask_image, smoothness)
+                masks.append(smoothed_mask_tensor)
+            else:
+                masks.append(pil2tensor(mask_image))
+                
+        return torch.cat(masks, dim=0) if len(masks) > 1 else masks[0].unsqueeze(0)
+
+
+
+class Image_target_adjust:
+    def __init__(self):
+        pass
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "target_width": ("INT", {"default": 512, "min": 16, "max": 4096, "step": 16}),
+                "target_height": ("INT", {"default": 512, "min": 16, "max": 4096, "step": 16}),
+                "multiple": ("INT", {"default": 64, "min": 1, "max": 256, "step": 1}),
+                "upscale_method": (["bicubic", "nearest-exact", "bilinear", "area", "lanczos"],),
+                "adjustment_method": (["stretch", "crop", "pad"], {
+                    "default": "stretch"
+                }),
+            },
+            "optional": {
+                "region_position": (["top", "bottom", "left", "right", "center"], {
+                    "default": "center"
+                }),
+                "pad_background": (
+                    ["none", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
+                    {"default": "black"}
+                ),
+            }
+        }
+    
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "resize_image"
+    CATEGORY = "Apt_Preset/image"
+    
+    def calculate_optimal_dimensions(self, original_width, original_height, target_width, target_height, multiple):
+        original_aspect = original_width / original_height
+        target_area = target_width * target_height
+        ideal_width = np.sqrt(target_area * original_aspect)
+        ideal_height = np.sqrt(target_area / original_aspect)
+        width = round(ideal_width / multiple) * multiple
+        height = round(ideal_height / multiple) * multiple
+        width = max(multiple, width)
+        height = max(multiple, height)
+        return width, height
+    
+    def get_color_value(self, color_name, image=None):
+        """获取颜色值，支持预设颜色和使用原图作为背景"""
+        if color_name == "image" and image is not None:
+            # 对于图像背景，我们会在填充时处理，这里返回特殊标记
+            return "image"
+            
+        colors = {
+            "none": (0, 0, 0, 0),  # 透明
+            "white": (255, 255, 255),
+            "black": (0, 0, 0),
+            "red": (255, 0, 0),
+            "green": (0, 255, 0),
+            "blue": (0, 0, 255),
+            "yellow": (255, 255, 0),
+            "cyan": (0, 255, 255),
+            "magenta": (255, 0, 255),
+            "gray": (128, 128, 128)
+        }
+        
+        return colors.get(color_name, (0, 0, 0))
+    
+    def create_background_image(self, size, original_image, position, padded_area):
+        """创建与原图风格一致的背景填充图像"""
+        width, height = size
+        original_np = (original_image * 255).astype(np.uint8)
+        original_pil = Image.fromarray(original_np)
+        
+        # 创建与目标大小相同的背景图
+        background = Image.new('RGB', (width, height))
+        
+        # 根据填充区域和位置，从原图中提取合适的区域作为背景
+        if padded_area == "top" or padded_area == "bottom":
+            # 上下填充，使用原图左右边缘
+            src_width, src_height = original_pil.size
+            cropped = original_pil.crop((0, 0, src_width, min(src_height, height)))
+            resized = cropped.resize((width, height), Image.BILINEAR)
+            background.paste(resized)
+        elif padded_area == "left" or padded_area == "right":
+            # 左右填充，使用原图上下边缘
+            src_width, src_height = original_pil.size
+            cropped = original_pil.crop((0, 0, min(src_width, width), src_height))
+            resized = cropped.resize((width, height), Image.BILINEAR)
+            background.paste(resized)
+            
+        return background
+    
+    def resize_image(self, image, target_width, target_height, multiple, upscale_method, 
+                    adjustment_method, region_position="center", pad_background="black"):
+        batch_size, original_height, original_width, channels = image.shape
+        output_width, output_height = self.calculate_optimal_dimensions(
+            original_width, original_height, target_width, target_height, multiple
+        )
+        
+        original_area = original_width * original_height
+        target_area = output_width * output_height
+        
+        if original_area > target_area:
+            method = "area"
+        else:
+            method = upscale_method
+        
+        def resize_fn(img):
+            img_np = img.cpu().numpy()
+            img_np = (img_np * 255).astype(np.uint8)
+            pil_img = Image.fromarray(img_np)
+            
+            original_aspect = original_width / original_height
+            target_aspect = output_width / output_height
+            
+            if adjustment_method == "stretch":
+                resized_pil = pil_img.resize((output_width, output_height), resample=self.get_resample_method(method))
+                
+            elif adjustment_method == "crop":
+                if original_aspect > target_aspect:
+                    # 宽高比更大，需要裁剪宽度
+                    scale = output_height / original_height
+                    scaled_width = int(original_width * scale)
+                    scaled_height = output_height
+                    resized = pil_img.resize((scaled_width, scaled_height), resample=self.get_resample_method(method))
+                    
+                    # 根据位置裁剪宽度
+                    excess = scaled_width - output_width
+                    if region_position == "left":
+                        left, right = 0, output_width
+                    elif region_position == "right":
+                        left, right = excess, scaled_width
+                    else:  # center
+                        left = excess // 2
+                        right = left + output_width
+                    resized_pil = resized.crop((left, 0, right, scaled_height))
+                else:
+                    # 宽高比更小，需要裁剪高度
+                    scale = output_width / original_width
+                    scaled_width = output_width
+                    scaled_height = int(original_height * scale)
+                    resized = pil_img.resize((scaled_width, scaled_height), resample=self.get_resample_method(method))
+                    
+                    # 根据位置裁剪高度
+                    excess = scaled_height - output_height
+                    if region_position == "top":
+                        top, bottom = 0, output_height
+                    elif region_position == "bottom":
+                        top, bottom = excess, scaled_height
+                    else:  # center
+                        top = excess // 2
+                        bottom = top + output_height
+                    resized_pil = resized.crop((0, top, scaled_width, bottom))
+                    
+            elif adjustment_method == "pad":
+                # 获取填充颜色
+                pad_color = self.get_color_value(pad_background, img_np)
+                
+                if original_aspect > target_aspect:
+                    # 宽高比更大，需要在高度方向填充
+                    scale = output_width / original_width
+                    scaled_width = output_width
+                    scaled_height = int(original_height * scale)
+                    resized = pil_img.resize((scaled_width, scaled_height), resample=self.get_resample_method(method))
+                    
+                    # 计算填充量
+                    pad_total = output_height - scaled_height
+                    if region_position == "top":
+                        pad_top, pad_bottom = pad_total, 0
+                        padded_area = "top"
+                    elif region_position == "bottom":
+                        pad_top, pad_bottom = 0, pad_total
+                        padded_area = "bottom"
+                    else:  # center
+                        pad_top = pad_total // 2
+                        pad_bottom = pad_total - pad_top
+                        padded_area = "center"
+                    
+                    # 处理图像背景填充
+                    if pad_background == "image":
+                        # 创建与原图风格一致的背景
+                        bg_size = (output_width, output_height)
+                        background = self.create_background_image(bg_size, img_np, region_position, padded_area)
+                        # 将缩放后的图像粘贴到背景上
+                        y_offset = pad_top
+                        background.paste(resized, (0, y_offset))
+                        resized_pil = background
+                    else:
+                        # 使用指定颜色填充
+                        resized_pil = ImageOps.expand(resized, (0, pad_top, 0, pad_bottom), fill=pad_color)
+                else:
+                    # 宽高比更小，需要在宽度方向填充
+                    scale = output_height / original_height
+                    scaled_width = int(original_width * scale)
+                    scaled_height = output_height
+                    resized = pil_img.resize((scaled_width, scaled_height), resample=self.get_resample_method(method))
+                    
+                    # 计算填充量
+                    pad_total = output_width - scaled_width
+                    if region_position == "left":
+                        pad_left, pad_right = pad_total, 0
+                        padded_area = "left"
+                    elif region_position == "right":
+                        pad_left, pad_right = 0, pad_total
+                        padded_area = "right"
+                    else:  # center
+                        pad_left = pad_total // 2
+                        pad_right = pad_total - pad_left
+                        padded_area = "center"
+                    
+                    # 处理图像背景填充
+                    if pad_background == "image":
+                        # 创建与原图风格一致的背景
+                        bg_size = (output_width, output_height)
+                        background = self.create_background_image(bg_size, img_np, region_position, padded_area)
+                        # 将缩放后的图像粘贴到背景上
+                        x_offset = pad_left
+                        background.paste(resized, (x_offset, 0))
+                        resized_pil = background
+                    else:
+                        # 使用指定颜色填充
+                        resized_pil = ImageOps.expand(resized, (pad_left, 0, pad_right, 0), fill=pad_color)
+            
+            resized_np = np.array(resized_pil).astype(np.float32) / 255.0
+            return torch.from_numpy(resized_np)
+        
+        resized_images = torch.stack([resize_fn(img) for img in image])
+        return (resized_images,)
+    
+    def get_resample_method(self, method):
+        methods = {
+            "bicubic": Image.BICUBIC,
+            "nearest-exact": Image.NEAREST,
+            "bilinear": Image.BILINEAR,
+            "area": Image.LANCZOS if method == "area" and Image.__version__ >= "9.1.0" else Image.BILINEAR,
+            "lanczos": Image.LANCZOS
+        }
+        return methods.get(method, Image.BILINEAR)
+
+
+
+
+class Image_Channel_Apply:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "channel": (["A", "R", "G", "B"],),
+                "invert_channel": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "channel_data": ("MASK",),
+                "background_color": (
+                    ["none", "image", "white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "gray"],
+                    {"default": "none"}
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "MASK")
+    RETURN_NAMES = ("image", "mask")
+    CATEGORY = "Apt_Preset/image"
+    FUNCTION = "Image_Channel_Apply"
+
+    def Image_Channel_Apply(self, images: torch.Tensor, channel, invert_channel=False, 
+                           channel_data=None, background_color="none"):
+        channel_colors = {
+            "R": (1.0, 0.0, 0.0),
+            "G": (0.0, 1.0, 0.0),
+            "B": (0.0, 0.0, 1.0),
+            "A": (1.0, 1.0, 1.0)
+        }
+        
+        colors = {
+            "white": (1.0, 1.0, 1.0),
+            "black": (0.0, 0.0, 0.0),
+            "red": (1.0, 0.0, 0.0),
+            "green": (0.0, 1.0, 0.0),
+            "blue": (0.0, 0.0, 1.0),
+            "yellow": (1.0, 1.0, 0.0),
+            "cyan": (0.0, 1.0, 1.0),
+            "magenta": (1.0, 0.0, 1.0),
+            "gray": (0.5, 0.5, 0.5)
+        }
+        
+        merged_images = []
+        output_masks = []
+        
+        if len(images.shape) < 4:
+            images = images.unsqueeze(3).repeat(1, 1, 1, 3)
+        
+        channel_index = ["R", "G", "B", "A"].index(channel)
+        input_provided = channel_data is not None
+
+        for i, image in enumerate(images):
+            # 保存原始图像的副本用于可能作为背景
+            original_background = image.cpu().clone()
+            
+            if channel == "A" and image.shape[2] < 4:
+                base_mask = torch.zeros((image.shape[0], image.shape[1]))
+            else:
+                base_mask = image[:, :, channel_index].clone()
+            
+            if input_provided:
+                input_mask = channel_data
+                
+                # 处理不同维度的输入mask
+                if len(input_mask.shape) == 4:
+                    # 4D张量 (batch, height, width, 1)
+                    input_mask = input_mask.squeeze(-1)  # 移除最后一个维度
+                    if input_mask.shape[0] > i:
+                        input_mask = input_mask[i]  # 选择对应批次
+                    else:
+                        input_mask = input_mask[0]  # 如果批次不足，使用第一个
+                elif len(input_mask.shape) == 3:
+                    # 3D张量 (batch, height, width) 或 (height, width, 1)
+                    if input_mask.shape[-1] == 1:
+                        input_mask = input_mask.squeeze(-1)
+                    if len(input_mask.shape) == 3 and input_mask.shape[0] > 1:
+                        # 多批次mask
+                        if input_mask.shape[0] > i:
+                            input_mask = input_mask[i]
+                        else:
+                            input_mask = input_mask[0]
+                elif len(input_mask.shape) == 2:
+                    # 2D张量 (height, width)
+                    pass  # 已经是正确的格式
+                
+                # 确保input_mask是2D的
+                if len(input_mask.shape) > 2:
+                    input_mask = input_mask.squeeze()
+                
+                # 确保维度匹配
+                if input_mask.shape != base_mask.shape:
+                    input_mask = input_mask.unsqueeze(0).unsqueeze(0) if len(input_mask.shape) == 2 else input_mask.unsqueeze(0)
+                    input_mask = torch.nn.functional.interpolate(
+                        input_mask,
+                        size=base_mask.shape[-2:],  # 只使用最后两个维度
+                        mode='bilinear',
+                        align_corners=False
+                    )
+                    input_mask = input_mask.squeeze()
+                
+                processed_input_mask = 1.0 - input_mask if invert_channel else input_mask
+                merged_mask = processed_input_mask + base_mask
+                merged_mask = torch.clamp(merged_mask, 0.0, 1.0)
+            else:
+                merged_mask = base_mask
+                processed_input_mask = merged_mask
+            
+            original_image = image.cpu().clone()
+            image = original_image.clone()
+
+            if channel != "A":
+                if input_provided:
+                    if channel == "R":
+                        image[:, :, 0] = merged_mask
+                    elif channel == "G":
+                        image[:, :, 1] = merged_mask
+                    else:
+                        image[:, :, 2] = merged_mask
+                else:
+                    r, g, b = channel_colors[channel]
+                    channel_color_image = torch.zeros_like(image[:, :, :3])
+                    channel_color_image[:, :, 0] = r
+                    channel_color_image[:, :, 1] = g
+                    channel_color_image[:, :, 2] = b
+                    
+                    mask = base_mask.unsqueeze(2)
+                    image[:, :, :3] = original_image[:, :, :3] * (1 - mask) + channel_color_image * mask
+            else:
+                if input_provided:
+                    if image.shape[2] < 4:
+                        image = torch.cat([image, torch.ones((image.shape[0], image.shape[1], 1))], dim=2)
+                    
+                    image[:, :, 3] = processed_input_mask
+                    mask = processed_input_mask.unsqueeze(2)
+                    image[:, :, :3] = original_image[:, :, :3] * mask
+
+            # 处理背景
+            if background_color != "none":
+                if background_color == "image":
+                    # 使用输入的原始图像作为背景
+                    background = original_background[:, :, :3]  # 只取RGB通道
+                else:
+                    # 使用颜色作为背景
+                    r, g, b = colors[background_color]
+                    h, w, _ = image.shape
+                    background = torch.zeros((h, w, 3))
+                    background[:, :, 0] = r
+                    background[:, :, 1] = g
+                    background[:, :, 2] = b
+                
+                # 应用背景
+                if image.shape[2] >= 4:
+                    alpha = image[:, :, 3].unsqueeze(2)
+                    image_rgb = image[:, :, :3]
+                    image = image_rgb * alpha + background * (1 - alpha)
+                else:
+                    image = background
+
+            if channel == "A" and input_provided:
+                output_mask = processed_input_mask
+            else:
+                output_mask = merged_mask
+
+            merged_images.append(image)
+            output_masks.append(output_mask)
+
+        return (torch.stack(merged_images), torch.stack(output_masks))
+
+
 
 
 
