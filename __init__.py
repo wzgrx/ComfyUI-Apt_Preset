@@ -341,7 +341,7 @@ NODE_CLASS_MAPPINGS= {
 #----------------image------------------------
 
 "Image_pad_keep": Image_pad_keep,  
-"Image_pad_outfill": Image_pad_outfill,  
+#"Image_pad_outfill": Image_pad_outfill,  
 
 
 "Image_batch_select": Image_batch_select,
@@ -571,3 +571,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 "load_SD35": "load_SD35(deprecated)",
 
 }
+
