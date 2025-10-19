@@ -13468,20 +13468,20 @@
         "CN12_SwitchTime": {
             "name": "CN12切换时间"
         },
-        "mix_factor1": {
-            "name": "混合系数1"
+        "mix1_factor": {
+            "name": "混合1系数"
         },
-        "mix_factor2": {
-            "name": "混合系数2"
+        "mix2_factor": {
+            "name": "混合2系数"
         },
-        "factor3": {
-            "name": "系数3"
+        "factor": {
+            "name": "系数"
         },
-        "int1": {
-            "name": "整数1"
+        "intA": {
+            "name": "A整数"
         },
-        "int2": {
-            "name": "整数2"
+        "intB": {
+            "name": "B整数"
         }
     },
     "outputs": {
@@ -13514,19 +13514,19 @@
             "name": "CN12切换时间"
         },
         "4": {
-            "name": "混合系数1"
+            "name": "混合1系数"
         },
         "5": {
-            "name": "混合系数2"
+            "name": "混合2系数"
         },
         "6": {
-            "name": "系数3"
+            "name": "系数"
         },
         "7": {
-            "name": "整数1"
+            "name": "整数A"
         },
         "8": {
-            "name": "整数2"
+            "name": "整数B"
         }
     }
 },
