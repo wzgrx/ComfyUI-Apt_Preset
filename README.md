@@ -11,6 +11,7 @@ The current workflow connections are becoming increasingly dense, making them di
 
 # I. Update Record
 2025.10.6 fix image node.Image_Resize_sum,Image_Resize_sum_restore
+
 2025.10.19 add QwenEditplus stack，Supports stable direct output of large images
 
 # II. Usage Guide
