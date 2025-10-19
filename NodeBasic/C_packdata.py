@@ -3,7 +3,6 @@ import folder_paths
 from ..main_unit import *
 
 
-
 class param_preset:
     @classmethod
     def INPUT_TYPES(s):
@@ -12,7 +11,12 @@ class param_preset:
                 "CN1_Strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.001, "round": 0.001}),
                 "CN2_Strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.001, "round": 0.001}), 
                 "CN12_Strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.001, "round": 0.001}),    
-                "CN12_SwitchTime": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.001}),    
+                "CN12_SwitchTime": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.001}),  
+                "mix_factor1": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.001}),
+                "mix_factor2": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.001}),
+                "factor3": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.001}),
+                "int1": ("INT", {"default": 1, "min": 0, "max": 9999, "step": 1}),
+                "int2": ("INT", {"default": 1, "min": 0, "max": 9999, "step": 1}),
             }
         }
 
@@ -21,9 +25,9 @@ class param_preset:
     FUNCTION = "data"
     CATEGORY = "Apt_Preset/stack"
 
-    def data(self, CN1_Strength=1.0, CN2_Strength=1.0, CN12_Strength=1.0, CN12_SwitchTime=1.0):
+    def data(self, CN1_Strength=1.0, CN2_Strength=1.0, CN12_Strength=1.0, CN12_SwitchTime=1.0, mix_factor1=1.0, mix_factor2=1.0, factor3=1.0, int1=1, int2=1):
         # 将参数打包成元组，保持与输入参数一致
-        Drun = (CN1_Strength, CN2_Strength, CN12_Strength, CN12_SwitchTime)
+        Drun = (CN1_Strength, CN2_Strength, CN12_Strength, CN12_SwitchTime, mix_factor1, mix_factor2, factor3, int1, int2)
         return (Drun,)
 
 
@@ -40,16 +44,16 @@ class Unpack_param:
         }
 
     # 调整返回类型和名称以匹配param_preset中的参数
-    RETURN_TYPES = ("FLOAT", "FLOAT", "FLOAT", "FLOAT")
-    RETURN_NAMES = ("CN1_Strength", "CN2_Strength", "CN12_Strength", "CN12_SwitchTime")
+    RETURN_TYPES = ("FLOAT", "FLOAT", "FLOAT", "FLOAT", "FLOAT", "FLOAT", "FLOAT", "INT", "INT")
+    RETURN_NAMES = ("CN1_Strength", "CN2_Strength", "CN12_Strength", "CN12_SwitchTime", "mix_factor1", "mix_factor2", "factor3", "int1", "int2")
 
     FUNCTION = "unpack_pipe"
     CATEGORY = "Apt_Preset/stack"
 
     def unpack_pipe(self, Drun):
         # 解包元组，顺序与打包时保持一致
-        CN1_Strength, CN2_Strength, CN12_Strength, CN12_SwitchTime = Drun 
-        return (CN1_Strength, CN2_Strength, CN12_Strength, CN12_SwitchTime)
+        CN1_Strength, CN2_Strength, CN12_Strength, CN12_SwitchTime, mix_factor1, mix_factor2, factor3, int1, int2 = Drun 
+        return (CN1_Strength, CN2_Strength, CN12_Strength, CN12_SwitchTime, mix_factor1, mix_factor2, factor3, int1, int2)
 
 
 
