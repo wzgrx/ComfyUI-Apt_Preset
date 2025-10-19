@@ -13453,6 +13453,89 @@
 },
 
 
+"param_preset_pack": {
+    "display_name": "参数预设",
+    "inputs": {
+        "CN1_Strength": {
+            "name": "CN1强度"
+        },
+        "CN2_Strength": {
+            "name": "CN2强度"
+        },
+        "CN12_Strength": {
+            "name": "CN12混合强度"
+        },
+        "CN12_SwitchTime": {
+            "name": "CN12切换时间"
+        },
+        "mix_factor1": {
+            "name": "混合系数1"
+        },
+        "mix_factor2": {
+            "name": "混合系数2"
+        },
+        "factor3": {
+            "name": "系数3"
+        },
+        "int1": {
+            "name": "整数1"
+        },
+        "int2": {
+            "name": "整数2"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "数据管道"
+        }
+    }
+},
+
+
+
+"param_preset_Unpack": {
+    "display_name": "参数预设解包",
+    "inputs": {
+        "Drun": {
+            "name": "数据管道"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "CN1强度"
+        },
+        "1": {
+            "name": "CN2强度"
+        },
+        "2": {
+            "name": "CN12强度"
+        },
+        "3": {
+            "name": "CN12切换时间"
+        },
+        "4": {
+            "name": "混合系数1"
+        },
+        "5": {
+            "name": "混合系数2"
+        },
+        "6": {
+            "name": "系数3"
+        },
+        "7": {
+            "name": "整数1"
+        },
+        "8": {
+            "name": "整数2"
+        }
+    }
+},
+
+
+
+
+
+
 
   "basicIn_int": {
     "display_name": "基础输入_整数",
