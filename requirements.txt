@@ -36,6 +36,7 @@ watchdog>=3.0.0
 filelock>=3.12.0
 opencv-python
 psd_tools
+pynvml
 
 
 
