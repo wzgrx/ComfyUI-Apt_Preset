@@ -1804,6 +1804,7 @@ class color_match_adv:
 
 
 
+
 class Image_smooth_blur:
     @classmethod
     def INPUT_TYPES(s):
@@ -1812,9 +1813,12 @@ class Image_smooth_blur:
                 "image": ("IMAGE",),
                 "mask": ("MASK",),
                 "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1, "display": "slider"}),
+                "invert_mask": ("BOOLEAN", {"default": False}),
+                "mask_expansion": ("INT", {"default": 0, "min": -50, "max": 50, "step": 1}),
+                "mask_color": (["image", "Alpha", "white", "black", "red", "green", "blue", "gray"], {"default": "white"}),
             },
             "optional": {
-                "bg_color": (["Alpha", "white", "black", "red", "green", "blue", "gray"], {"default": "Alpha"}),
+                "bg_color": (["image", "Alpha", "white", "black", "red", "green", "blue", "gray"], {"default": "Alpha"}),
             }
         }
 
@@ -1823,7 +1827,7 @@ class Image_smooth_blur:
     CATEGORY = "Apt_Preset/image"
     FUNCTION = "apply_smooth_blur"
 
-    def apply_smooth_blur(self, image, mask, smoothness, bg_color="Alpha"):
+    def apply_smooth_blur(self, image, mask, smoothness, invert_mask=False, mask_expansion=0, mask_color="image", bg_color="Alpha"):
         batch_size = image.shape[0]
         result_images = []
         smoothed_masks = []
@@ -1841,46 +1845,63 @@ class Image_smooth_blur:
             current_image = image[i].clone()
             current_mask = mask[i] if i < mask.shape[0] else mask[0]
             
-            # 确保 mask_tensor 始终有定义，并且维度正确
+            if current_image.shape[-1] == 4:
+                current_image = current_image[:, :, :3]
+            
             if smoothness > 0:
-                mask_tensor = smoothness_mask(current_mask, smoothness)
+                mask_tensor = smoothness_mask(current_mask, smoothness)  # 假设smoothness_mask已定义
             else:
                 mask_tensor = current_mask.clone()
             
-            # 确保 mask_tensor 是二维的
             if mask_tensor.dim() == 1:
-                # 如果是一维的，需要 reshape
                 mask_tensor = mask_tensor.unsqueeze(0)
             elif mask_tensor.dim() > 2:
-                # 如果是三维或更高维度，需要降维
                 mask_tensor = mask_tensor.squeeze()
-                # 确保最后是二维
                 while mask_tensor.dim() > 2:
                     mask_tensor = mask_tensor.squeeze(0)
             
-            # 保存平滑后的遮罩用于输出
+            if mask_expansion != 0:
+                kernel_size = abs(mask_expansion) * 2 + 1
+                if mask_expansion > 0:
+                    from torch.nn import functional as F
+                    mask_tensor = F.max_pool2d(mask_tensor.unsqueeze(0).unsqueeze(0), kernel_size, 1, padding=mask_expansion).squeeze()
+                else:
+                    from torch.nn import functional as F
+                    mask_tensor = F.avg_pool2d(mask_tensor.unsqueeze(0).unsqueeze(0), kernel_size, 1, padding=-mask_expansion).squeeze()
+                    mask_tensor = (mask_tensor > 0.5).float()
+            
+            if invert_mask:
+                mask_tensor = 1.0 - mask_tensor
+            
             smoothed_mask = mask_tensor.clone()
             
-            # 创建未模糊的图像（因为已移除blur功能）
             unblurred_tensor = current_image.clone()
             
-            # 确保图像和遮罩通道数匹配
             if current_image.shape[-1] != 3:
-                # 如果图像不是3通道，转换为3通道
-                if current_image.shape[-1] == 4:
-                    # RGBA转RGB
-                    current_image = current_image[:, :, :3]
-                    unblurred_tensor = unblurred_tensor[:, :, :3]
-                elif current_image.shape[-1] == 1:
-                    # 灰度图转RGB
+                if current_image.shape[-1] == 1:
                     current_image = current_image.repeat(1, 1, 3)
                     unblurred_tensor = unblurred_tensor.repeat(1, 1, 3)
             
-            # 正确扩展 mask 维度
             mask_expanded = mask_tensor.unsqueeze(-1).repeat(1, 1, 3)
-            result_tensor = current_image * mask_expanded + unblurred_tensor * (1 - mask_expanded)
             
-            if bg_color != "Alpha":
+            # 处理mask_color为"Alpha"的情况（保持透明效果）
+            if mask_color == "image":
+                mask_fill = current_image
+            elif mask_color == "Alpha":
+                mask_fill = torch.zeros_like(current_image)  # 透明区域用黑色填充（后续会被背景覆盖）
+            else:
+                mask_fill = torch.zeros_like(current_image)
+                r, g, b = color_map[mask_color]
+                mask_fill[:, :, 0] = r / 255.0
+                mask_fill[:, :, 1] = g / 255.0
+                mask_fill[:, :, 2] = b / 255.0
+            
+            result_tensor = mask_fill * mask_expanded + unblurred_tensor * (1 - mask_expanded)
+            
+            # 处理bg_color为"image"的情况（使用原图作为背景）
+            if bg_color == "image":
+                bg_tensor = unblurred_tensor  # 使用原图作为背景
+            elif bg_color != "Alpha":
                 bg_tensor = torch.zeros_like(current_image)
                 if bg_color in color_map:
                     r, g, b = color_map[bg_color]
@@ -1896,6 +1917,10 @@ class Image_smooth_blur:
         final_image = torch.cat(result_images, dim=0)
         final_mask = torch.cat(smoothed_masks, dim=0)
         return (final_image, final_mask)
+
+
+
+
 
 
 
@@ -6730,6 +6755,7 @@ class Image_pad_adjust:
         final_padding_masks = torch.clamp(final_padding_masks, 0, 1)
         
         return final_masks, final_padding_masks
+
 
 
 
