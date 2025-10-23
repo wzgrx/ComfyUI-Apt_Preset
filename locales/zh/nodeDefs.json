@@ -2403,14 +2403,17 @@
         }
     },
     "outputs": {
-        "image": {
+        "0": {
             "name": "图像"
         },
-        "smooth_mask": {
+        "1": {
             "name": "平滑遮罩"
+        },
+        "2": {
+            "name": "反转遮罩"
         }
-    }
-},
+    },
+
 "Image_CnMapMix": {
     "display_name": "双图_CN混合",
     "inputs": {
