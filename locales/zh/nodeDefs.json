@@ -2344,37 +2344,12 @@
       }
     }
   },
-  "Image_Channel_RemoveAlpha": {
-    "display_name": "通道_移除Alpha",
-    "inputs": {
-      "image": {
-        "name": "图像"
-      }
-    },
-    "outputs": {
-      "image": {
-        "name": "图像"
-      }
-    }
-  },
-  "Image_Channel_Extract": {
-    "display_name": "通道_提取",
-    "inputs": {
-      "images": {
-        "name": "图像"
-      },
-      "channel": {
-        "name": "通道"
-      }
-    },
-    "outputs": {
-      "mask": {
-        "name": "遮罩"
-      }
-    }
-  },
+
+
+
+
   "Image_Channel_Apply": {
-    "display_name": "通道_合并拆分",
+    "display_name": "单图_通道处理",
     "inputs": {
       "images": {
         "name": "图像"
@@ -2401,6 +2376,179 @@
       }
     }
   },
+
+"Image_smooth_blur": {
+    "display_name": "单图_双向羽化",
+    "inputs": {
+        "image": {
+            "name": "图像"
+        },
+        "mask": {
+            "name": "遮罩"
+        },
+        "smoothness": {
+            "name": "平滑度"
+        },
+        "invert_mask": {
+            "name": "反转遮罩"
+        },
+        "mask_expansion": {
+            "name": "遮罩扩展"
+        },
+        "mask_color": {
+            "name": "遮罩颜色"
+        },
+        "bg_color": {
+            "name": "背景颜色"
+        }
+    },
+    "outputs": {
+        "image": {
+            "name": "图像"
+        },
+        "smooth_mask": {
+            "name": "平滑遮罩"
+        }
+    }
+},
+"Image_CnMapMix": {
+    "display_name": "双图_CN混合",
+    "inputs": {
+        "image1": {
+            "name": "图像1"
+        },
+        "image2": {
+            "name": "图像2"
+        },
+        "blur_1": {
+            "name": "模糊1"
+        },
+        "blur_2": {
+            "name": "模糊2"
+        },
+        "diff_blur": {
+            "name": "差异模糊"
+        },
+        "blend_mode": {
+            "name": "混合模式"
+        },
+        "blend_factor": {
+            "name": "混合因子"
+        },
+        "contrast": {
+            "name": "对比度"
+        },
+        "brightness": {
+            "name": "亮度"
+        },
+        "diff_sensitivity": {
+            "name": "差异敏感度"
+        }
+    },
+    "outputs": {
+        "image": {
+            "name": "图像"
+        }
+    }
+},
+"Stack_Ksampler_refine": {
+    "display_name": "stack采样refine",
+    "inputs": {
+        "upscale_model": {
+            "name": "放大模型"
+        },
+        "upscale_method": {
+            "name": "放大方法"
+        },
+        "pixls_scale": {
+            "name": "像素缩放比例"
+        },
+        "steps": {
+            "name": "步数"
+        },
+        "cfg": {
+            "name": "CFG比例"
+        },
+        "image": {
+            "name": "图像"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "功能"
+        }
+    }
+},
+"Stack_Ksampler_highAndLow": {
+    "display_name": "stack高低频采样",
+    "inputs": {
+        "add_noise": {
+            "name": "添加噪声"
+        },
+        "noise_seed": {
+            "name": "噪声种子"
+        },
+        "start_step": {
+            "name": "起始步数"
+        },
+        "mid_step": {
+            "name": "中间步数"
+        },
+        "steps": {
+            "name": "总步数"
+        },
+        "return_with_leftover_noise": {
+            "name": "返回剩余噪声"
+        },
+        "model2": {
+            "name": "模型2"
+        },
+        "positive2": {
+            "name": "正条件2"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "功能"
+        }
+    }
+},
+
+"Stack_Ksampler_dual_paint": {
+    "display_name": "stack双区采样",
+    "inputs": {
+        "image": {
+            "name": "图像"
+        },
+        "mask": {
+            "name": "遮罩"
+        },
+        "smoothness": {
+            "name": "平滑度"
+        },
+        "mask_area_denoise": {
+            "name": "遮罩区降噪"
+        },
+        "image_area_denoise": {
+            "name": "图像区降噪"
+        },
+        "refine": {
+            "name": "放大细化"
+        },
+        "refine_denoise": {
+            "name": "细化降噪"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "功能"
+        }
+    }
+},
+
+
+
+
   "Image_tensor_Converter": {
     "display_name": "图像_张量转换",
     "inputs": {
@@ -9405,31 +9553,8 @@
       }
     }
   },
-  "Image_smooth_blur": {
-    "display_name": "单图_羽化",
-    "inputs": {
-      "image": {
-        "name": "图像"
-      },
-      "mask": {
-        "name": "遮罩"
-      },
-      "smoothness": {
-        "name": "羽化"
-      },
-      "bg_color": {
-        "name": "背景颜色"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "图像"
-      },
-      "1": {
-        "name": "羽化遮罩"
-      }
-    }
-  },
+
+  
   "Image_Solo_data": {
     "display_name": "单图_裁切_数据",
     "inputs": {
@@ -13593,6 +13718,204 @@
     "outputs": {
         "image": {
             "name": "图像"
+        }
+    }
+},
+
+  
+  "sum_Ksampler": {
+    "display_name": "sum_总采样器",
+    "inputs": {
+      "context": {
+        "name": "context"
+      },
+      "seed": {
+        "name": "种子"
+      },
+      "denoise": {
+        "name": "降噪"
+      },
+      "image_output": {
+        "name": "图像输出"
+      },
+      "model": {
+        "name": "模型"
+      },
+      "positive": {
+        "name": "正向条件"
+      },
+      "negative": {
+        "name": "负向条件"
+      },
+      "latent_stack": {
+        "name": "latent堆"
+      },
+      "lowCpu": {
+        "name": "低cpu"
+      },
+      "ksample_type": {
+        "name": "基础采样"
+      },
+      "prompt": {
+        "name": "提示词"
+      },
+      "funtion": {
+        "name": "功能"
+      }
+    },
+    "outputs": {
+      "context": {
+        "name": "context"
+      },
+      "image": {
+        "name": "图像"
+      }
+    }
+  },
+  "Stack_VAEDecodeTiled": {
+    "display_name": "VAE分块解码",
+    "inputs": {
+      "tile_size": {
+        "name": "分块大小"
+      },
+      "overlap": {
+        "name": "重叠区域"
+      },
+      "temporal_size": {
+        "name": "时间维度尺寸"
+      },
+      "temporal_overlap": {
+        "name": "时间维度重叠"
+      }
+    },
+    "outputs": {
+      "vaeTile": {
+        "name": "VAE分块解码"
+      }
+    }
+  },
+  "Stack_Ksampler_adv": {
+    "display_name": "stack高级采样器",
+    "inputs": {
+      "add_noise": {
+        "name": "添加噪声"
+      },
+      "steps": {
+        "name": "步数"
+      },
+      "cfg": {
+        "name": "CFG"
+      },
+      "sampler": {
+        "name": "采样器"
+      },
+      "scheduler": {
+        "name": "调度器"
+      },
+      "start_at_step": {
+        "name": "起始步数"
+      },
+      "end_at_step": {
+        "name": "结束步数"
+      },
+      "return_with_leftover_noise": {
+        "name": "返回剩余噪声"
+      }
+    },
+    "outputs": {
+      "ksample_adv": {
+        "name": "ksample_adv"
+      }
+    }
+  },
+  "Stack_Ksampler_basic": {
+    "display_name": "stack基础采样器",
+    "inputs": {
+      "steps": {
+        "name": "步数"
+      },
+      "cfg": {
+        "name": "CFG"
+      },
+      "sampler": {
+        "name": "采样器"
+      },
+      "scheduler": {
+        "name": "调度器"
+      }
+    },
+    "outputs": {
+      "ksample": {
+        "name": "ksample"
+      }
+    }
+  },
+  "Stack_Ksampler_custom": {
+    "display_name": "stack自定义采样器",
+    "inputs": {
+      "steps": {
+        "name": "步数"
+      },
+      "cfg": {
+        "name": "CFG比例"
+      },
+      "scheduler": {
+        "name": "调度器"
+      },
+      "noise": {
+        "name": "噪声"
+      },
+      "guider": {
+        "name": "引导器"
+      },
+      "sampler": {
+        "name": "采样器"
+      },
+      "sigmas": {
+        "name": "西格玛值"
+      }
+    },
+    "outputs": {
+      "ksample_custom": {
+        "name": "ksample_custom"
+      }
+    }
+  },
+
+"pre_MulCondiMode": {
+    "display_name": "条件_多条件模式",
+    "inputs": {
+        "mode": {
+            "name": "模式"
+        },
+        "conditioning_1": {
+            "name": "条件1"
+        },
+        "conditioning_2": {
+            "name": "条件2"
+        },
+        "conditioning_3": {
+            "name": "条件3"
+        },
+        "conditioning_4": {
+            "name": "条件4"
+        },
+        "strength1": {
+            "name": "强度1"
+        },
+        "strength2": {
+            "name": "强度2"
+        },
+        "strength3": {
+            "name": "强度3"
+        },
+        "strength4": {
+            "name": "强度4"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "条件"
         }
     }
 },
