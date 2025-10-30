@@ -146,9 +146,10 @@ class text_mul_replace:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("text",)
     FUNCTION = "replace"
-    CATEGORY = "Apt_Preset/prompt"
+    CATEGORY = "Apt_Preset/prompt/😺backup"
 
     def replace(self, text, target, replace):
+        import re  # 注意补充re的导入（原代码可能遗漏）
         def split_with_quotes(s):
             pattern = r'"([^"]*)"|\s*([^,]+)'
             matches = re.finditer(pattern, s)
@@ -156,26 +157,19 @@ class text_mul_replace:
         
         targets = split_with_quotes(target)
         exchanges = split_with_quotes(replace)
-        
-
+    
         word_map = {}
         for target, exchange in zip(targets, exchanges):
-
-            target_clean = target.strip('"').strip().lower()
+            target_clean = target.strip('"').strip()  # 去掉lower()，避免大小写转换影响（如原目标含大写时）
             exchange_clean = exchange.strip('"').strip()
             word_map[target_clean] = exchange_clean
-        
-
+    
         sorted_targets = sorted(word_map.keys(), key=len, reverse=True)
         
         result = text
         for target in sorted_targets:
-            if ' ' in target:
-                pattern = re.escape(target)
-            else:
-                pattern = r'\b' + re.escape(target) + r'\b'
-            
-            result = re.sub(pattern, word_map[target], result, flags=re.IGNORECASE)
+            pattern = re.escape(target)
+            result = re.sub(pattern, word_map[target], result)
         
         
         return (result,)
@@ -199,31 +193,28 @@ class text_mul_remove:
             }
         }
 
-
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("text",)
     FUNCTION = "clean_prompt"
-    CATEGORY = "Apt_Preset/prompt"
+    CATEGORY = "Apt_Preset/prompt/😺backup"
 
     def clean_prompt(self, text, words_to_remove):
-        remove_words = [word.strip().lower() for word in words_to_remove.split(',')]
-        words = re.findall(r'\b\w+\b|[^\w\s]', text)
+        # 拆分待移除的词（处理可能的空格和空字符串）
+        remove_words = [word.strip() for word in words_to_remove.split(',') if word.strip()]
+        if not remove_words:
+            return (text,)
+    
+        remove_words_sorted = sorted(remove_words, key=lambda x: len(x), reverse=True)
         
-        cleaned_words = []
-        skip_next = False
-        for i, word in enumerate(words):
-            word_lower = word.lower()
-            if word_lower in remove_words:
-                continue
-            cleaned_words.append(word)
-        cleaned_text = ' '.join(cleaned_words)
+        pattern = '|'.join(re.escape(word) for word in remove_words_sorted)
+        cleaned_text = re.sub(pattern, '', text)
 
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()    
         return (cleaned_text,)
 
     @classmethod
     def IS_CHANGED(cls, text, words_to_remove):
         return (text, words_to_remove)
-
 
 
 class text_free_wildcards:
@@ -325,8 +316,7 @@ class text_free_wildcards:
 wildcards_dir1 = Path(__file__).parent.parent  / "wildcards"
 os.makedirs(wildcards_dir1, exist_ok=True)
 wildcards_dir2 = Path(folder_paths.base_path) / "wildcards"
-# os.makedirs(wildcards_dir2, exist_ok=True)
-print(f"Using wildcards dir:{wildcards_dir1} or {wildcards_dir2}")
+
 
 full_dirs = [wildcards_dir1, wildcards_dir2]
 
@@ -376,7 +366,7 @@ class text_stack_wildcards:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("text",)
     FUNCTION = "stack_Wildcards"
-    CATEGORY = "Apt_Preset/prompt"
+    CATEGORY = "Apt_Preset/prompt/😺backup"
 
     def stack_Wildcards(self, wildcards_count, seed, text=None, **kwargs):
 
@@ -444,7 +434,7 @@ class text_mul_Join:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("joined_text",)
     FUNCTION = "join_text"
-    CATEGORY = "Apt_Preset/prompt"
+    CATEGORY = "Apt_Preset/prompt/😺backup"
 
     def join_text(self, delimiter, **kwargs):
         # 处理特殊转义字符
@@ -500,7 +490,7 @@ class text_mul_Split:
                     "item5", "item6", "item7", "item8")
     #OUTPUT_IS_LIST = (True, False, False, False, False, False, False, False, False)
     FUNCTION = "split_text"
-    CATEGORY = "Apt_Preset/prompt"
+    CATEGORY = "Apt_Preset/prompt/😺backup"
 
     def split_text(self, text, delimiter):
         # 处理特殊转义字符
@@ -545,7 +535,7 @@ class text_list_combine :
     RETURN_TYPES = ("STRING",) 
     RETURN_NAMES = ("text",) 
     FUNCTION = "run"
-    CATEGORY = "Apt_Preset/prompt"
+    CATEGORY = "Apt_Preset/prompt/😺backup"
 
     INPUT_IS_LIST = True
     OUTPUT_IS_LIST = (False,)

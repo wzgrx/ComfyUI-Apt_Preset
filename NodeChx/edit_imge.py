@@ -1209,6 +1209,171 @@ class pre_ref_condition:
 
 
 
+class pre_MulCondiMode:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mode": (["combine", "average", "concat"], ),
+            },
+            "optional": {
+                "conditioning_1": ("CONDITIONING", ),
+                "conditioning_2": ("CONDITIONING", ),
+                "conditioning_3": ("CONDITIONING",),
+                "conditioning_4": ("CONDITIONING",),
+                "strength1": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "strength2": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "strength3": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "strength4": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01})  
+            }
+        }
+    
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("conditioning",)
+    FUNCTION = "merge"
+    CATEGORY = "Apt_Preset/chx_tool/conditioning"
+
+    DESCRIPTION = """
+    - combine：列表拼接，让模型 “同时做两件事”
+    - average：数值融合，让模型 “做一件中间的事”
+    - concat：维度拼接，让模型 “用更完整的信息做两件事”"""
+
+    def merge(self, mode, conditioning_1=None, conditioning_2=None, 
+              conditioning_3=None, conditioning_4=None,
+              strength1=0.5, strength2=0.5, strength3=0.5, strength4=0.5):
+        
+        conditionings = []
+        strengths = []
+        inputs = [
+            (conditioning_1, strength1),
+            (conditioning_2, strength2),
+            (conditioning_3, strength3),
+            (conditioning_4, strength4)
+        ]
+        for cond, strength in inputs:
+            if cond is not None:
+                conditionings.append(cond)
+                strengths.append(strength)
+        
+        if not conditionings:
+            logging.warning("No valid conditioning inputs provided.")
+            return ([], )
+        
+        if len(conditionings) == 1:
+            result = []
+            cond = conditionings[0]
+            strength = strengths[0]
+            for item in cond:
+                tensor = torch.mul(item[0], strength)
+                meta = item[1].copy()
+                if "pooled_output" in meta and meta["pooled_output"] is not None:
+                    meta["pooled_output"] = torch.mul(meta["pooled_output"], strength)
+                result.append([tensor, meta])
+            return (result, )
+        
+        if mode == "combine":
+            result = []
+            for cond, strength in zip(conditionings, strengths):
+                for item in cond:
+                    if item[0].numel() == 0:
+                        continue
+                    tensor = torch.mul(item[0], strength)
+                    meta = item[1].copy()
+                    if "pooled_output" in meta and meta["pooled_output"] is not None:
+                        meta["pooled_output"] = torch.mul(meta["pooled_output"], strength)
+                    result.append([tensor, meta])
+            return (result, )
+        
+        elif mode == "average":
+            total_strength = sum(strengths)
+            if total_strength <= 0:
+                normalized = [1.0 / len(strengths)] * len(strengths)
+            else:
+                normalized = [s / total_strength for s in strengths]
+            
+            base = conditionings[0]
+            out = []
+            for i in range(len(base)):
+                result_tensor = torch.mul(base[i][0], normalized[0])
+                result_meta = base[i][1].copy()
+                pooled = None
+                if "pooled_output" in result_meta and result_meta["pooled_output"] is not None:
+                    pooled = torch.mul(result_meta["pooled_output"], normalized[0])
+                
+                for j in range(1, len(conditionings)):
+                    cond = conditionings[j]
+                    if i >= len(cond):
+
+                        continue
+                    curr_tensor = cond[i][0]
+                    curr_meta = cond[i][1]
+                    
+                    if curr_tensor.shape[1] != result_tensor.shape[1]:
+                        if curr_tensor.shape[1] > result_tensor.shape[1]:
+                            curr_tensor = curr_tensor[:, :result_tensor.shape[1], :]
+                        else:
+                            pad = torch.zeros(
+                                (curr_tensor.shape[0], result_tensor.shape[1] - curr_tensor.shape[1], curr_tensor.shape[2]),
+                                dtype=curr_tensor.dtype, device=curr_tensor.device
+                            )
+                            curr_tensor = torch.cat([curr_tensor, pad], dim=1)
+                    
+                    result_tensor += torch.mul(curr_tensor, normalized[j])
+                    
+                    if pooled is not None and "pooled_output" in curr_meta and curr_meta["pooled_output"] is not None:
+                        curr_pooled = curr_meta["pooled_output"]
+                        if curr_pooled.shape != pooled.shape:
+                            if curr_pooled.numel() > pooled.numel():
+                                curr_pooled = curr_pooled.flatten()[:pooled.numel()].reshape(pooled.shape)
+                            else:
+                                curr_pooled = torch.cat([curr_pooled.flatten(), torch.zeros(pooled.numel() - curr_pooled.numel(), device=curr_pooled.device)]).reshape(pooled.shape)
+                        pooled += torch.mul(curr_pooled, normalized[j])
+                
+                if pooled is not None:
+                    result_meta["pooled_output"] = pooled
+                out.append([result_tensor, result_meta])
+            
+            return (out, )
+        
+        elif mode == "concat":
+            out = []
+            base = conditionings[0]
+            for i in range(len(base)):
+                tensors = [torch.mul(base[i][0], strengths[0])]
+                for j in range(1, len(conditionings)):
+                    cond = conditionings[j]
+                    if i >= len(cond):
+                        logging.warning(f"Conditioning {j+1} has fewer items than the first, skipping index {i}")
+                        continue
+                    curr_tensor = torch.mul(cond[i][0], strengths[j])
+                    if curr_tensor.shape[0] != tensors[0].shape[0] or curr_tensor.shape[2] != tensors[0].shape[2]:
+                        logging.warning(f"Conditioning {j+1} has incompatible dimensions with the first, skipping.")
+                        continue
+                    tensors.append(curr_tensor)
+            
+                result_tensor = torch.cat(tensors, dim=1)
+                result_meta = base[i][1].copy()
+                
+                if "pooled_output" in result_meta and result_meta["pooled_output"] is not None:
+                    pooled_list = [torch.mul(result_meta["pooled_output"], strengths[0])]
+                    for j in range(1, len(conditionings)):
+                        cond = conditionings[j]
+                        if i < len(cond) and "pooled_output" in cond[i][1] and cond[i][1]["pooled_output"] is not None:
+                            pooled_list.append(torch.mul(cond[i][1]["pooled_output"], strengths[j]))
+                    result_meta["pooled_output"] = torch.cat(pooled_list, dim=0)
+                    logging.info("Concatenated pooled_output may not be compatible with some models.")
+                
+                out.append([result_tensor, result_meta])
+            
+            return (out, )
+        
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
+
+
+
+
+
 
 
 

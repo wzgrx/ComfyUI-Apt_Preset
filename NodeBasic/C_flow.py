@@ -120,7 +120,7 @@ class flow_auto_pixel:
 
     def auto_pixel(self, model_name, image, threshold_type, 
                 pixels_threshold, upscale_method_True, upscale_method_False, low_pixels_True, high_pixels_False, divisible_by):
-        model = UpscaleModelLoader().load_model(model_name)[0]
+
 
         # 处理不同维度的图像张量
         if len(image.shape) == 3:
@@ -154,13 +154,10 @@ class flow_auto_pixel:
         elif threshold_type == "width > height":
             megapixels = high_pixels_False
             upscale_method = upscale_method_False
-
-        # 执行 upscale 操作
+            
+        model = UpscaleModelLoader().load_model(model_name)[0]
         image = ImageUpscaleWithModel().upscale(model, image)[0]
-        image = ImageScaleToTotalPixels().upscale(image, upscale_method, megapixels)[0]
-        
-        # 调整尺寸以满足divisible_by要求
-        # 同样需要处理不同维度的情况
+
         if len(image.shape) == 3:
             H, W, C = image.shape
         else:  # len(image.shape) == 4
@@ -259,30 +256,6 @@ class flow_switch:
 
 
 
-
-class flow_break_switch:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "data": (any_type,),
-                "flow_pass": ("BOOLEAN", {"default": True, }),
-            }
-        }
-
-    # 关键：将返回类型设为可选（通过添加问号标记）
-    RETURN_TYPES = (any_type,)  # 问号表示该输出是可选的
-    RETURN_NAMES = ("data",)
-    CATEGORY = "Apt_Preset/flow"
-    FUNCTION = "process"
-
-    def process(self, data, flow_pass):
-        if flow_pass:
-            return (data,)
-        else:
-            # 返回空值时使用官方更可能兼容的形式
-            return (None,)
-    
 
 
 class flow_low_gpu:

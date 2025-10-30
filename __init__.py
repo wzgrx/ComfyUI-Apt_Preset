@@ -39,7 +39,6 @@ from .NodeBasic.C_condition import *
 
 
 from .NodeCollect.mask_face import *
-from .NodeCollect.text_font2img import *
 from .NodeChx.sum_text_yaml import *
 from .NodeChx.edit_imge import*
 
@@ -58,8 +57,10 @@ NODE_CLASS_MAPPINGS= {
 
 #-------------------------------------------------------N
 "sum_load_adv": sum_load_adv,   
-"sum_create_chx": sum_create_chx,
 "sum_editor": sum_editor,
+"sum_Ksampler": sum_Ksampler,  
+"sum_create_chx": sum_create_chx,   #test
+#-------------------------------------------------------S
 
 "load_Nanchaku":load_Nanchaku,
 "load_GGUF": UnetLoaderGGUF2,
@@ -70,7 +71,6 @@ NODE_CLASS_MAPPINGS= {
 "Data_basic": Data_basic,
 "Data_select": Data_select,
 "Data_chx_Merge":Data_chx_Merge,
-
 "Data_preset_save": Data_preset_save,
 
 "sum_latent": sum_latent,     
@@ -84,36 +84,32 @@ NODE_CLASS_MAPPINGS= {
 
 #-sample-------------------------------------------#
 
+
 "basic_Ksampler_simple": basic_Ksampler_simple,  
-"basic_Ksampler_mid": basic_Ksampler_mid,    
-"basic_Ksampler_full": basic_Ksampler_full,     
-"basic_Ksampler_custom": basic_Ksampler_custom,
-"basic_Ksampler_adv": basic_Ksampler_adv,
-"basic_Ksampler_low_gpu": basic_Ksampler_low_gpu,
-
-
-"chx_Ksampler_refine": chx_Ksampler_refine,
-"chx_ksampler_tile": chx_ksampler_tile,   
 "chx_Ksampler_inpaint": chx_Ksampler_inpaint,         
-
-"chx_Ksampler_highAndLow":chx_Ksampler_highAndLow,
-    
-
-
 "sampler_DynamicTileSplit": DynamicTileSplit, 
 "sampler_DynamicTileMerge": DynamicTileMerge,
 
 
 #--------***----------------------------#
-"chx_Ksampler_dual_paint": chx_Ksampler_dual_paint, 
+"basic_Ksampler_mid": basic_Ksampler_mid,    
+"basic_Ksampler_full": basic_Ksampler_full,     
+"basic_Ksampler_custom": basic_Ksampler_custom,
+"basic_Ksampler_adv": basic_Ksampler_adv,
+"basic_Ksampler_low_gpu": basic_Ksampler_low_gpu,
+"chx_Ksampler_refine": chx_Ksampler_refine,
+"chx_ksampler_tile": chx_ksampler_tile,   
+"chx_Ksampler_highAndLow":chx_Ksampler_highAndLow,
 
-"chx_Ksampler_dual_area": chx_Ksampler_dual_area,
-"chx_Ksampler_texture": chx_Ksampler_texture,
+
+"chx_Ksampler_dual_paint": chx_Ksampler_dual_paint, 
 "chx_Ksampler_mix": chx_Ksampler_mix,
- 
 "chx_ksampler_Deforum_sch":chx_ksampler_Deforum_sch,
 "basic_KSampler_variant_seed": basic_KSampler_variant_seed,
 "sampler_enhance": sampler_enhance,
+
+
+
 
 #---------control tool------------------------------------------#
 
@@ -132,9 +128,7 @@ NODE_CLASS_MAPPINGS= {
 "pre_mul_Mulcondi": pre_mul_Mulcondi,   
 "pre_condi_combine_switch":pre_condi_combine_switch,
 "pre_ref_condition": pre_ref_condition,  # New
-
-
-
+"pre_MulCondiMode": pre_MulCondiMode,
 
 #---------****------------------
 "pre_ic_light_sd15": pre_ic_light_sd15,
@@ -163,7 +157,7 @@ NODE_CLASS_MAPPINGS= {
 
 
 
-#-stack-------------------------------------------#
+#-stack#-----------------**----------------------------------------------------#
 
 "Stack_latent": Stack_latent,
 "Stack_pre_Mark2": Stack_pre_Mark2,
@@ -181,13 +175,18 @@ NODE_CLASS_MAPPINGS= {
 "Stack_ControlNet":Stack_ControlNet,
 "Stack_CN_union":Stack_CN_union,   
 "Stack_inpaint": Stack_inpaint,
-
 "Stack_CN_union3": Stack_CN_union3,
 
 
 
-
-
+"Stack_VAEDecodeTiled": Stack_VAEDecodeTiled,
+"Stack_Ksampler_adv": Stack_Ksampler_adv,
+"Stack_Ksampler_basic": Stack_Ksampler_basic,
+"Stack_Ksampler_custom": Stack_Ksampler_custom,
+"Stack_Ksampler_dual_paint": Stack_Ksampler_dual_paint,
+"Stack_Ksampler_highAndLow": Stack_Ksampler_highAndLow,
+"Stack_Ksampler_refine": Stack_Ksampler_refine,
+"Stack_ksampler_tile":Stack_ksampler_tile,
 
 #-------------wan---------------------------------------
 
@@ -234,7 +233,8 @@ NODE_CLASS_MAPPINGS= {
 "AD_ImageExpandBatch": AD_ImageExpandBatch,
 "AD_frame_replace": AD_frame_replace,
 "AD_pingpong_vedio":AD_pingpong_vedio,
-"AD_font2img":AD_font2img,
+"AD_FILM_VFI":AD_FILM_VFI,
+
 
 "Amp_drive_value": Amp_drive_value,
 "Amp_drive_String": Amp_drive_String,
@@ -332,8 +332,6 @@ NODE_CLASS_MAPPINGS= {
 
 #---------------model--------
 
-
-
 "model_tool_assy":model_tool_assy,
 "latent_chx_noise": latent_chx_noise,
 "latent_Image2Noise": latent_Image2Noise,
@@ -343,20 +341,20 @@ NODE_CLASS_MAPPINGS= {
 
 #----------------image------------------------
 
-"Image_pad_keep": Image_pad_keep,  #new
+"Image_pad_keep": Image_pad_keep,  
 "Image_pad_adjust": Image_pad_adjust,  
 "Image_pad_adjust_restore": Image_pad_adjust_restore,
 
 
 
 #-------------------------------------------------------------
-"Image_solo_crop": Image_solo_crop,  #new
-"Image_solo_stitch": Image_solo_stitch, 
+"Image_solo_crop": Image_solo_crop,  
+"Image_solo_stitch": Image_solo_stitch,    
 "Image_transform_crop":Image_transform_crop,  
-"Image_smooth_blur": Image_smooth_blur,
+
 "Image_Channel_Apply": Image_Channel_Apply,
 "Image_Solo_data":Image_Solo_data,
-
+"Image_smooth_blur": Image_smooth_blur,    #test
 
 
 "Image_target_adjust":Image_target_adjust,
@@ -371,15 +369,14 @@ NODE_CLASS_MAPPINGS= {
 "Image_transform_layer":Image_transform_layer,   
 "Image_Pair_Merge": Image_Pair_Merge,  
 "Image_Pair_crop": Image_Pair_crop, 
-
+"Image_CnMapMix":Image_CnMapMix,    #test
+"Image_Detail_HL_frequencye": Image_Detail_HL_frequencye,
 
 #-------------------------------------------------------------
-
 
 "color_adjust_HSL": color_adjust_HSL,
 "color_adjust_HDR": color_adjust_HDR,
 "color_match_adv":color_match_adv,
-
 
 
 #---****------------------
@@ -387,8 +384,7 @@ NODE_CLASS_MAPPINGS= {
 "Image_batch_composite": Image_batch_composite,
 "color_OneColor_replace": color_OneColor_replace,
 "color_OneColor_keep": color_OneColor_keep,     
-"color_Local_Gray": color_Local_Gray,  
-"color_adjust_light": color_adjust_light,
+  
 "color_tool": color_tool,
 "color_balance_adv": color_balance_adv,
 #"color_selector":color_selector,   # bug
@@ -404,13 +400,17 @@ NODE_CLASS_MAPPINGS= {
 
 "stack_Mask2color": stack_Mask2color,
 "img_effect_Load": img_effect_Load,
-"lay_texture_Offset": lay_texture_Offset,
+
 "lay_edge_cut": lay_edge_cut,   
 "lay_text_sum":lay_text_sum,
 "lay_image_grid_note": lay_image_grid_note,
 "lay_mul_image":lay_mul_image,
 
 
+"texture_Offset": texture_Offset,
+"texture_create": texture_create,
+"texture_Ksampler": texture_Ksampler,
+"texture_apply": texture_apply,
 
 
 #-----------------mask----------------------
@@ -483,7 +483,6 @@ NODE_CLASS_MAPPINGS= {
 "flow_judge":flow_judge,
 "flow_auto_pixel":flow_auto_pixel, 
 "flow_switch":flow_switch,
-"flow_break_switch":flow_break_switch,
 "flow_sch_control":flow_sch_control,
 "flow_low_gpu":flow_low_gpu,
 
@@ -532,9 +531,9 @@ NODE_CLASS_MAPPINGS= {
 "pre_QwenEdit":pre_QwenEdit,   #(Deprecated)
 "sum_stack_QwenEdit":sum_stack_QwenEdit, #(Deprecated)
 "model_Style_Align":model_Style_Align,#(Deprecated)
-"chx_Ksampler_VisualStyle": chx_Ksampler_VisualStyle, 
-"lay_image_mul":lay_image_mul,
-
+"chx_Ksampler_VisualStyle": chx_Ksampler_VisualStyle, #(Deprecated)
+"lay_image_mul":lay_image_mul,#(Deprecated)
+"chx_Ksampler_dual_area": chx_Ksampler_dual_area,#(Deprecated)
 
 #------------------------隐藏节点-------------------------
 

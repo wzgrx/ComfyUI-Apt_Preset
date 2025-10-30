@@ -5,6 +5,14 @@ import comfy
 import folder_paths
 from nodes import  CLIPTextEncode
 import numpy as np
+import os
+import sys
+import bisect
+import typing
+import pathlib
+import gc
+from comfy.model_management import get_torch_device, soft_empty_cache
+import einops
 
 from comfy_extras.nodes_wan import *
 
@@ -741,6 +749,299 @@ class Stack_WanPhantomSubjectToVideo:
     def encode(self, width, height, length, images=None):
         image_2V = (width, height, length, images)
         return (image_2V,)
+
+
+
+
+
+
+
+
+
+#region--------------------------------------
+
+
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+config = {
+    "ckpts_path": "./ckpts",
+    "ops_backend": "cupy"
+}
+DEVICE = get_torch_device()
+
+class InterpolationStateList():
+    def __init__(self, frame_indices: typing.List[int], is_skip_list: bool):
+        self.frame_indices = frame_indices
+        self.is_skip_list = is_skip_list
+    def is_frame_skipped(self, frame_index):
+        is_frame_in_list = frame_index in self.frame_indices
+        return self.is_skip_list and is_frame_in_list or not self.is_skip_list and not is_frame_in_list
+
+class MakeInterpolationStateList:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "frame_indices": ("STRING", {"multiline": True, "default": "1,2,3"}),
+                "is_skip_list": ("BOOLEAN", {"default": True},),
+            },
+        }
+    RETURN_TYPES = ("INTERPOLATION_STATES",)
+    FUNCTION = "create_options"
+    CATEGORY = "ComfyUI-Frame-Interpolation/VFI"
+    def create_options(self, frame_indices: str, is_skip_list: bool):
+        frame_indices_list = [int(item) for item in frame_indices.split(',')]
+        interpolation_state_list = InterpolationStateList(
+            frame_indices=frame_indices_list,
+            is_skip_list=is_skip_list,
+        )
+        return (interpolation_state_list,)
+
+def preprocess_frames(frames):
+    return einops.rearrange(frames[..., :3], "n h w c -> n c h w")
+
+def postprocess_frames(frames):
+    return einops.rearrange(frames, "n c h w -> n h w c")[..., :3].cpu()
+
+def assert_batch_size(frames, batch_size=2, vfi_name=None):
+    subject_verb = "Most VFI models require" if vfi_name is None else f"VFI model {vfi_name} requires"
+    assert len(frames) >= batch_size, f"{subject_verb} at least {batch_size} frames to work with, only found {frames.shape[0]}. Please check the frame input using PreviewImage."
+
+def _generic_frame_loop(
+        frames,
+        clear_cache_after_n_frames,
+        multiplier: typing.Union[typing.SupportsInt, typing.List],
+        return_middle_frame_function,
+        *return_middle_frame_function_args,
+        interpolation_states: InterpolationStateList = None,
+        use_timestep=True,
+        dtype=torch.float16,
+        final_logging=True):
+    def non_timestep_inference(frame0, frame1, n):        
+        middle = return_middle_frame_function(frame0, frame1, None, *return_middle_frame_function_args)
+        if n == 1:
+            return [middle]
+        first_half = non_timestep_inference(frame0, middle, n=n//2)
+        second_half = non_timestep_inference(middle, frame1, n=n//2)
+        if n%2:
+            return [*first_half, middle, *second_half]
+        else:
+            return [*first_half, *second_half]
+    output_frames = torch.zeros(multiplier*frames.shape[0], *frames.shape[1:], dtype=dtype, device="cpu")
+    out_len = 0
+    number_of_frames_processed_since_last_cleared_cuda_cache = 0
+    for frame_itr in range(len(frames) - 1):
+        frame0 = frames[frame_itr:frame_itr+1]
+        output_frames[out_len] = frame0
+        out_len += 1
+        frame0 = frame0.to(dtype=torch.float32)
+        frame1 = frames[frame_itr+1:frame_itr+2].to(dtype=torch.float32)
+        if interpolation_states is not None and interpolation_states.is_frame_skipped(frame_itr):
+            continue
+        middle_frame_batches = []
+        if use_timestep:
+            for middle_i in range(1, multiplier):
+                timestep = middle_i/multiplier
+                middle_frame = return_middle_frame_function(
+                    frame0.to(DEVICE), 
+                    frame1.to(DEVICE),
+                    timestep,
+                    *return_middle_frame_function_args
+                ).detach().cpu()
+                middle_frame_batches.append(middle_frame.to(dtype=dtype))
+        else:
+            middle_frames = non_timestep_inference(frame0.to(DEVICE), frame1.to(DEVICE), multiplier - 1)
+            middle_frame_batches.extend(torch.cat(middle_frames, dim=0).detach().cpu().to(dtype=dtype))
+        for middle_frame in middle_frame_batches:
+            output_frames[out_len] = middle_frame
+            out_len += 1
+        number_of_frames_processed_since_last_cleared_cuda_cache += 1
+        if number_of_frames_processed_since_last_cleared_cuda_cache >= clear_cache_after_n_frames:
+            print("Comfy-VFI: Clearing cache...", end=' ')
+            soft_empty_cache()
+            number_of_frames_processed_since_last_cleared_cuda_cache = 0
+            print("Done cache clearing")
+        gc.collect()
+    if final_logging:
+        print(f"Comfy-VFI done! {len(output_frames)} frames generated at resolution: {output_frames[0].shape}")
+    output_frames[out_len] = frames[-1:]
+    out_len += 1
+    if final_logging:
+        print("Comfy-VFI: Final clearing cache...", end = ' ')
+    soft_empty_cache()
+    if final_logging:
+        print("Done cache clearing")
+    return output_frames[:out_len]
+
+def generic_frame_loop(
+        model_name,
+        frames,
+        clear_cache_after_n_frames,
+        multiplier: typing.Union[typing.SupportsInt, typing.List],
+        return_middle_frame_function,
+        *return_middle_frame_function_args,
+        interpolation_states: InterpolationStateList = None,
+        use_timestep=True,
+        dtype=torch.float32):
+    assert_batch_size(frames, vfi_name=model_name.replace('_', ' ').replace('VFI', ''))
+    if type(multiplier) == int:
+        return _generic_frame_loop(
+            frames, 
+            clear_cache_after_n_frames, 
+            multiplier, 
+            return_middle_frame_function, 
+            *return_middle_frame_function_args, 
+            interpolation_states=interpolation_states,
+            use_timestep=use_timestep,
+            dtype=dtype
+        )
+    if type(multiplier) == list:
+        multipliers = list(map(int, multiplier))
+        multipliers += [2] * (len(frames) - len(multipliers) - 1)
+        frame_batches = []
+        for frame_itr in range(len(frames) - 1):
+            multiplier = multipliers[frame_itr]
+            if multiplier == 0: continue
+            frame_batch = _generic_frame_loop(
+                frames[frame_itr:frame_itr+2], 
+                clear_cache_after_n_frames, 
+                multiplier, 
+                return_middle_frame_function, 
+                *return_middle_frame_function_args, 
+                interpolation_states=interpolation_states,
+                use_timestep=use_timestep,
+                dtype=dtype,
+                final_logging=False
+            )
+            if frame_itr != len(frames) - 2:
+                frame_batch = frame_batch[:-1]
+            frame_batches.append(frame_batch)
+        output_frames = torch.cat(frame_batches)
+        print(f"Comfy-VFI done! {len(output_frames)} frames generated at resolution: {output_frames[0].shape}")
+        return output_frames
+    raise NotImplementedError(f"multipiler of {type(multiplier)}")
+
+class FloatToInt:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "float": ("FLOAT", {"default": 0, 'min': 0, 'step': 0.01})
+            }
+        }
+    RETURN_TYPES = ("INT",)
+    FUNCTION = "convert"
+    CATEGORY = "ComfyUI-Frame-Interpolation"
+    def convert(self, float):
+        if hasattr(float, "__iter__"):
+            return (list(map(int, float)),)
+        return (int(float),)
+
+MODEL_TYPE = pathlib.Path(__file__).parent.name
+def inference(model, img_batch_1, img_batch_2, inter_frames):
+    results = [img_batch_1, img_batch_2]
+    idxes = [0, inter_frames + 1]
+    remains = list(range(1, inter_frames + 1))
+    splits = torch.linspace(0, 1, inter_frames + 2)
+    for _ in range(len(remains)):
+        starts = splits[idxes[:-1]]
+        ends = splits[idxes[1:]]
+        distances = ((splits[None, remains] - starts[:, None]) / (ends[:, None] - starts[:, None]) - .5).abs()
+        matrix = torch.argmin(distances).item()
+        start_i, step = np.unravel_index(matrix, distances.shape)
+        end_i = start_i + 1
+        x0 = results[start_i].to(DEVICE)
+        x1 = results[end_i].to(DEVICE)
+        dt = x0.new_full((1, 1), (splits[remains[step]] - splits[idxes[start_i]])) / (splits[idxes[end_i]] - splits[idxes[start_i]])
+        with torch.no_grad():
+            prediction = model(x0, x1, dt)
+        insert_position = bisect.bisect_left(idxes, remains[step])
+        idxes.insert(insert_position, remains[step])
+        results.insert(insert_position, prediction.clamp(0, 1).float())
+        del remains[step]
+    return [tensor.flip(0) for tensor in results]
+
+class AD_FILM_VFI:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "ckpt_name": (["film_net_fp32.pt"], ),
+                "frames": ("IMAGE", ),
+                "clear_cache_after_n_frames": ("INT", {"default": 10, "min": 1, "max": 1000}),
+                "multiplier": ("INT", {"default": 2, "min": 2, "max": 1000}),
+            },
+            "optional": {
+                #"optional_interpolation_states": ("INTERPOLATION_STATES", )
+            }
+        }
+    RETURN_TYPES = ("IMAGE", )
+    FUNCTION = "vfi"
+    CATEGORY = "Apt_Preset/AD"
+    def vfi(
+        self,
+        ckpt_name: typing.AnyStr,
+        frames: torch.Tensor,
+        clear_cache_after_n_frames = 10,
+        multiplier: typing.SupportsInt = 2,
+
+        **kwargs
+    ):
+        
+        optional_interpolation_states =None
+        interpolation_states = optional_interpolation_states
+        comfy_root = os.path.abspath(os.path.join(
+            os.path.dirname(__file__),  # 当前文件目录：NodeChx
+            "..",  # 上一级：ComfyUI-Apt_Preset
+            "..",  # 上两级：custom_nodes
+            ".."   # 上三级：ComfyUI根目录
+        ))
+        # 拼接模型路径
+        model_root = os.path.join(comfy_root, "models", "interpolation", "Frame_VFI")
+        model_path = os.path.join(model_root, ckpt_name)
+
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found at: {model_path}. Please place {ckpt_name} in the directory first.")
+        model = torch.jit.load(model_path, map_location='cpu')
+        model.eval()
+        model = model.to(DEVICE)
+        dtype = torch.float32
+        frames = preprocess_frames(frames)
+        number_of_frames_processed_since_last_cleared_cuda_cache = 0
+        output_frames = []
+        if type(multiplier) == int:
+            multipliers = [multiplier] * len(frames)
+        else:
+            multipliers = list(map(int, multiplier))
+            multipliers += [2] * (len(frames) - len(multipliers) - 1)
+        for frame_itr in range(len(frames) - 1):
+            if interpolation_states is not None and interpolation_states.is_frame_skipped(frame_itr):
+                continue
+            frame_0 = frames[frame_itr:frame_itr+1].to(DEVICE).float()
+            frame_1 = frames[frame_itr+1:frame_itr+2].to(DEVICE).float()
+            relust = inference(model, frame_0, frame_1, multipliers[frame_itr] - 1)
+            output_frames.extend([frame.detach().cpu().to(dtype=dtype) for frame in relust[:-1]])
+            number_of_frames_processed_since_last_cleared_cuda_cache += 1
+            if number_of_frames_processed_since_last_cleared_cuda_cache >= clear_cache_after_n_frames:
+                print("Comfy-VFI: Clearing cache...", end = ' ')
+                soft_empty_cache()
+                number_of_frames_processed_since_last_cleared_cuda_cache = 0
+                print("Done cache clearing")
+            gc.collect()
+        output_frames.append(frames[-1:].to(dtype=dtype))
+        output_frames = [frame.cpu() for frame in output_frames]
+        out = torch.cat(output_frames, dim=0)
+        print("Comfy-VFI: Final clearing cache...", end = ' ')
+        soft_empty_cache()
+        print("Done cache clearing")
+        return (postprocess_frames(out), )
+
+
+
+#endregion--------------------------------------
+
+
+
 
 
 

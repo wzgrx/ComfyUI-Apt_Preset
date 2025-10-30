@@ -43,7 +43,10 @@ app.registerExtension({
             nodeData.name.startsWith('sch_') ||
             nodeData.name.startsWith('AI_') ||
             nodeData.name.startsWith('flow_') ||
-            nodeData.name.startsWith('AD_')
+            nodeData.name.startsWith('AD_')||
+            nodeData.name.startsWith('texture')
+
+
         );
 
         if (isAptPreset) {

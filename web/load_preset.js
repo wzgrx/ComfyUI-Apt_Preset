@@ -321,7 +321,7 @@ app.registerExtension({
     function messageHandler(event) {
       if (node.id == event.detail.node) {
         node.widgets[1].value = event.detail.message["unet_name"] ? event.detail.message["unet_name"] : "None";     
-        node.widgets[2].value = event.detail.message["cache_threshold"] ? event.detail.message["cache_threshold"] : "None";
+        node.widgets[2].value = event.detail.message["cache_threshold"] ? event.detail.message["cache_threshold"] : "0.00";
         node.widgets[3].value = event.detail.message["attention"] ? event.detail.message["attention"] : "None";
         node.widgets[4].value = event.detail.message["cpu_offload"] ? event.detail.message["cpu_offload"] : "None";        
         node.widgets[5].value = event.detail.message["clip1"] ? event.detail.message["clip1"] : "None";

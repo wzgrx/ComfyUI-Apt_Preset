@@ -1563,7 +1563,7 @@
     }
   },
   "Mask_simple_adjust": {
-    "display_name": "遮罩_简单调整",
+    "display_name": "遮罩_简易调整",
     "inputs": {
       "smoothness": {
         "name": "平滑度"
@@ -1717,22 +1717,9 @@
       }
     }
   },
-  "flow_break_switch": {
-    "display_name": "流程_控制开关",
-    "inputs": {
-      "data": {
-        "name": "数据"
-      },
-      "flow_pass": {
-        "name": "流程通过"
-      }
-    },
-    "outputs": {
-      "data": {
-        "name": "数据"
-      }
-    }
-  },
+
+
+  
   "Image_target_adjust": {
     "display_name": "尺寸_以面积参考",
     "inputs": {
@@ -2079,8 +2066,9 @@
       }
     }
   },
-  "color_adjust_light": {
-    "display_name": "颜色_材质打光",
+
+  "texture_apply": {
+    "display_name": "纹理_贴图",
     "inputs": {
       "target_img": {
         "name": "目标图像"
@@ -2400,6 +2388,9 @@
         },
         "bg_color": {
             "name": "背景颜色"
+        },
+        "brightness": {
+            "name": "image亮度缩放"
         }
     },
     "outputs": {
@@ -2414,6 +2405,7 @@
         }
     }
 },
+
 "Image_CnMapMix": {
     "display_name": "双图_CN混合",
     "inputs": {
@@ -2454,8 +2446,9 @@
         }
     }
 },
+
 "Stack_Ksampler_refine": {
-    "display_name": "stack采样refine",
+    "display_name": "refine二次采样",
     "inputs": {
         "upscale_model": {
             "name": "放大模型"
@@ -2472,16 +2465,21 @@
         "cfg": {
             "name": "CFG比例"
         },
-        "image": {
-            "name": "图像"
-        }
+        "resample": {
+            "name": "二次采样"
+        },
+      "lowCpu": {
+        "name": "低cpu"
+      }
+
     },
     "outputs": {
         "0": {
-            "name": "功能"
+            "name": "图像"
         }
     }
 },
+
 "Stack_Ksampler_highAndLow": {
     "display_name": "stack高低频采样",
     "inputs": {
@@ -3910,37 +3908,8 @@
       }
     }
   },
-  "color_Local_Gray": {
-    "display_name": "颜色_局部灰度",
-    "inputs": {
-      "image": {
-        "name": "图像"
-      },
-      "mask": {
-        "name": "遮罩"
-      },
-      "mask_gray": {
-        "name": "遮罩灰度"
-      },
-      "bj_gray": {
-        "name": "背景灰度"
-      },
-      "smoothness": {
-        "name": "平滑度"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "遮罩区图像"
-      },
-      "1": {
-        "name": "背景区图像"
-      },
-      "2": {
-        "name": "遮罩"
-      }
-    }
-  },
+
+  
   "create_Mask_visual_tag": {
     "display_name": "创建_遮罩_视觉标记",
     "inputs": {
@@ -5486,7 +5455,31 @@
     }
   },
 
-
+"AD_FILM_VFI": {
+    "display_name": "视频_帧插值",
+    "inputs": {
+        "ckpt_name": {
+            "name": "模型"
+        },
+        "frames": {
+            "name": "帧图像"
+        },
+        "clear_cache_after_n_frames": {
+            "name": "每处理n帧后清除缓存"
+        },
+        "multiplier": {
+            "name": "插值倍数"
+        },
+        "optional_interpolation_states": {
+            "name": "可选插值状态"
+        }
+    },
+    "outputs": {
+        "IMAGE": {
+            "name": "图像"
+        }
+    }
+},
 
  "IO_save_image": {
     "display_name": "输出_保存图片",
@@ -5508,6 +5501,9 @@
         },
         "number_digits": {
             "name": "编号位数"
+        },
+        "save_workflow_as_json": {
+            "name": "保存工作流"
         }
     },
     "outputs": {
@@ -8875,6 +8871,84 @@
   },
 
 
+  "Stack_ksampler_tile": {
+    "display_name": "tile_二次采样",
+    "inputs": {
+      "resample": {
+        "name": "二次采样"
+      },
+      "model_name": {
+        "name": "模型"
+      },
+      "upscale_by": {
+        "name": "固定倍数"
+      },
+      "seed": {
+        "name": "种子"
+      },
+      "denoise_image": {
+        "name": "降噪"
+      },
+      "tile_denoise": {
+        "name": "tile_降噪"
+      },
+      "tile_size": {
+        "name": "分块大小"
+      },
+      "image_output": {
+        "name": "图像输出"
+      },
+      "image_optional": {
+        "name": "图像_可选"
+      },
+      "base_model": {
+        "name": "基础模型"
+      },
+      "samples": {
+        "name": "samples"
+      },
+      "positive_cond_base": {
+        "name": "positive_cond_base"
+      },
+      "negative_cond_base": {
+        "name": "negative_cond_base"
+      },
+      "vae": {
+        "name": "VAE"
+      },
+      "steps": {
+        "name": "步数"
+      },
+      "cfg": {
+        "name": "cfg"
+      },
+      "sampler_name": {
+        "name": "采样器"
+      },
+      "scheduler": {
+        "name": "调度器"
+      },
+      "prompt": {
+        "name": "提示词"
+      },
+      "extra_pnginfo": {
+        "name": "附加PNG信息"
+      },
+      "upscale_method": {
+        "name": "放大方法"
+      },
+      "lowCpu": {
+        "name": "低cpu"
+      }
+    },
+    "outputs": {
+      "image": {
+        "name": "图像"
+      }
+    }
+  },
+
+
   
   "chx_Ksampler_VisualStyle": {
     "display_name": "采样器_可视化风格",
@@ -9013,19 +9087,17 @@
         "name": "context"
       },
       "1": {
-        "name": "背景图像"
+        "name": "生成图像"
       },
       "2": {
-        "name": "图像"
-      },
-      "3": {
         "name": "裁剪遮罩"
       },
-      "4": {
+      "3": {
         "name": "裁剪图像"
       }
     }
   },
+  
   "chx_Ksampler_Kontext_inpaint": {
     "display_name": "采样器_kontext_局部重绘",
     "inputs": {
@@ -9314,8 +9386,8 @@
       }
     }
   },
-  "lay_texture_Offset": {
-    "display_name": "排版_纹理偏移",
+  "texture_Offset": {
+    "display_name": "纹理_偏移",
     "inputs": {
       "pixels": {
         "name": "像素"
@@ -9462,6 +9534,9 @@
       },
       "expand_height": {
         "name": "高扩展"
+      },
+      "auto_expand_square": {
+        "name": "自动正方形"
       },
       "mask_stack": {
         "name": "遮罩控制"
@@ -10548,9 +10623,15 @@
       "diff_difusion": {
         "name": "差异扩散"
       },
+      "width": {
+        "name": "宽"
+      },
+      "height": {
+        "name": "高"
+      },
       "ratio_selected": {
         "name": "选择比例"
-      },
+      },     
       "batch_size": {
         "name": "批次"
       }
@@ -11111,8 +11192,8 @@
       }
     }
   },
-  "chx_Ksampler_texture": {
-    "display_name": "采样器_纹理",
+  "texture_Ksampler": {
+    "display_name": "纹理_采样器",
     "inputs": {
       "context": {
         "name": "context"
@@ -11183,7 +11264,11 @@
       },
       "extra_pnginfo": {
         "name": "附加PNG信息"
+      },
+      "lowCpu": {
+        "name": "低cpu"
       }
+
     },
     "outputs": {
       "0": {
@@ -11878,8 +11963,8 @@
       }
     },
     "outputs": {
-      "0": {
-        "name": "redux堆"
+      "context": {
+        "name": "context"
       }
     }
   },
@@ -12163,88 +12248,51 @@
       }
     }
   },
-  "AD_font2img": {
-    "display_name": "AD_字体动画",
+
+"Image_Detail_HL_frequencye": {
+    "display_name": "双图_高低频恢复",
     "inputs": {
-      "input_images": {
-        "name": "输入图像"
-      },
-      "transcription": {
-        "name": "转录（带时间戳）"
-      },
-      "font_file": {
-        "name": "字体文件"
-      },
-      "font_color": {
-        "name": "字体颜色"
-      },
-      "background_color": {
-        "name": "背景颜色"
-      },
-      "line_spacing": {
-        "name": "行间距"
-      },
-      "kerning": {
-        "name": "字间距"
-      },
-      "padding": {
-        "name": "内边距"
-      },
-      "frame_count": {
-        "name": "帧数"
-      },
-      "image_height": {
-        "name": "图像高度"
-      },
-      "image_width": {
-        "name": "图像宽度"
-      },
-      "text_alignment": {
-        "name": "文本对齐方式"
-      },
-      "text_interpolation_options": {
-        "name": "文本插值选项"
-      },
-      "Text": {
-        "name": "文本内容"
-      },
-      "start_font_size": {
-        "name": "起始字体大小"
-      },
-      "end_font_size": {
-        "name": "结束字体大小"
-      },
-      "start_x_offset": {
-        "name": "起始X偏移"
-      },
-      "end_x_offset": {
-        "name": "结束X偏移"
-      },
-      "start_y_offset": {
-        "name": "起始Y偏移"
-      },
-      "end_y_offset": {
-        "name": "结束Y偏移"
-      },
-      "start_rotation": {
-        "name": "起始旋转角度"
-      },
-      "end_rotation": {
-        "name": "结束旋转角度"
-      },
-      "rotation_anchor_x": {
-        "name": "旋转锚点X坐标"
-      },
-      "rotation_anchor_y": {
-        "name": "旋转锚点Y坐标"
-      }
+        "image": {
+            "name": "重绘图"
+        },
+        "detail_image": {
+            "name": "细节原图"
+        },
+        "keep_high_freq": {
+            "name": "保留高频"
+        },
+        "erase_low_freq": {
+            "name": "擦除低频"
+        },
+        "mask_blur": {
+            "name": "边缘模糊"
+        },
+        "blend_mode": {
+            "name": "混合模式"
+        },
+        "blend_opacity": {
+            "name": "混合强度"
+        },
+        "detail_strength": {
+            "name": "细节强度"
+        },
+        "high_freq_threshold": {
+            "name": "高频细节对比度"
+        },
+        "mask": {
+            "name": "细节区域"
+        },
+        "invert_mask": {
+            "name": "反转遮罩"
+        }
     },
     "outputs": {
-      "0": {
-        "name": "字体转图像结果"
-      }
+        "image": {
+            "name": "图像"
+        }
     }
-  },
+},
+
   "IPA_dapterSD3LOAD": {
     "display_name": "IPA_dapterSD3LOAD",
     "inputs": {
@@ -13714,6 +13762,9 @@
         "main_text_size": {
             "name": "主图文本大小"
         },
+        "border": {
+            "name": "边框尺寸"
+        },
         "main_long_size": {
             "name": "主图长边尺寸"
         }
@@ -13767,11 +13818,14 @@
       }
     },
     "outputs": {
-      "context": {
+      "0": {
         "name": "context"
       },
-      "image": {
+      "1": {
         "name": "图像"
+      },
+      "2": {
+        "name": "二次采样"
       }
     }
   },
@@ -13860,7 +13914,7 @@
         "name": "步数"
       },
       "cfg": {
-        "name": "CFG比例"
+        "name": "cfg"
       },
       "scheduler": {
         "name": "调度器"
@@ -13923,7 +13977,46 @@
     }
 },
 
-
+"texture_create": {
+    "display_name": "纹理_生成",
+    "inputs": {
+        "image": {
+            "name": "图像"
+        },
+        "normals_overlap": {
+            "name": "法线图重叠度"
+        },
+        "curvature_blur": {
+            "name": "曲率图模糊度"
+        },
+        "height_seamless": {
+            "name": "高度图无缝拼接"
+        },
+        "highlight_threshold": {
+            "name": "高光图阈值"
+        },
+        "highlight_contrast": {
+            "name": "高光图对比度"
+        },
+        "highlight_sharpen": {
+            "name": "高光图锐化"
+        }
+    },
+    "outputs": {
+        "0": {
+            "name": "法线图"
+        },
+        "1": {
+            "name": "曲率图"
+        },
+        "2": {
+            "name": "高度图"
+        },
+        "3": {
+            "name": "高光图"
+        }
+    }
+},
 
 
   "basicIn_int": {

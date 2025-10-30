@@ -14,6 +14,9 @@ The current workflow connections are becoming increasingly dense, making them di
 
 2025.10.19 add QwenEditplus stack，Supports stable direct output of large images
 
+2025.10.27 Added a new node, sum ksampler, and optimized the layout
+
+
 # II. Usage Guide
 
 ## 1. Universal Loader Sum_load_adv, Supports GGUF Models

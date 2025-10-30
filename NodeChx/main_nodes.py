@@ -32,21 +32,14 @@ import latent_preview
 from server import PromptServer
 from nodes import common_ksampler, CLIPTextEncode, ControlNetLoader, KSamplerAdvanced,SetLatentNoiseMask, ControlNetApplyAdvanced, VAEDecode, VAEEncode, DualCLIPLoader, CLIPLoader,ConditioningConcat, ConditioningAverage, InpaintModelConditioning, LoraLoader, CheckpointLoaderSimple, ImageScale,VAEDecodeTiled,VAELoader
 from comfy.cli_args import args
-
-
 from typing import Optional, Tuple, Dict, Any, Union, cast
 from comfy.comfy_types.node_typing import IO
-
 
 from math import ceil
 from nodes import CLIPSetLastLayer, CheckpointLoaderSimple, UNETLoader
 from comfy_extras.nodes_hidream import QuadrupleCLIPLoader
-
 from comfy.utils import load_torch_file as comfy_load_torch_file
-
-
-
-from nodes import CLIPVisionLoader, CLIPVisionEncode
+from nodes import CLIPVisionLoader, CLIPVisionEncode,KSampler
 
 
 
@@ -1349,125 +1342,79 @@ class sum_lora:
         context = new_context(context, model=model, clip=clip, positive=positive, negative=negative, )
         return (context, positive, negative,)
 
-
-
 class sum_editor:
-
     ratio_sizes, ratio_dict = read_ratios()
     def __init__(self):
         pass
-
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {
-                "context": ("RUN_CONTEXT",),
-            },
+            "required": {"context": ("RUN_CONTEXT",)},
             "optional": {
-                "model": ("MODEL",),
-                "clip": ("CLIP",),
-                "positive": ("CONDITIONING",),
-                "negative": ("CONDITIONING",),
-                "vae": ("VAE",), 
-                "latent": ("LATENT",),
-                "image": ("IMAGE",),
-                
+                "model": ("MODEL",), "clip": ("CLIP",), "positive": ("CONDITIONING",), "negative": ("CONDITIONING",),
+                "vae": ("VAE",), "latent": ("LATENT",), "image": ("IMAGE",),
                 "steps": ("INT", {"default": 0, "min": 0, "max": 10000,"tooltip": "  0  == None"}),
                 "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "tooltip": "  0  == None"}),
-                "sampler": (['None'] + comfy.samplers.KSampler.SAMPLERS, {"default": "None"}),  
-                "scheduler": (['None'] + comfy.samplers.KSampler.SCHEDULERS, {"default": "None"}), 
-                
+                "sampler": (['None'] + comfy.samplers.KSampler.SAMPLERS, {"default": "None"}),
+                "scheduler": (['None'] + comfy.samplers.KSampler.SCHEDULERS, {"default": "None"}),
                 "pos": ("STRING", {"default": "", "multiline": True}),
                 "neg": ("STRING", {"default": "", "multiline": False}),
                 "guidance": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step": 0.01}),
                 "style": (["None"] + style_list()[0], {"default": "None"}),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 300, }),
-                "ratio_selected": (['None'] + s.ratio_sizes, {"default": "None"}),
-
+                "ratio_selected": (['None', 'customer_WxH'] + s.ratio_sizes, {"default": "None"}),
+                "width": ("INT", {"default": 512, "min": 8, "max": 16384, "step": 8}),
+                "height": ("INT", {"default": 512, "min": 8, "max": 16384, "step": 8}),
             }
         }
-
     RETURN_TYPES = ("RUN_CONTEXT", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT", "VAE","CLIP",  "IMAGE",)
     RETURN_NAMES = ("context", "model","positive", "negative", "latent", "vae","clip", "image", )
     FUNCTION = "text"
     CATEGORY = "Apt_Preset/chx_load"
-
-
-
-    def generate(self, ratio_selected, batch_size=1):
-        width = self.ratio_dict[ratio_selected]["width"]
-        height = self.ratio_dict[ratio_selected]["height"]
-        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
+    def generate(self, ratio_selected, batch_size=1, width=None, height=None):
+        if ratio_selected == 'customer_WxH':
+            used_width = width
+            used_height = height
+        else:
+            used_width = self.ratio_dict[ratio_selected]["width"]
+            used_height = self.ratio_dict[ratio_selected]["height"]
+        latent = torch.zeros([batch_size, 4, used_height // 8, used_width // 8])
         return ({"samples": latent}, )
-
-    def text(self, context=None, model=None, clip=None, positive=None, negative=None, pos="", neg="", image=None, vae=None, latent=None, steps=None, cfg=None, sampler=None, scheduler=None, style=None, batch_size=1, ratio_selected=None, guidance=0 ):
-
-        width = context.get("width")
-        height = context.get("height")       
-        if ratio_selected and ratio_selected != "None" and ratio_selected in self.ratio_dict:
+    def text(self, context=None, model=None, clip=None, positive=None, negative=None, pos="", neg="", image=None, vae=None, latent=None, steps=None, cfg=None, sampler=None, scheduler=None, style=None, batch_size=1, ratio_selected=None, guidance=0, width=512, height=512 ):
+        ctx_width = context.get("width") if context else None
+        ctx_height = context.get("height") if context else None
+        final_width, final_height = ctx_width or 512, ctx_height or 512
+        if ratio_selected and ratio_selected != "None":
             try:
-                width = self.ratio_dict[ratio_selected]["width"]
-                height = self.ratio_dict[ratio_selected]["height"]
+                if ratio_selected == 'customer_WxH':
+                    final_width, final_height = width, height
+                else:
+                    final_width = self.ratio_dict[ratio_selected]["width"]
+                    final_height = self.ratio_dict[ratio_selected]["height"]
             except KeyError as e:
-                print(f"[ERROR] Invalid ratio selected: {e}")
-                width = context.get("width", 512)
-                height = context.get("height", 512)
-        else:
-            if width is None or height is None:
-                width = 512
-                height = 512       
-
-        if model is None:
-            model = context.get("model")
-        if clip is None:
-            clip = context.get("clip")
-        if vae is None:
-            vae= context.get("vae")
-        if steps == 0:
-            steps = context.get("steps")
-        if cfg == 0.0:
-            cfg = context.get("cfg")
-        if sampler == "None":
-            sampler = context.get("sampler")
-        if scheduler == "None":
-            scheduler = context.get("scheduler")
-
-        if guidance == 0.0:
-            guidance = context.get("guidance",3.5)
-        
-        #latent选项-------------------
-        if latent is None:
-            latent = context.get("latent")
-            
-        if image is None:
-            image = context.get("images")
-
-        if image is not None:
-            image = image
-            latent = VAEEncode().encode(vae, image)[0]
-            
-        latent = latentrepeat(latent, batch_size)[0]   # latent批次
+                print(f"[ERROR] Invalid ratio: {e}")
+        if model is None: model = context.get("model") if context else None
+        if clip is None: clip = context.get("clip") if context else None
+        if vae is None: vae = context.get("vae") if context else None
+        if steps == 0: steps = context.get("steps") if context else None
+        if cfg == 0.0: cfg = context.get("cfg") if context else None
+        if sampler == "None": sampler = context.get("sampler") if context else None
+        if scheduler == "None": scheduler = context.get("scheduler") if context else None
+        if guidance == 0.0: guidance = context.get("guidance", 3.5) if context else 3.5
+        if latent is None: latent = context.get("latent") if context else None
+        if image is None: image = context.get("images") if context else None
+        if image is not None: latent = VAEEncode().encode(vae, image)[0]
+        latent = latentrepeat(latent, batch_size)[0]
         if ratio_selected != "None":
-            latent = self.generate(ratio_selected, batch_size)[0]    
-        
-        pos, neg = add_style_to_subject(style, pos, neg)  # 风格
-
-        if pos is not None and pos!= "":
-            positive, = CLIPTextEncode().encode(clip, pos)
-        else:
-            positive = context.get("positive")
-
-        if neg is not None and neg!= "":
-            negative, = CLIPTextEncode().encode(clip, neg)
-        else:
-            negative = context.get("negative")
-        
+            latent = self.generate(ratio_selected, batch_size, final_width, final_height)[0]
+        pos, neg = add_style_to_subject(style, pos, neg)
+        if pos and pos != "": positive, = CLIPTextEncode().encode(clip, pos)
+        else: positive = context.get("positive") if context else None
+        if neg and neg != "": negative, = CLIPTextEncode().encode(clip, neg)
+        else: negative = context.get("negative") if context else None
         positive = node_helpers.conditioning_set_values(positive, {"guidance": guidance})
-
-        context = new_context(context, model=model , latent=latent , clip=clip, vae=vae, positive=positive, negative=negative, images=image,steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler,guidance=guidance, pos=pos, neg=neg, width=width, height=height, batch=batch_size )
-        
-        return (context, model, positive, negative, latent, vae, clip,  image, )
-
+        context = new_context(context, model=model, latent=latent, clip=clip, vae=vae, positive=positive, negative=negative, images=image, steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler, guidance=guidance, pos=pos, neg=neg, width=final_width, height=final_height, batch=batch_size )
+        return (context, model, positive, negative, latent, vae, clip, image, )
 
 
 class sum_latent:
@@ -1479,19 +1426,17 @@ class sum_latent:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            
-            "required": {  "context": ("RUN_CONTEXT",),   },
-            
+            "required": {  "context": ("RUN_CONTEXT",),   },         
             "optional":  {
                 "latent": ("LATENT", ),
                 "pixels": ("IMAGE", ),
                 "mask": ("MASK", ),
-                "noise_mask": ("BOOLEAN", {"default": True, }),
                 "diff_difusion": ("BOOLEAN", {"default": True}), 
                 "smoothness":("INT", {"default": 0,  "min":0, "max": 150, "step": 1,"display": "slider"}),
-                "ratio_selected": (['None'] + s.ratio_sizes, {"default": "None"}),
-                "batch_size": ("INT", {"default": 1, "min": 1, "max": 300, })
-                
+                "ratio_selected": (['None','customer_WxH'] + s.ratio_sizes, {"default": "None"}),
+                "batch_size": ("INT", {"default": 1, "min": 1, "max": 300, }),
+                "width": ("INT", {"default": 512, "min": 8, "max": 16384}), 
+                "height": ("INT", {"default": 512, "min": 8, "max": 16384}),   
             }
         }
 
@@ -1500,15 +1445,25 @@ class sum_latent:
     FUNCTION = "process"
     CATEGORY = "Apt_Preset/chx_tool"
 
-    def generate(self, ratio_selected, batch_size=1):
-        width = self.ratio_dict[ratio_selected]["width"]
-        height = self.ratio_dict[ratio_selected]["height"]
-        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
+    def generate(self, ratio_selected, batch_size=1, width=None, height=None):
+        # 当选择customer_WxH模式时，使用输入的width和height
+        if ratio_selected == 'customer_WxH':
+            # 确保width和height有效
+            if width is None or height is None:
+                raise ValueError("When 'customer_WxH' is selected, 'width' and 'height' must be provided.")
+            used_width = width
+            used_height = height
+        else:
+            # 其他模式从ratio_dict获取宽高
+            used_width = self.ratio_dict[ratio_selected]["width"]
+            used_height = self.ratio_dict[ratio_selected]["height"]
+        
+        latent = torch.zeros([batch_size, 4, used_height // 8, used_width // 8])
         return ({"samples": latent}, )
 
-
-    def process(self, noise_mask, ratio_selected, smoothness=1, batch_size=1, context=None, latent=None, pixels=None, mask=None, diff_difusion=True):
-
+    def process(self, ratio_selected, smoothness=1, batch_size=1, context=None, latent=None, pixels=None, mask=None, 
+                diff_difusion=True, width=None, height=None):
+        noise_mask = True
         model = context.get("model")
         if diff_difusion:
             model = DifferentialDiffusion().apply(model)[0]
@@ -1529,9 +1484,9 @@ class sum_latent:
         positive = context.get("positive", None)
         negative = context.get("negative", None)
 
-
         if ratio_selected != "None":
-           latent = self.generate(ratio_selected, batch_size)[0]
+            # 调用generate时传入width和height，用于customer_WxH模式
+            latent = self.generate(ratio_selected, batch_size, width, height)[0]
 
         if pixels is not None:
             if mask is not None:
@@ -1551,8 +1506,7 @@ class sum_latent:
         context = new_context(context, model=model, positive=positive, negative=negative, latent=latent)
 
         return (context, latent, mask)
-
-
+    
 
 
 class sum_create_chx:
@@ -1682,7 +1636,7 @@ class basic_Ksampler_full:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "context": ("RUN_CONTEXT",),
+
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
 
                 "steps": ("INT", {"default": -1, "min": -1, "max": 10000,"tooltip": "  -1  == None"}),
@@ -1695,6 +1649,7 @@ class basic_Ksampler_full:
             },
             
             "optional": {
+                "context": ("RUN_CONTEXT",),
                 "model": ("MODEL",),
                 "positive": ("CONDITIONING",),
                 "negative": ("CONDITIONING",),
@@ -1714,7 +1669,7 @@ class basic_Ksampler_full:
     RETURN_TYPES = ("RUN_CONTEXT","IMAGE", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT","VAE","CLIP", )
     RETURN_NAMES = ("context", "image", "model","positive", "negative",  "latent", "vae", "clip", )
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
 
 
     def sample(self,  seed, denoise, context=None, clip=None, model=None,vae=None, positive=None, negative=None, latent=None,steps=None, cfg=None, sampler=None, scheduler=None, image=None, prompt=None, image_output=None, extra_pnginfo=None, ):
@@ -1739,10 +1694,14 @@ class basic_Ksampler_full:
             model= context.get("model")
         if clip is None:
             clip= context.get("clip")
-        if latent is None:
-           latent = context.get("latent")
+
+#------------------------latent3种处理方式-------------------------
+
         if image is not None:
-           latent = encode(vae, image)[0]
+            latent = encode(vae, image)[0]
+        if latent is None:
+            latent = context.get("latent",None)
+#----------------------------------------------------------------  
 
         latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
                 positive, 
@@ -1775,13 +1734,14 @@ class basic_Ksampler_mid:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "context": ("RUN_CONTEXT",),
+
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                 "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
             },
             
             "optional": {
+                "context": ("RUN_CONTEXT",),
                 "model": ("MODEL",),
                 "positive": ("CONDITIONING",),
                 "negative": ("CONDITIONING",),
@@ -1801,7 +1761,7 @@ class basic_Ksampler_mid:
     RETURN_TYPES = ("RUN_CONTEXT","IMAGE", "MODEL", "CONDITIONING", "CONDITIONING", "LATENT","VAE","CLIP", )
     RETURN_NAMES = ("context", "image", "model","positive", "negative",  "latent", "vae", "clip", )
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
 
 
     def sample(self,  seed, denoise, context=None, clip=None, model=None,vae=None, positive=None, negative=None, latent=None, image=None, prompt=None, image_output=None, extra_pnginfo=None, ):
@@ -1824,10 +1784,15 @@ class basic_Ksampler_mid:
         if clip is None:
             clip= context.get("clip")
 
-        if latent is None:
-           latent = context.get("latent")
+
+#------------------------latent四种处理方式-------------------------
+
         if image is not None:
-           latent = encode(vae, image)[0]
+            latent = encode(vae, image)[0]
+        if latent is None:
+            latent = context.get("latent",None)
+#----------------------------------------------------------------  
+
 
         latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
                 positive, 
@@ -1890,11 +1855,12 @@ class basic_Ksampler_simple:
         positive = context.get("positive",None)
         negative = context.get("negative",None)
         model = context.get("model",None)
-        latent = context.get("latent",None)
-
 
         if image is not None:
             latent = VAEEncode().encode(vae, image)[0]
+        else:
+            latent = context.get("latent",None)
+
 
         latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
                 positive, 
@@ -1920,19 +1886,17 @@ class basic_Ksampler_simple:
                 "result": (context, output_image,)}
 
 
-
-
-
 class basic_Ksampler_custom:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "context": ("RUN_CONTEXT",),
+
             },
             
             "optional":
                     {
+                    "context": ("RUN_CONTEXT",),
                     "model": ("MODEL", ),
                     "positive": ("CONDITIONING", ),
                     "negative": ("CONDITIONING", ),
@@ -1954,15 +1918,17 @@ class basic_Ksampler_custom:
     RETURN_TYPES = ("RUN_CONTEXT","IMAGE", "MODEL","CONDITIONING","CONDITIONING","LATENT", "VAE", )
     RETURN_NAMES = ("context","image", "model","positive","negative","latent", "vae",  )
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
 
-    def sample(self, context,model=None,image=None,positive=None, negative=None, latent=None, noise=None, sampler=None, guider=None, sigmas=None, seed=1, denoise=1, prompt=None, image_output=None, extra_pnginfo=None,):
+    def sample(self, context=None,model=None,image=None,positive=None, negative=None, latent=None, noise=None, sampler=None, guider=None, sigmas=None, seed=1, denoise=1, prompt=None, image_output=None, extra_pnginfo=None,):
         
         vae=context.get("vae")
         steps = context.get("steps")
         cfg = context.get("cfg")
         scheduler = context.get("scheduler")
-        
+
+
+
         if model is None:
             model=context.get("model")
             
@@ -1984,13 +1950,17 @@ class basic_Ksampler_custom:
 
         if sigmas is None:
             sigmas = BasicScheduler().get_sigmas(model, scheduler, steps, denoise)[0]
-            
-        if  latent is None:
-            latent = context.get("latent")
 
+
+#------------------------latent三种处理方式-------------------------
         if image is not None:
             latent = encode(vae, image)[0]
-        
+        elif latent is None:
+            latent = latent
+        else:
+            latent = context.get("latent",None)
+#----------------------------------------------------------------           
+               
         out= SamplerCustomAdvanced().sample( noise, guider, sampler, sigmas, latent)
         latent= out[0]
         
@@ -2008,9 +1978,6 @@ class basic_Ksampler_custom:
             
         return {"ui": {"images": results},
                 "result": (context,output_image, model, positive, negative, latent, vae,)}
-
-
-
 
 
 class basic_Ksampler_adv:
@@ -2039,7 +2006,7 @@ class basic_Ksampler_adv:
     RETURN_NAMES = ("context ", "image")
     OUTPUT_NODE = True
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
 
     def sample(self, context, add_noise, steps, noise_seed, start_at_step,end_at_step, return_with_leftover_noise, denoise=1.0, 
                 pos="", neg="", latent=None, prompt=None, image_output=None, extra_pnginfo=None, ):
@@ -2090,8 +2057,6 @@ class basic_Ksampler_adv:
             
         return {"ui": {"images": results},
                 "result": (context, output_image,)}
-
-
 
 
 class chx_Ksampler_mix:
@@ -2204,7 +2169,7 @@ class chx_Ksampler_highAndLow:
     RETURN_TYPES = ("RUN_CONTEXT","IMAGE")
     RETURN_NAMES = ("context ", "image")
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample"
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
 
     def sample(self, context, add_noise, noise_seed,  start_step,  steps,  return_with_leftover_noise, denoise=1.0, mid_step =10,model2=None,positive2=None,
               latent=None,chx2=None,image=None ):
@@ -2257,11 +2222,7 @@ class chx_Ksampler_highAndLow:
         return (context ,output_image )
 
 
-
-
-
-
-class chx_Ksampler_texture:
+class texture_Ksampler:
     def __init__(self):
         pass
 
@@ -2282,7 +2243,7 @@ class chx_Ksampler_texture:
     RETURN_NAMES = ("image",)
     
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
+    CATEGORY = "Apt_Preset/imgEffect"
 
 
     def apply_asymmetric_tiling(self, model, tileX, tileY):
@@ -2345,9 +2306,6 @@ class chx_Ksampler_texture:
         return (out_image,)  
 
 
-
-
-
 class chx_Ksampler_refine:
     @classmethod
     def INPUT_TYPES(s):
@@ -2359,13 +2317,13 @@ class chx_Ksampler_refine:
                 "Add_img_scale": ("FLOAT", {"default": 2, "min": 1, "max": 16.0, "step": 0.1}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                 "denoise": ("FLOAT", {"default": 0.3, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
-                
+                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),                
                 
             },
             
             "optional": {
                 "image": ("IMAGE",),
+                "lowCpu": ("VAEDecodeTiled",),  
             },
             
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
@@ -2376,8 +2334,8 @@ class chx_Ksampler_refine:
     RETURN_NAMES = ("context",  "image", )
     OUTPUT_NODE = True
     FUNCTION = "run"
-    CATEGORY = "Apt_Preset/chx_ksample"
-    def run(self,context, seed, denoise, upscale_model,upscale_method, image=None,  prompt=None, image_output=None, extra_pnginfo=None,Add_img_scale=1):
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
+    def run(self,context, seed, denoise, upscale_model,upscale_method, image=None,  prompt=None, image_output=None, extra_pnginfo=None,Add_img_scale=1, lowCpu=None):
 
         vae = context.get("vae",None)
         steps = context.get("steps",None)
@@ -2412,12 +2370,17 @@ class chx_Ksampler_refine:
                 )[0]
 
 
+        if lowCpu is not None:
+            (tile_size, overlap, temporal_size, temporal_overlap)=lowCpu
+            output_image = VAEDecodeTiled(vae, latent, tile_size, overlap, temporal_size, temporal_overlap)[0]
+        else:
+            output_image = decode(vae, latent)[0]
+
+
         if image_output == "None":
             context = new_context(context, latent=latent, images=None, )
             return(context, None)
 
-
-        output_image = decode(vae, latent)[0]
         
         context = new_context(context, latent=latent, images=output_image,  )
         
@@ -2428,9 +2391,6 @@ class chx_Ksampler_refine:
             
         return {"ui": {"images": results},
                 "result": (context, output_image,)}
-
-
-
 
 
 
@@ -2546,6 +2506,7 @@ class chx_Ksampler_dual_paint:    #双区采样 ksampler
         samples = result["samples"].to(device)
         
         if refine:
+
             sampler = KSampler()
             result = sampler.sample(
                 model,
@@ -2567,10 +2528,6 @@ class chx_Ksampler_dual_paint:    #双区采样 ksampler
         context = new_context(context,  latent=latent, images=images, )
 
         return (context,images,)
-
-
-
-
 
 
 
@@ -2604,7 +2561,7 @@ class basic_Ksampler_low_gpu:
     RETURN_NAMES = ("context",  "image", )
     OUTPUT_NODE = True
     FUNCTION = "run"
-    CATEGORY = "Apt_Preset/chx_ksample"
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
 
 
     def run(self,context, seed, denoise, image=None,  prompt=None, image_output=None, extra_pnginfo=None,sampler=None,tile_size=512, overlap=64, temporal_size=64, temporal_overlap=8):
@@ -2649,6 +2606,294 @@ class basic_Ksampler_low_gpu:
 
 
 
+class chx_ksampler_tile:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                    "context": ("RUN_CONTEXT",),
+                    "model_name": (folder_paths.get_filename_list("upscale_models"), {"default": "RealESRGAN_x2.pth"}),
+                    "upscale_by": ("FLOAT", {"default": 2.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "denoise_image": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
+                    "tile_size": ("INT", {"default": 512, "min": 256, "max": 4096, "step": 64}),
+                    "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
+                    },
+                "optional": {"image_optional": ("IMAGE",),},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
+            }
+            
+    OUTPUT_NODE = True
+    RETURN_TYPES = ('IMAGE', )
+    RETURN_NAMES = ('output_image', )
+    FUNCTION = 'run'
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
+
+    def phase_one(self, base_model, samples, positive_cond_base, negative_cond_base,
+                    upscale_by, model_name, seed, vae, denoise_image,
+                    steps, cfg, sampler_name, scheduler):
+        image_scaler = ImageScale()
+        vaedecoder = VAEDecode()
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(model_name)[0]
+        iuwm = ImageUpscaleWithModel()
+        start_step = int(steps - (steps * denoise_image))
+        sample1 = common_ksampler(base_model, seed, steps, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, samples,
+                                start_step=start_step, last_step=steps, force_full_denoise=False)[0]
+        pixels = vaedecoder.decode(vae, sample1)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = image_scaler.upscale(img, "bicubic", upscaled_width, upscaled_height, 'center')[0]
+        return img, upscaled_width, upscaled_height
+
+    def run(self, seed, model_name, upscale_by=2.0, tile_size=512,prompt=None, image_output=None, extra_pnginfo=None,
+            upscale_method='normal', denoise_image=1.0, image_optional=None, context=None):
+        if image_output == "None":
+            output_image = context.get("images",None)
+            return (output_image,)
+        
+        vae = context.get("vae", None)
+        steps = context.get("steps", 8)
+        cfg = context.get("cfg", 7)
+        sampler_name = context.get("sampler", "dpmpp_sde_gpu")
+        scheduler = context.get("scheduler", "karras")
+        positive_cond_base = context.get("positive", "")
+        negative_cond_base = context.get("negative", "")
+        base_model = context.get("model", None)
+        samples = context.get("latent", None)
+
+        tile_denoise = denoise_image
+
+        if image_optional is not None:
+            vaeencoder = VAEEncode()
+            samples = vaeencoder.encode(vae, image_optional)[0]
+        
+        img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
+                                                            upscale_by, model_name, seed, vae, denoise_image,
+                                                            steps, cfg, sampler_name, scheduler)
+        img= tensor2pil(img)
+
+        tiled_image = run_tiler_for_steps(img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps, tile_denoise, tile_size)
+
+        results = easySave(tiled_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+        if image_output in ("Hide", "Hide/Save"):
+            return {"ui": {},
+                "result": ( tiled_image,)}
+            
+        return {"ui": {"images": results},
+                "result": ( tiled_image,)}
+
+
+
+
+#region------------------------ksampler-tile------------------------
+
+def split_image(img, tile_size=1024):
+    if isinstance(img, list):
+        print("Warning: img is a list, selecting the first element.")
+        img = img[0]
+    if not hasattr(img, 'width') or not hasattr(img, 'height'):
+        raise TypeError("The input 'img' must be an image object (e.g., PIL Image or torch tensor).")
+
+    tile_width, tile_height = tile_size, tile_size
+    width, height = img.width, img.height
+
+    num_tiles_x = ceil(width / tile_width)
+    num_tiles_y = ceil(height / tile_height)
+
+    if num_tiles_x < 2:
+        num_tiles_x = 2
+    if num_tiles_y < 2:
+        num_tiles_y = 2
+
+    if width % tile_width == 0:
+        num_tiles_x += 1
+    if height % tile_height == 0:
+        num_tiles_y += 1
+
+    if num_tiles_x > 1:
+        overlap_x = (num_tiles_x * tile_width - width) / (num_tiles_x - 1)
+    else:
+        overlap_x = 0
+    if num_tiles_y > 1:
+        overlap_y = (num_tiles_y * tile_height - height) / (num_tiles_y - 1)
+    else:
+        overlap_y = 0
+
+    if overlap_x < 256:
+        num_tiles_x += 1
+        overlap_x = (num_tiles_x * tile_width - width) / (num_tiles_x - 1)
+    if overlap_y < 256:
+        num_tiles_y += 1
+        overlap_y = (num_tiles_y * tile_height - height) / (num_tiles_y - 1)
+
+    tiles = []
+
+    for i in range(num_tiles_y):
+        for j in range(num_tiles_x):
+            x_start = j * tile_width - j * overlap_x
+            y_start = i * tile_height - i * overlap_y
+
+            x_start = round(x_start)
+            y_start = round(y_start)
+
+            tile_img = img.crop((x_start, y_start, x_start + tile_width, y_start + tile_height))
+            tiles.append(((x_start, y_start, x_start + tile_width, y_start + tile_height), tile_img))
+
+    return tiles
+
+def stitch_images(upscaled_size, tiles):
+    if isinstance(upscaled_size, tuple):
+        width, height = upscaled_size
+    elif hasattr(upscaled_size, 'size'):
+        width, height = upscaled_size.size
+    elif hasattr(upscaled_size, 'shape'):
+        _, height, width = upscaled_size.shape
+    else:
+        raise TypeError("upscaled_size should be a tuple, PIL.Image, or torch.Tensor.")
+    
+    result = torch.zeros((3, height, width))
+    sorted_tiles = sorted(tiles, key=lambda x: (x[0][1], x[0][0]))
+    current_row_upper = None
+
+    for (left, upper, right, lower), tile in sorted_tiles:
+        if current_row_upper != upper:
+            current_row_upper = upper
+            first_tile_in_row = True
+        else:
+            first_tile_in_row = False
+
+        tile_width = right - left
+        tile_height = lower - upper
+        feather = tile_width // 8
+
+        mask = torch.ones(tile.shape[0], tile.shape[1], tile.shape[2])
+
+        if not first_tile_in_row:
+            for t in range(feather):
+                mask[:, :, t:t+1] *= (1.0 / feather) * (t + 1)
+
+        if upper != 0:
+            for t in range(feather):
+                mask[:, t:t+1, :] *= (1.0 / feather) * (t + 1)
+
+        tile = tile.squeeze(0).squeeze(0)
+        tile_to_add = tile.permute(2, 0, 1)
+        combined_area = tile_to_add * mask.unsqueeze(0) + result[:, upper:lower, left:right] * (1.0 - mask.unsqueeze(0))
+        result[:, upper:lower, left:right] = combined_area
+
+    tensor_expanded = result.unsqueeze(0)
+    tensor_final = tensor_expanded.permute(0, 2, 3, 1)
+    return tensor_final
+
+def ai_upscale_adv(tile, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, start_step=11, end_step=20):
+    vaedecoder = VAEDecode()
+    vaeencoder = VAEEncode()
+    tile = pil2tensor(tile)
+    encoded_tile = vaeencoder.encode(vae, tile)[0]
+    tile = common_ksampler(base_model, seed, end_step, cfg, sampler_name, scheduler,
+                        positive_cond_base, negative_cond_base, encoded_tile,
+                        start_step=start_step, force_full_denoise=True)[0]
+    tile = vaedecoder.decode(vae, tile)[0]
+    return tile
+
+def run_tiler_for_steps(enlarged_img, base_model, vae, seed, cfg, sampler_name, scheduler,
+                        positive_cond_base, negative_cond_base, steps=20, denoise=0.25, tile_size=1024):
+    if isinstance(enlarged_img, list):
+        print("Warning: enlarged_img is a list, selecting the first element.")
+        enlarged_img = enlarged_img[0]
+    if not hasattr(enlarged_img, 'size') and not hasattr(enlarged_img, 'shape'):
+        raise TypeError("enlarged_img should be a valid image object (e.g., PIL.Image or torch tensor).")
+
+    tiles = split_image(enlarged_img, tile_size=tile_size)
+
+    start_step = int(steps - (steps * denoise))
+    end_step = steps
+    resampled_tiles = [(coords, ai_upscale_adv(tile, base_model, vae, seed, cfg, sampler_name, scheduler,
+                                            positive_cond_base, negative_cond_base, start_step, end_step)) for coords, tile in tiles]
+
+    result = stitch_images(enlarged_img.size, resampled_tiles)
+
+    return result
+
+
+
+
+class chx_ksampler_tile:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                    "context": ("RUN_CONTEXT",),
+                    "model_name": (folder_paths.get_filename_list("upscale_models"), {"default": "RealESRGAN_x2.pth"}),
+                    "upscale_by": ("FLOAT", {"default": 2.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "denoise_image": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
+                    "tile_size": ("INT", {"default": 512, "min": 256, "max": 4096, "step": 64}),
+                    "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
+                    },
+                "optional": {"image_optional": ("IMAGE",),},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
+            }
+            
+    OUTPUT_NODE = True
+    RETURN_TYPES = ('IMAGE', )
+    RETURN_NAMES = ('output_image', )
+    FUNCTION = 'run'
+    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
+
+    def phase_one(self, base_model, samples, positive_cond_base, negative_cond_base,
+                    upscale_by, model_name, seed, vae, denoise_image,
+                    steps, cfg, sampler_name, scheduler):
+        image_scaler = ImageScale()
+        vaedecoder = VAEDecode()
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(model_name)[0]
+        iuwm = ImageUpscaleWithModel()
+        start_step = int(steps - (steps * denoise_image))
+        sample1 = common_ksampler(base_model, seed, steps, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, samples,
+                                start_step=start_step, last_step=steps, force_full_denoise=False)[0]
+        pixels = vaedecoder.decode(vae, sample1)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = image_scaler.upscale(img, "bicubic", upscaled_width, upscaled_height, 'center')[0]
+        return img, upscaled_width, upscaled_height
+
+    def run(self, seed, model_name, upscale_by=2.0, tile_size=512,prompt=None, image_output=None, extra_pnginfo=None,
+            upscale_method='normal', denoise_image=1.0, image_optional=None, context=None):
+        if image_output == "None":
+            output_image = context.get("images",None)
+            return (output_image,)
+        
+        vae = context.get("vae", None)
+        steps = context.get("steps", 8)
+        cfg = context.get("cfg", 7)
+        sampler_name = context.get("sampler", "dpmpp_sde_gpu")
+        scheduler = context.get("scheduler", "karras")
+        positive_cond_base = context.get("positive", "")
+        negative_cond_base = context.get("negative", "")
+        base_model = context.get("model", None)
+        samples = context.get("latent", None)
+
+        tile_denoise = denoise_image
+
+        if image_optional is not None:
+            vaeencoder = VAEEncode()
+            samples = vaeencoder.encode(vae, image_optional)[0]
+        
+        img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
+                                    upscale_by, model_name, seed, vae, denoise_image,steps, cfg, sampler_name, scheduler)
+        img= tensor2pil(img)
+
+        tiled_image = run_tiler_for_steps(img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps, tile_denoise, tile_size)
+
+        results = easySave(tiled_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+        if image_output in ("Hide", "Hide/Save"):
+            return {"ui": {},
+                "result": ( tiled_image,)}
+            
+        return {"ui": {"images": results},
+                "result": ( tiled_image,)}
 
 
 
@@ -2656,9 +2901,12 @@ class basic_Ksampler_low_gpu:
 
 
 
+#endregion-----------tile采样器--------------------------------------------------------------------------------#
 
 
-#endregion-----------采样器--------------------------------------------------------------------------------#
+
+
+
 
 
 
@@ -3678,6 +3926,593 @@ class Data_preset_save:
             f.write(tomltext)
 
         return ()
+
+
+
+
+
+
+# region Ksampler_sum-----------------------------------
+
+class Stack_VAEDecodeTiled:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                "tile_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 32}),
+                "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
+                "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4, "tooltip": "Only used for video VAEs: Amount of frames to decode at a time."}),
+                "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4, "tooltip": "Only used for video VAEs: Amount of frames to overlap."})
+                },
+                "optional": {}}
+
+    RETURN_TYPES = ("VAEDecodeTiled",)
+    RETURN_NAMES = ("vaeTile",)
+    FUNCTION = "encode"
+    CATEGORY = "Apt_Preset/stack/ksample/😺backup"
+
+    def encode(self, tile_size, overlap=64, temporal_size=64, temporal_overlap=8):
+        pack = (tile_size, overlap, temporal_size, temporal_overlap)
+        return (pack,)
+
+
+class Stack_Ksampler_adv:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "add_noise": (["enable", "disable"],),
+                "steps": ("INT", {"default": 20, "min": 0, "max": 10000,}),
+                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0,}),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}),
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "normal"}),
+                "start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
+                "end_at_step": ("INT", {"default": 1000, "min": 0, "max": 10000}),
+                "return_with_leftover_noise": (["disable", "enable"],)
+            },
+
+        }
+
+    RETURN_TYPES = ("KS_STACK",)
+    RETURN_NAMES = ("ksample",)
+    FUNCTION = "encode"
+    CATEGORY = "Apt_Preset/stack/ksample/😺backup"
+
+    def encode(self, add_noise, steps, cfg, sampler, scheduler, start_at_step, end_at_step, return_with_leftover_noise):
+        data = (add_noise, steps, cfg, sampler, scheduler, start_at_step, end_at_step, return_with_leftover_noise)
+        return (data, )
+
+
+class Stack_Ksampler_basic:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "steps": ("INT", {"default": 8, "min": 0, "max": 10000, }),
+                "cfg": ("FLOAT", {"default": 8, "min": 0.0, "max": 100.0, }),
+                "sampler": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}),
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "normal"})
+            },
+
+        }
+
+    RETURN_TYPES = ("KS_STACK",)
+    RETURN_NAMES = ("ksample",)
+    FUNCTION = "encode"
+    CATEGORY = "Apt_Preset/stack/ksample/😺backup"
+
+    def encode(self, steps, cfg, sampler, scheduler):
+        data = (steps, cfg, sampler, scheduler)
+        return (data, )
+
+
+class Stack_Ksampler_custom:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {  # 保持所有参数为可选
+                "steps": ("INT", {"default": 8, "min": 0, "max": 10000}),
+                "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0}),
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "normal"}),
+                "noise": ("NOISE",),  # 可选参数
+                "guider": ("GUIDER",),  # 可选参数
+                "sampler": ("SAMPLER",),
+                "sigmas": ("SIGMAS",)
+            }
+        }
+
+    RETURN_TYPES = ("KS_STACK",)
+    RETURN_NAMES = ("ksample",)
+    FUNCTION = "encode"
+    CATEGORY = "Apt_Preset/stack/ksample/😺backup"
+
+    def encode(self, steps=8, cfg=8.0, scheduler="normal", 
+               noise=None, guider=None, sampler=None, sigmas=None):
+        data = (steps, cfg, scheduler, noise, guider, sampler, sigmas)
+        return (data, )
+
+
+
+class Stack_Ksampler_refine:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "resample": ("RESAMPLE",),
+                "upscale_model": (["None"] +folder_paths.get_filename_list("upscale_models"), {"default": "1xDeJPG_OmniSR.pth"}),
+                "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], {"default": "bilinear" }),
+                "pixls_scale": ("FLOAT", {"default": 2, "min": 1, "max": 16.0, "step": 0.1}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "denoise": ("FLOAT", {"default": 0.3, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "image_output": (["Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
+            },
+            "optional": {
+                "lowCpu": ("VAEDecodeTiled",),  
+            },            
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
+        }
+
+
+    RETURN_TYPES = ( "IMAGE", )
+    RETURN_NAMES = ( "image", )
+    OUTPUT_NODE = True
+    FUNCTION = "run"
+    CATEGORY = "Apt_Preset/stack/ksample/😺backup"
+    def run(self,resample, seed, denoise, upscale_model,upscale_method, prompt=None, image_output=None, extra_pnginfo=None,lowCpu=None,pixls_scale=1):
+
+        (model, positive, negative, vae, steps, cfg, sampler, scheduler, image, clip, latent) = resample 
+        if upscale_model != "None":         
+            up_model = load_upscale_model(upscale_model)
+            image = upscale_with_model(up_model, image )
+        if pixls_scale != 1:
+            image = image_upscale(image, upscale_method, pixls_scale)[0]
+        latent = encode(vae, image)[0]
+        latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
+                positive,  negative, latent,  denoise=denoise )[0]
+
+        if lowCpu is not None:
+            (tile_size, overlap, temporal_size, temporal_overlap)=lowCpu
+            output_image = VAEDecodeTiled(vae, latent, tile_size, overlap, temporal_size, temporal_overlap)[0]
+        else:
+            output_image = decode(vae, latent)[0] 
+        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+        if image_output in ("Hide", "Hide/Save"):
+            return {"ui": {},
+                "result": (output_image,)}
+            
+        return {"ui": {"images": results},
+                "result": (output_image,)}
+
+
+
+class Stack_Ksampler_highAndLow:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "add_noise": (["enable", "disable"],),
+                "noise_seed": ("INT", {"default": 3, "min": 0, "max": 0xffffffffffffffff}),
+                "start_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
+                "mid_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
+                "steps": ("INT", {"default": 20, "min": 0, "max": 10000}),
+                "return_with_leftover_noise": (["disable", "enable"],)
+            },
+            "optional": {
+                "model2": ("MODEL",),
+                "positive2": ("CONDITIONING",),
+            }
+        }
+
+    RETURN_TYPES = ("FUNTION", )
+    RETURN_NAMES = ("funtion", )
+    FUNCTION = "encode"
+    CATEGORY = "Apt_Preset/stack/ksample/😺backup"
+
+    def encode(self, add_noise, noise_seed, start_step, mid_step, steps, return_with_leftover_noise, model2=None,
+               positive2=None):
+        data = (add_noise, noise_seed, start_step, mid_step, steps, return_with_leftover_noise, model2, positive2)
+        return (data,)
+
+
+class Stack_Ksampler_dual_paint:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "mask": ("MASK",),
+                "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1, "display": "slider"}),
+                "mask_area_denoise": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "image_area_denoise": ("FLOAT", {"default": 0.9, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "refine": ("BOOLEAN", {"default": False}),
+                "refine_denoise": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 1.0, "step": 0.01})
+            }
+        }
+
+    RETURN_TYPES = ("FUNTION", )
+    RETURN_NAMES = ("funtion", )
+    FUNCTION = "encode"
+    CATEGORY = "Apt_Preset/stack/ksample/😺backup"
+
+    def encode(self, image, mask, smoothness, mask_area_denoise, image_area_denoise, refine, refine_denoise):
+        data = (image, mask, smoothness, mask_area_denoise, image_area_denoise, refine, refine_denoise)
+        return (data,)
+
+
+def Stack_dual_paint(image, mask, smoothness, mask_area_denoise, image_area_denoise,refine,refine_denoise, seed, 
+            model, positive, negative, steps, cfg, sampler, scheduler,vae):
+    
+
+    phase_steps = math.ceil(steps / 2)
+    device = model.model.device if hasattr(model, 'model') else model.device
+    
+    vae_encoder = VAEEncode()
+    latent_dict = vae_encoder.encode(vae, image)[0]
+    input_latent = latent_dict["samples"].to(device)
+
+
+    if mask is not None :
+        mask=tensor2pil(mask)
+        if not isinstance(mask, Image.Image):
+            raise TypeError("mask is not a valid PIL Image object")
+        
+        feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+        mask=pil2tensor(feathered_image)
+
+
+    
+    mask = 1-mask.float().to(device)
+    
+    mask_resized = torch.nn.functional.interpolate(
+        mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])), 
+        size=(input_latent.shape[2], input_latent.shape[3]), 
+        mode='bilinear'
+    )
+    
+    mask_strength = mask_resized * (image_area_denoise - mask_area_denoise) + mask_area_denoise
+    
+    noise_mask = SetLatentNoiseMask()
+    latent_with_mask = noise_mask.set_mask({"samples": input_latent}, mask_strength)[0]
+    
+    advanced_sampler = KSamplerAdvanced()
+    
+    result = advanced_sampler.sample(
+        model=model,
+        add_noise=0.00,
+        noise_seed=seed,
+        steps=steps,
+        cfg=cfg,
+        sampler_name=sampler,
+        scheduler=scheduler,
+        positive=positive,
+        negative=negative,
+        latent_image=latent_with_mask,
+        start_at_step=0,
+        end_at_step=phase_steps,
+        return_with_leftover_noise=False
+    )[0]
+    samples = result["samples"].to(device)
+    binary_mask = (mask_resized >= 0.5).float()
+    phase2_mask = binary_mask * 1.0 + (1 - binary_mask) * mask_area_denoise
+    
+    latent_phase2 = noise_mask.set_mask(
+        {"samples": samples},
+        phase2_mask
+    )[0]
+
+    result = advanced_sampler.sample(
+        model=model,
+        add_noise=0.00,
+        noise_seed=seed + 1,
+        steps=steps,
+        cfg=cfg,
+        sampler_name=sampler,
+        scheduler=scheduler,
+        positive=positive,
+        negative=negative,
+        latent_image=latent_phase2,
+        start_at_step=phase_steps,
+        end_at_step=steps,
+        return_with_leftover_noise=False
+    )[0]
+    samples = result["samples"].to(device)
+    
+    if refine:
+
+        sampler = KSampler()
+        result = sampler.sample(
+            model,
+            seed + 1,
+            steps,
+            cfg,
+            sampler,
+            scheduler,
+            positive,
+            negative,
+            {"samples": samples},
+            refine_denoise
+        )[0]
+        samples = result["samples"].to(device)   
+    latent= {"samples": samples}       
+    return ( latent,)
+
+
+class Stack_ksampler_tile:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                   "resample": ("RESAMPLE",),
+                    "model_name": (folder_paths.get_filename_list("upscale_models"), {"default": "RealESRGAN_x2.pth"}),
+                    "upscale_by": ("FLOAT", {"default": 2.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "denoise_image": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
+                    "tile_size": ("INT", {"default": 512, "min": 256, "max": 4096, "step": 64}),
+                    "image_output": (["Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
+                    },
+            "optional": {
+                "lowCpu": ("VAEDecodeTiled",),  
+            },              
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
+            }
+            
+    OUTPUT_NODE = True
+    RETURN_TYPES = ('IMAGE', )
+    RETURN_NAMES = ('output_image', )
+    FUNCTION = 'run'
+    CATEGORY = "Apt_Preset/stack/ksample/😺backup"
+
+    def phase_one(self, base_model, samples, positive_cond_base, negative_cond_base,
+                    upscale_by, model_name, seed, vae, denoise_image, steps, cfg, sampler_name, scheduler):
+        
+        image_scaler = ImageScale()
+        vaedecoder = VAEDecode()
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(model_name)[0]
+        iuwm = ImageUpscaleWithModel()
+        start_step = int(steps - (steps * denoise_image))
+        
+        # 确保 samples 是 latent 格式（字典）
+        if isinstance(samples, torch.Tensor):
+            if samples.ndim == 4 and samples.shape[-1] in [3, 4]:
+                # 这是图像数据，需要编码为 latent
+                samples = {"samples": VAEEncode().encode(vae, samples)[0]["samples"]}
+            else:
+                # 这已经是 latent 数据
+                samples = {"samples": samples}
+        elif not isinstance(samples, dict) or "samples" not in samples:
+            raise ValueError("samples must be a tensor or a dict with 'samples' key")
+        
+        sample1 = common_ksampler(base_model, seed, steps, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, samples,
+                                start_step=start_step, last_step=steps, force_full_denoise=False)[0]
+        pixels = vaedecoder.decode(vae, sample1)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = image_scaler.upscale(img, "bicubic", upscaled_width, upscaled_height, 'center')[0]
+        return img, upscaled_width, upscaled_height
+
+    def run(self, seed, model_name, upscale_by=2.0, tile_size=512, prompt=None, image_output=None, extra_pnginfo=None,
+            upscale_method='normal', denoise_image=1.0, resample=None, lowCpu=None):
+
+        (base_model, positive_cond_base, negative_cond_base, vae, steps, cfg, sampler_name, scheduler, image, clip, latent) = resample
+       
+        tile_denoise = denoise_image
+
+        # 处理输入数据
+        if image is not None:
+            # 如果提供了图像，先编码为 latent
+            samples = VAEEncode().encode(vae, image)[0]
+        elif latent is not None:
+            # 如果提供了 latent，直接使用
+            samples = latent
+        else:
+            raise ValueError("Either image or latent must be provided")
+
+        img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
+                                    upscale_by, model_name, seed, vae, denoise_image, steps, cfg, sampler_name, scheduler)
+        img = tensor2pil(img)
+
+        tiled_image = run_tiler_for_steps(img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps, tile_denoise, tile_size)
+
+        results = easySave(tiled_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+        if image_output in ("Hide", "Hide/Save"):
+            return {"ui": {},
+                "result": (tiled_image,)}
+            
+        return {"ui": {"images": results},
+                "result": (tiled_image,)}
+
+
+class sum_Ksampler:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "context": ("RUN_CONTEXT",),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),                                
+            },           
+            "optional": {
+                "model": ("MODEL",),
+                "positive": ("CONDITIONING",),
+                "negative": ("CONDITIONING",),
+                "latent_stack": ("LATENT_STACK",),       
+                "lowCpu": ("VAEDecodeTiled",),         
+                "ksample_type":("KS_STACK",),
+                "funtion":("FUNTION",),
+
+            },            
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",}, }
+
+    RETURN_TYPES = ("RUN_CONTEXT","IMAGE","RESAMPLE", )
+    RETURN_NAMES = ("context", "image","resample"  )
+    OUTPUT_NODE = True
+    FUNCTION = "run"
+    CATEGORY = "Apt_Preset/chx_ksample"
+
+
+    def run(self,context, seed, denoise, positive=None, negative=None, model=None, prompt=None, image_output=None, extra_pnginfo=None, 
+            ksample_type=None,lowCpu=None,latent_stack=None,funtion=None):
+        clip = context.get("clip",None)
+        vae = context.get("vae",None)
+        steps = context.get("steps",20)
+        cfg = context.get("cfg",8)
+        sampler = context.get("sampler",None)
+        scheduler = context.get("scheduler",None)
+        image2 = context.get("images",None)
+
+        if positive is None:
+            positive = context.get("positive","boy" )
+        if negative is None:
+            negative = context.get("negative","" )
+        if model is None:
+            model= context.get("model")
+
+#-------------------------------------------------------------------------------------
+
+        if latent_stack is not None:
+            from .main_stack import Apply_latent
+            model, positive, negative, latent = Apply_latent().apply_latent_stack(model, positive, negative, vae, latent_stack)      
+        else:   
+            latent = context.get("latent",None)
+
+#-------------------ksample_type------------------------------------------------------------------
+
+        if ksample_type is not None:
+            if len(ksample_type) == 8:
+                (add_noise, steps, cfg, sampler, scheduler, start_at_step, end_at_step, return_with_leftover_noise) = ksample_type              
+                disable_noise = False
+                if add_noise == "disable":
+                    disable_noise = True
+                force_full_denoise = True
+                if return_with_leftover_noise == "enable":
+                    force_full_denoise = False
+                if latent is None:
+                    device = model.device if hasattr(model, 'device') else 'cpu'
+                    latent = {"samples": torch.zeros([1, 4, 64, 64], device=device)}
+                latent = common_ksampler(model, seed, steps, cfg, sampler, scheduler, positive, negative, latent, denoise=denoise, disable_noise=disable_noise, start_step=start_at_step, last_step=end_at_step, force_full_denoise=force_full_denoise)[0]
+
+            elif len(ksample_type) == 7:
+                (ks_steps, cfg, ks_scheduler, noise, guider, sampler, sigmas) = ksample_type    
+                if sampler is None:
+                    sampler_name = context.get("sampler", None)
+                    if sampler_name:
+                        sampler = KSamplerSelect().get_sampler(sampler_name)[0]
+                    else:
+                        sampler = KSamplerSelect().get_sampler("euler")[0]                       
+                if noise is None:
+                    noise = RandomNoise().get_noise(seed)[0]                 
+                if guider is None:
+                    guider = BasicGuider().get_guider(model, positive)[0]                    
+                if sigmas is None:
+                    sched = ks_scheduler if ks_scheduler != None else context.get("scheduler", "normal")
+                    sigmas = BasicScheduler().get_sigmas(model, sched, ks_steps if ks_steps != None else steps, denoise)[0]      
+                latent = SamplerCustomAdvanced().sample(noise, guider, sampler, sigmas, latent)[0]
+            
+            elif len(ksample_type) == 4:
+                (steps, cfg, sampler, scheduler) = ksample_type              
+                latent = common_ksampler(model, seed, steps, cfg, sampler, scheduler,
+                        positive, negative,  latent,  denoise=denoise )[0]
+
+
+        if funtion is not None:
+
+            if len(funtion) == 8:
+                (add_noise, noise_seed, start_step, mid_step, steps, return_with_leftover_noise, model2, positive2)=funtion 
+                disable_noise = False 
+                if add_noise == "disable":
+                    disable_noise = True 
+                force_full_denoise = True
+                if return_with_leftover_noise == "enable":
+                    force_full_denoise = False
+                         
+                latent1 = common_ksampler(model, noise_seed, steps, cfg, sampler, scheduler, positive, negative, latent, denoise=denoise, 
+                                        disable_noise=disable_noise, start_step=start_step, last_step=mid_step, force_full_denoise=force_full_denoise)[0]
+                
+                if model2 is None:
+                    model = context.get("model", None)  
+                if positive2 is None:
+                    positive = context.get("positive", None)
+                latent = common_ksampler(model, noise_seed, steps, cfg, sampler, scheduler, positive, negative, latent1, denoise=denoise, 
+                                        disable_noise=disable_noise, start_step=mid_step, last_step=steps, force_full_denoise=force_full_denoise)[0]
+
+            elif len(funtion) == 7:
+                (image, mask, smoothness, mask_area_denoise, image_area_denoise, refine, refine_denoise)=funtion
+                latent= Stack_dual_paint(image, mask, smoothness, mask_area_denoise, image_area_denoise,refine,refine_denoise, seed, 
+                                    model, positive, negative, steps, cfg, sampler, scheduler,vae)[0]
+
+
+        else:
+            latent = common_ksampler(model,seed, steps, cfg, sampler, scheduler,
+                    positive,  negative, latent, denoise=denoise)[0]
+            
+#----------------vae-way----------------------------------------------------------------------
+
+        if lowCpu is not None:
+            (tile_size, overlap, temporal_size, temporal_overlap)=lowCpu
+            output_image = VAEDecodeTiled(vae, latent, tile_size, overlap, temporal_size, temporal_overlap)[0]
+        else:
+            output_image = VAEDecode().decode(vae, latent)[0]
+
+#-----------------------------------------------------------------------------------------------
+
+        context = new_context(context, model=model, positive=positive, negative=negative,  clip=clip, latent=latent, images=output_image, vae=vae,
+            steps=steps, cfg=cfg, sampler=sampler, scheduler=scheduler, )
+
+        resample = (model, positive, negative, vae, steps, cfg, sampler, scheduler, output_image, clip, latent)
+
+
+        if image_output == "None":
+            context = new_context(context, latent=latent, images=None,  )
+            return (context, None, None, )
+
+        results = easySave(output_image, 'easyPreview', image_output, prompt, extra_pnginfo)
+        if image_output in ("Hide", "Hide/Save"):
+            return {"ui": {},
+                "result": (context, output_image, resample )}
+            
+        return {"ui": {"images": results},
+                "result": (context, output_image, resample)}
+
+
+
+#endregion-----------sum采样器--------------------------------------------------------------------------------#
+
+
+
+
+
+
+
+
+
+
+
+
+
+#endregion-----------采样器--------------------------------------------------------------------------------#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

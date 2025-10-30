@@ -23,7 +23,7 @@ import comfy.model_management as mm
 from comfy.k_diffusion import sampling as k_diffusion_sampling
 
 
-
+from comfy_extras import nodes_custom_sampler
 
 
 
@@ -849,7 +849,7 @@ class chx_Ksampler_dual_area:
     RETURN_TYPES = ("RUN_CONTEXT", "IMAGE","MASK")
     RETURN_NAMES = ("context", "image","mask")
     FUNCTION = "sample"
-    CATEGORY = "Apt_Preset/chx_ksample/😺backup"
+    CATEGORY = "Apt_Preset/🚫Deprecated/🚫"
 
 
     def sample(self, seed, image_denoise, mask_denoise, image_cfg, mask_cfg, image=None, mask=None,  model_img=None,model_mask=None, prompt_img=None,prompt_mask=None,
@@ -910,6 +910,12 @@ class chx_Ksampler_dual_area:
 
 
 #endregion------------------------ksampler_dual双区域采样------------------------
+
+
+
+
+
+
 
 
 
@@ -1089,217 +1095,8 @@ class chx_ksampler_Deforum_sch:
 
 
 
-#region------------------------ksampler-tile------------------------
 
-def split_image(img, tile_size=1024):
-    if isinstance(img, list):
-        print("Warning: img is a list, selecting the first element.")
-        img = img[0]
-    if not hasattr(img, 'width') or not hasattr(img, 'height'):
-        raise TypeError("The input 'img' must be an image object (e.g., PIL Image or torch tensor).")
-
-    tile_width, tile_height = tile_size, tile_size
-    width, height = img.width, img.height
-
-    num_tiles_x = ceil(width / tile_width)
-    num_tiles_y = ceil(height / tile_height)
-
-    if num_tiles_x < 2:
-        num_tiles_x = 2
-    if num_tiles_y < 2:
-        num_tiles_y = 2
-
-    if width % tile_width == 0:
-        num_tiles_x += 1
-    if height % tile_height == 0:
-        num_tiles_y += 1
-
-    if num_tiles_x > 1:
-        overlap_x = (num_tiles_x * tile_width - width) / (num_tiles_x - 1)
-    else:
-        overlap_x = 0
-    if num_tiles_y > 1:
-        overlap_y = (num_tiles_y * tile_height - height) / (num_tiles_y - 1)
-    else:
-        overlap_y = 0
-
-    if overlap_x < 256:
-        num_tiles_x += 1
-        overlap_x = (num_tiles_x * tile_width - width) / (num_tiles_x - 1)
-    if overlap_y < 256:
-        num_tiles_y += 1
-        overlap_y = (num_tiles_y * tile_height - height) / (num_tiles_y - 1)
-
-    tiles = []
-
-    for i in range(num_tiles_y):
-        for j in range(num_tiles_x):
-            x_start = j * tile_width - j * overlap_x
-            y_start = i * tile_height - i * overlap_y
-
-            x_start = round(x_start)
-            y_start = round(y_start)
-
-            tile_img = img.crop((x_start, y_start, x_start + tile_width, y_start + tile_height))
-            tiles.append(((x_start, y_start, x_start + tile_width, y_start + tile_height), tile_img))
-
-    return tiles
-
-def stitch_images(upscaled_size, tiles):
-    if isinstance(upscaled_size, tuple):
-        width, height = upscaled_size
-    elif hasattr(upscaled_size, 'size'):
-        width, height = upscaled_size.size
-    elif hasattr(upscaled_size, 'shape'):
-        _, height, width = upscaled_size.shape
-    else:
-        raise TypeError("upscaled_size should be a tuple, PIL.Image, or torch.Tensor.")
-    
-    result = torch.zeros((3, height, width))
-    sorted_tiles = sorted(tiles, key=lambda x: (x[0][1], x[0][0]))
-    current_row_upper = None
-
-    for (left, upper, right, lower), tile in sorted_tiles:
-        if current_row_upper != upper:
-            current_row_upper = upper
-            first_tile_in_row = True
-        else:
-            first_tile_in_row = False
-
-        tile_width = right - left
-        tile_height = lower - upper
-        feather = tile_width // 8
-
-        mask = torch.ones(tile.shape[0], tile.shape[1], tile.shape[2])
-
-        if not first_tile_in_row:
-            for t in range(feather):
-                mask[:, :, t:t+1] *= (1.0 / feather) * (t + 1)
-
-        if upper != 0:
-            for t in range(feather):
-                mask[:, t:t+1, :] *= (1.0 / feather) * (t + 1)
-
-        tile = tile.squeeze(0).squeeze(0)
-        tile_to_add = tile.permute(2, 0, 1)
-        combined_area = tile_to_add * mask.unsqueeze(0) + result[:, upper:lower, left:right] * (1.0 - mask.unsqueeze(0))
-        result[:, upper:lower, left:right] = combined_area
-
-    tensor_expanded = result.unsqueeze(0)
-    tensor_final = tensor_expanded.permute(0, 2, 3, 1)
-    return tensor_final
-
-def ai_upscale_adv(tile, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, start_step=11, end_step=20):
-    vaedecoder = VAEDecode()
-    vaeencoder = VAEEncode()
-    tile = pil2tensor(tile)
-    encoded_tile = vaeencoder.encode(vae, tile)[0]
-    tile = common_ksampler(base_model, seed, end_step, cfg, sampler_name, scheduler,
-                        positive_cond_base, negative_cond_base, encoded_tile,
-                        start_step=start_step, force_full_denoise=True)[0]
-    tile = vaedecoder.decode(vae, tile)[0]
-    return tile
-
-def run_tiler_for_steps(enlarged_img, base_model, vae, seed, cfg, sampler_name, scheduler,
-                        positive_cond_base, negative_cond_base, steps=20, denoise=0.25, tile_size=1024):
-    if isinstance(enlarged_img, list):
-        print("Warning: enlarged_img is a list, selecting the first element.")
-        enlarged_img = enlarged_img[0]
-    if not hasattr(enlarged_img, 'size') and not hasattr(enlarged_img, 'shape'):
-        raise TypeError("enlarged_img should be a valid image object (e.g., PIL.Image or torch tensor).")
-
-    tiles = split_image(enlarged_img, tile_size=tile_size)
-
-    start_step = int(steps - (steps * denoise))
-    end_step = steps
-    resampled_tiles = [(coords, ai_upscale_adv(tile, base_model, vae, seed, cfg, sampler_name, scheduler,
-                                            positive_cond_base, negative_cond_base, start_step, end_step)) for coords, tile in tiles]
-
-    result = stitch_images(enlarged_img.size, resampled_tiles)
-
-    return result
-
-
-
-
-class chx_ksampler_tile:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-                    "context": ("RUN_CONTEXT",),
-                    "model_name": (folder_paths.get_filename_list("upscale_models"), {"default": "RealESRGAN_x2.pth"}),
-                    "upscale_by": ("FLOAT", {"default": 2.0, "min": 0.1, "max": 10.0, "step": 0.1}),
-                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "denoise_image": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
-                    "tile_size": ("INT", {"default": 512, "min": 256, "max": 4096, "step": 64}),
-                    "image_output": (["None", "Hide", "Preview", "Save", "Hide/Save"], {"default": "Preview"}),
-                    },
-                "optional": {"image_optional": ("IMAGE",),},
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO",},
-            }
-            
-    OUTPUT_NODE = True
-    RETURN_TYPES = ('IMAGE', )
-    RETURN_NAMES = ('output_image', )
-    FUNCTION = 'run'
-    CATEGORY = "Apt_Preset/chx_ksample"
-
-    def phase_one(self, base_model, samples, positive_cond_base, negative_cond_base,
-                    upscale_by, model_name, seed, vae, denoise_image,
-                    steps, cfg, sampler_name, scheduler):
-        image_scaler = ImageScale()
-        vaedecoder = VAEDecode()
-        uml = UpscaleModelLoader()
-        upscale_model = uml.load_model(model_name)[0]
-        iuwm = ImageUpscaleWithModel()
-        start_step = int(steps - (steps * denoise_image))
-        sample1 = common_ksampler(base_model, seed, steps, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, samples,
-                                start_step=start_step, last_step=steps, force_full_denoise=False)[0]
-        pixels = vaedecoder.decode(vae, sample1)[0]
-        org_width, org_height = pixels.shape[2], pixels.shape[1]
-        img = iuwm.upscale(upscale_model, image=pixels)[0]
-        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
-        img = image_scaler.upscale(img, "bicubic", upscaled_width, upscaled_height, 'center')[0]
-        return img, upscaled_width, upscaled_height
-
-    def run(self, seed, model_name, upscale_by=2.0, tile_size=512,prompt=None, image_output=None, extra_pnginfo=None,
-            upscale_method='normal', denoise_image=1.0, image_optional=None, context=None):
-        if image_output == "None":
-            output_image = context.get("images",None)
-            return (output_image,)
-        
-        vae = context.get("vae", None)
-        steps = context.get("steps", 8)
-        cfg = context.get("cfg", 7)
-        sampler_name = context.get("sampler", "dpmpp_sde_gpu")
-        scheduler = context.get("scheduler", "karras")
-        positive_cond_base = context.get("positive", "")
-        negative_cond_base = context.get("negative", "")
-        base_model = context.get("model", None)
-        samples = context.get("latent", None)
-
-        tile_denoise = denoise_image
-
-        if image_optional is not None:
-            vaeencoder = VAEEncode()
-            samples = vaeencoder.encode(vae, image_optional)[0]
-        
-        img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
-                                                            upscale_by, model_name, seed, vae, denoise_image,
-                                                            steps, cfg, sampler_name, scheduler)
-        img= tensor2pil(img)
-
-        tiled_image = run_tiler_for_steps(img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps, tile_denoise, tile_size)
-
-        results = easySave(tiled_image, 'easyPreview', image_output, prompt, extra_pnginfo)
-        if image_output in ("Hide", "Hide/Save"):
-            return {"ui": {},
-                "result": ( tiled_image,)}
-            
-        return {"ui": {"images": results},
-                "result": ( tiled_image,)}
-
-#endregion------------------------_ksampler-tile------------------------
+#endregion------------------------------------------
 
 
 
@@ -1576,7 +1373,7 @@ class chx_Ksampler_VisualStyle:
 
 
 
-class lay_texture_Offset:
+class texture_Offset:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -3988,6 +3785,8 @@ class basic_KSampler_variant_seed:
 
 
 #endregion----------------------------------ksampler---inspire-----------------------------------------
+
+
 
 
 

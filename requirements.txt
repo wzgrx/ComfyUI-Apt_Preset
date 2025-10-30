@@ -37,8 +37,7 @@ filelock
 opencv-python
 psd_tools
 pynvml
-
-
+onnxruntime
 
 
 

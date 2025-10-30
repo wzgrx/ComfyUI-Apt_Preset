@@ -2,7 +2,7 @@ import os
 import torch
 import numpy as np
 import folder_paths
-from PIL import Image, ImageOps, ImageEnhance, Image, ImageOps, ImageChops, ImageFilter, ImageDraw, ImageFont
+from PIL import ImageOps, ImageEnhance, Image, ImageOps, ImageChops, ImageFilter, ImageDraw, ImageFont
 from torchvision.transforms.functional import to_pil_image, to_tensor
 from scipy.interpolate import CubicSpline
 import matplotlib.pyplot as plt
@@ -11,6 +11,9 @@ from typing import Literal, Any
 import math
 from comfy.utils import common_upscale
 import typing as t
+from pathlib import Path
+
+
 
 
 
@@ -26,6 +29,13 @@ try:
     REMOVER_AVAILABLE = True  # 导入成功时设置为True
 except ImportError:
     cv2 = None
+    REMOVER_AVAILABLE = False  # 导入失败时设置为False
+
+try:
+    import onnxruntime as ort
+    REMOVER_AVAILABLE = True  # 导入成功时设置为True
+except ImportError:
+    ort = None
     REMOVER_AVAILABLE = False  # 导入失败时设置为False
 
 
@@ -711,7 +721,7 @@ class img_effect_Load:
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", )
     RETURN_NAMES = ("output1", "output2", "output3", "output4", )
     FUNCTION = "load_image_and_process"
-    CATEGORY = "Apt_Preset/imgEffect"
+    CATEGORY = "Apt_Preset/imgEffect/😺backup"
 
     def load_image_and_process(self, image, output_01_fx, output_02_fx, output_03_fx, output_04_fx, image_input=None):
         
@@ -1552,7 +1562,7 @@ class lay_image_grid_note:
         }
 
     FUNCTION = "create_grid"
-    CATEGORY = "Apt_Preset/imgEffect"
+    CATEGORY = "Apt_Preset/imgEffect/😺backup"
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("image",)
 
@@ -2895,10 +2905,6 @@ class lay_image_mul:
 
 
 
-
-
-#region------lay_mul_image-----------------------------------
-
 import torch
 import os
 import sys
@@ -2930,12 +2936,10 @@ file_list = get_font_list()
 class lay_mul_image:
     def __init__(self):
         self.font_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "fonts")
-        # 获取字体文件列表（假设 file_list 是已定义的字体列表）
         self.file_list = [f for f in os.listdir(self.font_dir) if f.endswith(('.ttf', '.otf'))]
 
     @classmethod
     def INPUT_TYPES(cls):
-        # 实例化获取字体列表（实际使用中可能需要调整）
         inst = cls()
         file_list = inst.file_list
         
@@ -2944,7 +2948,6 @@ class lay_mul_image:
                 "sub_team_direction": (["row", "column"], {"default": "row"}),
                 "main_position": (["top", "bottom", "left", "right"], {"default": "top"}),
                 "font": (file_list,),
-
             },
             "optional": {
                 "main_image": ("IMAGE",),
@@ -2954,17 +2957,16 @@ class lay_mul_image:
                 "image4": ("IMAGE",),
                 
                 "main_text": ("STRING", {"multiline": False, "default": ""}),
-                "main_text_size": ("INT", {"default": 40, "min": 8, "max": 128, "step": 2}),  # 主图文本默认40
+                "main_text_size": ("INT", {"default": 60, "min": 8, "max": 128, "step": 2}),
                 "main_long_size": ("INT", {"default": 1024, "min": 128, "max": 4096, "step": 32}),
-
 
                 "image1_text": ("STRING", {"multiline": False, "default": ""}),
                 "image2_text": ("STRING", {"multiline": False, "default": ""}),
                 "image3_text": ("STRING", {"multiline": False, "default": ""}),
                 "image4_text": ("STRING", {"multiline": False, "default": ""}),
-                "sub_text_size": ("INT", {"default": 40, "min": 8, "max": 128, "step": 2}),  # 子图文本默认32
-                "sub_team_size": ("INT", {"default": 1024, "min": 128, "max": 4096, "step": 32}),
-
+                "sub_text_size": ("INT", {"default": 30, "min": 8, "max": 128, "step": 2}),
+                "sub_team_size": ("INT", {"default": 512, "min": 128, "max": 4096, "step": 32}),
+                "border": ("INT", {"default": 8, "min": 0, "max": 128, "step": 1}),
 
             }
         }
@@ -2979,7 +2981,7 @@ class lay_mul_image:
     """
 
 
-    def process_images(self, sub_team_direction, sub_team_size, sub_text_size, main_text_size, font,
+    def process_images(self, sub_team_direction, sub_team_size, sub_text_size, main_text_size, font, border,
                       image1=None, image1_text="", image2=None, image2_text="",
                       image3=None, image3_text="", image4=None, image4_text="",
                       main_image=None, main_text="", main_position="top", main_long_size=1024):
@@ -3003,16 +3005,14 @@ class lay_mul_image:
         if not sub_images:
             return (pil2tensor(Image.new('RGB', (512, 512), color='white')),)
         
-        # 子图使用 sub_text_size
-        sub_grid = self.create_sub_grid(sub_images, sub_texts, sub_team_direction, sub_team_size, sub_text_size, font)
+        sub_grid = self.create_sub_grid(sub_images, sub_texts, sub_team_direction, sub_team_size, sub_text_size, font, border)
         
         if main_image is not None:
             main_pil = tensor2pil(main_image)
             if main_text:
-                # 主图使用 main_text_size
-                main_pil = self.add_text_to_image(main_pil, main_text, main_text_size, font)
+                main_pil = self.add_text_to_image(main_pil, main_text, main_text_size, font, border)
             main_resized = self.resize_main_image(main_pil, main_long_size)
-            result_image = self.combine_main_sub(main_resized, sub_grid, main_position)
+            result_image = self.combine_main_sub(main_resized, sub_grid, main_position, border)
         else:
             result_image = sub_grid
             
@@ -3028,7 +3028,7 @@ class lay_mul_image:
             new_height = int(image.height * scale)
             return image.resize((target_size, new_height), Image.LANCZOS)
     
-    def add_text_to_image(self, image, text, text_size, font_name) -> Image:
+    def add_text_to_image(self, image, text, text_size, font_name, border) -> Image:
         if not text.strip():
             return image
             
@@ -3038,7 +3038,6 @@ class lay_mul_image:
         
         draw = ImageDraw.Draw(new_image)
         
-        # 字体路径处理
         font_path = os.path.join(self.font_dir, font_name)
         font_obj = ImageFont.truetype(font_path, text_size)
         
@@ -3047,7 +3046,6 @@ class lay_mul_image:
         x = (image.width - text_width) // 2
         y = image.height + (text_height - text_size) // 2
         
-        # 关闭连字特性
         try:
             draw.text((x, y), text, fill=(0, 0, 0), font=font_obj, features=['-liga'])
         except:
@@ -3055,18 +3053,16 @@ class lay_mul_image:
         
         return new_image
     
-    def create_sub_grid(self, images, texts, direction, target_size, text_size, font_name) -> Image:
+    def create_sub_grid(self, images, texts, direction, target_size, text_size, font_name, border) -> Image:
         processed_images = []
         for img, text in zip(images, texts):
             resized = self.resize_sub_image(img, direction, target_size)
             if text:
-                # 子图文本使用传入的 text_size（实际为 sub_text_size）
-                with_text = self.add_text_to_image(resized, text, text_size, font_name)
+                with_text = self.add_text_to_image(resized, text, text_size, font_name, border)
                 processed_images.append(with_text)
             else:
                 processed_images.append(resized)
         
-        border = 16
         spacing = border
         
         if direction == "row":
@@ -3110,54 +3106,607 @@ class lay_mul_image:
             new_width = int(width * scale)
         return main_image.resize((new_width, new_height), Image.LANCZOS)
     
-    def combine_main_sub(self, main_img, sub_grid, position) -> Image:
-        border = 16
+    def combine_main_sub(self, main_img, sub_grid, position, border) -> Image:
         spacing = border * 2
         
-        if position == 'top' or position == 'bottom':
+        if position in ['top', 'bottom']:
             max_width = max(main_img.width, sub_grid.width)
-            total_height = main_img.height + sub_grid.height + spacing
-            
-            result = Image.new('RGB', (max_width, total_height), color='white')
-            
+            total_width = max_width + 2 * border
+            total_height = main_img.height + sub_grid.height + spacing + 2 * border
+
+            result = Image.new('RGB', (total_width, total_height), color='white')
+
             if position == 'top':
                 main_y = border
-                sub_y = main_img.height + spacing + border
+                sub_y = main_y + main_img.height + spacing
             else:
-                main_y = sub_grid.height + spacing + border
                 sub_y = border
-            
-            main_x = (max_width - main_img.width) // 2
-            result.paste(main_img, (main_x, main_y))
-            
-            sub_x = (max_width - sub_grid.width) // 2
-            result.paste(sub_grid, (sub_x, sub_y))
-            
+                main_y = sub_y + sub_grid.height + spacing
+
+            main_x = border + (max_width - main_img.width) // 2
+            sub_x = border + (max_width - sub_grid.width) // 2
+
         else:
             max_height = max(main_img.height, sub_grid.height)
-            total_width = main_img.width + sub_grid.width + spacing
-            
-            result = Image.new('RGB', (total_width, max_height), color='white')
-            
+            total_height = max_height + 2 * border
+            total_width = main_img.width + sub_grid.width + spacing + 2 * border
+
+            result = Image.new('RGB', (total_width, total_height), color='white')
+
             if position == 'left':
                 main_x = border
-                sub_x = main_img.width + spacing + border
+                sub_x = main_x + main_img.width + spacing
             else:
-                main_x = sub_grid.width + spacing + border
                 sub_x = border
-            
-            main_y = (max_height - main_img.height) // 2
-            result.paste(main_img, (main_x, main_y))
-            
-            sub_y = (max_height - sub_grid.height) // 2
-            result.paste(sub_grid, (sub_x, sub_y))
-        
+                main_x = sub_x + sub_grid.width + spacing
+
+            main_y = border + (max_height - main_img.height) // 2
+            sub_y = border + (max_height - sub_grid.height) // 2
+
+        result.paste(main_img, (main_x, main_y))
+        result.paste(sub_grid, (sub_x, sub_y))
         return result
 
 
 
 
-#endregion---------------------------------------------------------------
+
+
+#region-----------------纹理组---------------------------------
+
+
+ort.disable_telemetry_events()
+
+class ModelNotFound(Exception):
+    def __init__(self, model_name, *args, **kwargs):
+        super().__init__(f"The model {model_name} could not be found.", *args, **kwargs)
+
+def tensor2pil(tensor: torch.Tensor) -> list[Image.Image]:
+    if tensor.ndim == 3:
+        if tensor.shape[2] in [1, 3, 4]:
+            tensor = tensor.permute(2, 0, 1)
+        tensor = tensor.unsqueeze(0)
+    elif tensor.ndim == 4:
+        if tensor.shape[3] in [1, 3, 4]:
+            tensor = tensor.permute(0, 3, 1, 2)
+    
+    images = []
+    for t in tensor:
+        np_array = t.permute(1, 2, 0).cpu().detach().numpy()
+        if np_array.dtype in [np.float32, np.float64]:
+            np_array = (np_array * 255).astype(np.uint8)
+        
+        if np_array.ndim == 2:
+            img = Image.fromarray(np_array, mode="L")
+        elif np_array.shape[2] == 3:
+            img = Image.fromarray(np_array, mode="RGB")
+        elif np_array.shape[2] == 4:
+            img = Image.fromarray(np_array, mode="RGBA")
+        else:
+            raise ValueError(f"不支持的通道数: {np_array.shape[2]}（张量形状: {t.shape}）")
+        images.append(img)
+    return images
+
+def corner_mask(side_length):
+    corner = np.zeros([side_length, side_length])
+    for h in range(side_length):
+        for w in range(side_length):
+            if h >= w:
+                sh = h / (side_length - 1)
+                corner[h, w] = 1 - sh
+            if h <= w:
+                sw = w / (side_length - 1)
+                corner[h, w] = 1 - sw
+    return corner - 0.25 * scaling_mask(side_length)
+
+def scaling_mask(side_length):
+    scaling = np.zeros([side_length, side_length])
+    for h in range(side_length):
+        for w in range(side_length):
+            sh = h / (side_length - 1)
+            sw = w / (side_length - 1)
+            if h >= w and h <= side_length - w:
+                scaling[h, w] = sw
+            if h <= w and h <= side_length - w:
+                scaling[h, w] = sh
+            if h >= w and h >= side_length - w:
+                scaling[h, w] = 1 - sh
+            if h <= w and h >= side_length - w:
+                scaling[h, w] = 1 - sw
+    return 2 * scaling
+
+def generate_mask(tile_size, stride_size):
+    tile_h, tile_w = tile_size
+    stride_h, stride_w = stride_size
+    ramp_h = tile_h - stride_h
+    ramp_w = tile_w - stride_w
+    mask = np.ones((tile_h, tile_w))
+    mask[ramp_h:-ramp_h, :ramp_w] = np.linspace(0, 1, num=ramp_w)
+    mask[ramp_h:-ramp_h, -ramp_w:] = np.linspace(1, 0, num=ramp_w)
+    mask[:ramp_h, ramp_w:-ramp_w] = np.transpose(np.linspace(0, 1, num=ramp_h)[None], (1, 0))
+    mask[-ramp_h:, ramp_w:-ramp_w] = np.transpose(np.linspace(1, 0, num=ramp_h)[None], (1, 0))
+    assert ramp_h == ramp_w
+    corner = np.rot90(corner_mask(ramp_h), 2)
+    mask[:ramp_h, :ramp_w] = corner
+    corner = np.flip(corner, 1)
+    mask[:ramp_h, -ramp_w:] = corner
+    corner = np.flip(corner, 0)
+    mask[-ramp_h:, -ramp_w:] = corner
+    corner = np.flip(corner, 1)
+    mask[-ramp_h:, :ramp_w] = corner
+    return mask
+
+def pad(img, left, right, top, bottom):
+    pad_width = np.array(((0, 0), (top, bottom), (left, right)))
+    return np.pad(img, pad_width, mode="wrap")
+
+def tiles_infer(tiles, ort_session, progress_callback=None):
+    out_channels = 3
+    tiles_nb = tiles.shape[0]
+    pred_tiles = np.empty((tiles_nb, out_channels, tiles.shape[2], tiles.shape[3]))
+    for i in range(tiles_nb):
+        if progress_callback:
+            progress_callback(i + 1, tiles_nb)
+        pred_tiles[i] = ort_session.run(None, {"input": tiles[i:i+1].astype(np.float32)})[0]
+    return pred_tiles
+
+def tiles_merge(tiles, stride_size, img_size, paddings):
+    _, tile_h, tile_w = tiles[0].shape
+    pad_left, pad_right, pad_top, pad_bottom = paddings
+    height = img_size[1] + pad_top + pad_bottom
+    width = img_size[2] + pad_left + pad_right
+    stride_h, stride_w = stride_size
+    assert (stride_h % 2 == 0) and (stride_w % 2 == 0)
+    assert (stride_h >= tile_h / 2) and (stride_w >= tile_w / 2)
+    assert (stride_h <= tile_h) and (stride_w <= tile_w)
+    merged = np.zeros((img_size[0], height, width))
+    mask = generate_mask((tile_h, tile_w), stride_size)
+    h_range = ((height - tile_h) // stride_h) + 1
+    w_range = ((width - tile_w) // stride_w) + 1
+    idx = 0
+    for h in range(h_range):
+        for w in range(w_range):
+            h_from, h_to = h * stride_h, h * stride_h + tile_h
+            w_from, w_to = w * stride_w, w * stride_w + tile_w
+            merged[:, h_from:h_to, w_from:w_to] += tiles[idx] * mask
+            idx += 1
+    return merged[:, pad_top:-pad_bottom, pad_left:-pad_right]
+
+def tiles_split(img, tile_size, stride_size):
+    tile_h, tile_w = tile_size
+    stride_h, stride_w = stride_size
+    img_h, img_w = img.shape[0], img.shape[1]
+    assert (stride_h % 2 == 0) and (stride_w % 2 == 0)
+    assert (stride_h >= tile_h / 2) and (stride_w >= tile_w / 2)
+    assert (stride_h <= tile_h) and (stride_w <= tile_w)
+    pad_h, pad_w = 0, 0
+    remainer_h = (img_h - tile_h) % stride_h
+    remainer_w = (img_w - tile_w) % stride_w
+    if remainer_h != 0:
+        pad_h = stride_h - remainer_h
+    if remainer_w != 0:
+        pad_w = stride_w - remainer_w
+    if tile_h > img_h:
+        pad_h = tile_h - img_h
+    if tile_w > img_w:
+        pad_w = tile_w - img_w
+    pad_left = pad_w // 2 + stride_w
+    pad_right = pad_left if pad_w % 2 == 0 else pad_left + 1
+    pad_top = pad_h // 2 + stride_h
+    pad_bottom = pad_top if pad_h % 2 == 0 else pad_top + 1
+    img = pad(img, pad_left, pad_right, pad_top, pad_bottom)
+    img_h, img_w = img.shape[1], img.shape[2]
+    h_range = ((img_h - tile_h) // stride_h) + 1
+    w_range = ((img_w - tile_w) // stride_w) + 1
+    tiles = np.empty([h_range * w_range, img.shape[0], tile_h, tile_w])
+    idx = 0
+    for h in range(h_range):
+        for w in range(w_range):
+            h_from, h_to = h * stride_h, h * stride_h + tile_h
+            w_from, w_to = w * stride_w, w * stride_w + tile_w
+            tiles[idx] = img[:, h_from:h_to, w_from:w_to]
+            idx += 1
+    return tiles, (pad_left, pad_right, pad_top, pad_bottom)
+
+def color_to_normals(color_img, overlap, progress_callback=None):
+    img = np.mean(color_img[:3], axis=0, keepdims=True)
+    tile_size = 256
+    overlaps = {"SMALL": tile_size // 6, "MEDIUM": tile_size // 4, "LARGE": tile_size // 2}
+    stride_size = tile_size - overlaps[overlap]
+    tiles, paddings = tiles_split(img, (tile_size, tile_size), (stride_size, stride_size))
+    
+    # 本地模型路径（已按你的正确路径修改）
+    model_path = Path(__file__).parent.parent.parent.parent / "models" / "deepbump" / "deepbump256.onnx"
+    if not model_path.exists():
+        raise ModelNotFound(f"deepbump ({model_path})")
+    
+    providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CoreMLProvider", "CPUExecutionProvider"]
+    available_providers = [p for p in providers if p in ort.get_available_providers()]
+    if not available_providers:
+        raise RuntimeError("No valid ONNX Runtime providers available.")
+    
+    ort_session = ort.InferenceSession(model_path.as_posix(), providers=available_providers)
+    pred_tiles = tiles_infer(tiles, ort_session, progress_callback=progress_callback)
+    pred_img = tiles_merge(pred_tiles, (stride_size, stride_size), (3, img.shape[1], img.shape[2]), paddings)
+    return normalize(pred_img)
+
+def conv_1d(array, kernel_1d):
+    k_l = len(kernel_1d)
+    assert k_l % 2 != 0
+    extended = np.pad(array, k_l // 2, mode="wrap")
+    output = np.empty(array.shape)
+    for i in range(array.shape[0]):
+        output[i] = np.convolve(extended[i + (k_l // 2)], kernel_1d, mode="valid")
+    return output * -1
+
+def gaussian_kernel(length, sigma):
+    space = np.linspace(-(length - 1) / 2, (length - 1) / 2, length)
+    kernel = np.exp(-0.5 * np.square(space) / np.square(sigma))
+    return kernel / np.sum(kernel)
+
+def normalize(np_array):
+    return (np_array - np.min(np_array)) / (np.max(np_array) - np.min(np_array) + 1e-16)
+
+def normals_to_curvature(normals_img, blur_radius, progress_callback=None):
+    if progress_callback:
+        progress_callback(0, 4)
+    diff_kernel = np.array([-1, 0, 1])
+    h_conv = conv_1d(normals_img[0, :, :], diff_kernel)
+    if progress_callback:
+        progress_callback(1, 4)
+    v_conv = conv_1d(-1 * normals_img[1, :, :].T, diff_kernel).T
+    if progress_callback:
+        progress_callback(2, 4)
+    edges_conv = h_conv + v_conv
+    blur_factors = {"SMALLEST": 1/256, "SMALLER": 1/128, "SMALL": 1/64, "MEDIUM": 1/32, "LARGE": 1/16, "LARGER": 1/8, "LARGEST": 1/4}
+    if blur_radius not in blur_factors:
+        raise ValueError(f"{blur_radius} not in {blur_factors}")
+    blur_radius_px = int(np.mean(normals_img.shape[1:3]) * blur_factors[blur_radius])
+    if blur_radius_px < 2:
+        edges_conv = normalize(edges_conv)
+        return np.stack([edges_conv, edges_conv, edges_conv])
+    if blur_radius_px % 2 == 0:
+        blur_radius_px += 1
+    sigma = blur_radius_px // 8 if blur_radius_px // 8 != 0 else 1
+    g_kernel = gaussian_kernel(blur_radius_px, sigma)
+    h_blur = conv_1d(edges_conv, g_kernel)
+    if progress_callback:
+        progress_callback(3, 4)
+    v_blur = conv_1d(h_blur.T, g_kernel).T
+    if progress_callback:
+        progress_callback(4, 4)
+    curvature = normalize(v_blur)
+    return np.stack([curvature, curvature, curvature])
+
+def normals_to_grad(normals_img):
+    return (normals_img[0] - 0.5) * 2, (normals_img[1] - 0.5) * 2
+
+def copy_flip(grad_x, grad_y):
+    grad_x_top = np.hstack([grad_x, -np.flip(grad_x, axis=1)])
+    grad_x_bottom = np.hstack([np.flip(grad_x, axis=0), -np.flip(grad_x)])
+    new_grad_x = np.vstack([grad_x_top, grad_x_bottom])
+    grad_y_top = np.hstack([grad_y, np.flip(grad_y, axis=1)])
+    grad_y_bottom = np.hstack([-np.flip(grad_y, axis=0), -np.flip(grad_y)])
+    new_grad_y = np.vstack([grad_y_top, grad_y_bottom])
+    return new_grad_x, new_grad_y
+
+def frankot_chellappa(grad_x, grad_y, progress_callback=None):
+    if progress_callback:
+        progress_callback(0, 3)
+    rows, cols = grad_x.shape
+    rows_scale = (np.arange(rows) - (rows // 2 + 1)) / (rows - rows % 2)
+    cols_scale = (np.arange(cols) - (cols // 2 + 1)) / (cols - cols % 2)
+    u_grid, v_grid = np.meshgrid(cols_scale, rows_scale)
+    u_grid = np.fft.ifftshift(u_grid)
+    v_grid = np.fft.ifftshift(v_grid)
+    if progress_callback:
+        progress_callback(1, 3)
+    grad_x_F = np.fft.fft2(grad_x)
+    grad_y_F = np.fft.fft2(grad_y)
+    if progress_callback:
+        progress_callback(2, 3)
+    nominator = (-1j * u_grid * grad_x_F) + (-1j * v_grid * grad_y_F)
+    denominator = (u_grid**2) + (v_grid**2) + 1e-16
+    Z_F = nominator / denominator
+    Z_F[0, 0] = 0.0
+    Z = np.real(np.fft.ifft2(Z_F))
+    if progress_callback:
+        progress_callback(3, 3)
+    return (Z - np.min(Z)) / (np.max(Z) - np.min(Z) + 1e-16)
+
+def normals_to_height(normals_img, seamless, progress_callback=None):
+    flip_img = np.flip(normals_img, axis=1)
+    grad_x, grad_y = normals_to_grad(flip_img)
+    grad_x = np.flip(grad_x, axis=0)
+    grad_y = np.flip(grad_y, axis=0)
+    if not seamless:
+        grad_x, grad_y = copy_flip(grad_x, grad_y)
+    pred_img = frankot_chellappa(-grad_x, grad_y, progress_callback=progress_callback)
+    if not seamless:
+        height, width = normals_img.shape[1], normals_img.shape[2]
+        pred_img = pred_img[:height, :width]
+    return np.stack([pred_img, pred_img, pred_img])
+
+
+
+class texture_create:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "normals_overlap": (["SMALL", "MEDIUM", "LARGE"],),
+                "curvature_blur": (["SMALLEST", "SMALLER", "SMALL", "MEDIUM", "LARGE", "LARGER", "LARGEST"],),
+                "height_seamless": ("BOOLEAN", {"default": True}),
+                "highlight_threshold": ("INT", {"default": 200, "min": 0, "max": 255, "step": 1}),
+                "highlight_contrast": ("FLOAT", {"default": 1.5, "min": 0.1, "max": 5.0, "step": 0.1}),
+                "highlight_sharpen": ("BOOLEAN", {"default": True}),
+            },
+        }
+    
+    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE")
+    RETURN_NAMES = ("Normals", "Curvature", "Height", "Highlight")
+    FUNCTION = "apply"
+    CATEGORY = "Apt_Preset/imgEffect"
+    
+    def apply(self, *, image, normals_overlap="SMALL", 
+              curvature_blur="SMALL", height_seamless=True,
+              highlight_threshold=200, highlight_contrast=1.5, highlight_sharpen=True):
+        images = tensor2pil(image)
+        out_normals = []
+        out_curvature = []
+        out_height = []
+        out_highlight = []
+        
+        for img in images:
+            in_img = np.transpose(img, (2, 0, 1)) / 255
+            
+            normals_img = color_to_normals(in_img, normals_overlap)
+            curvature_img = normals_to_curvature(normals_img, curvature_blur)
+            height_img = normals_to_height(normals_img, height_seamless)
+            
+            gray_img = img.convert("L")
+            gray_arr = np.array(gray_img, dtype=np.float32)
+            highlight_arr = np.where(gray_arr < highlight_threshold, 0, gray_arr)
+            highlight_arr = (highlight_arr - highlight_threshold) * highlight_contrast
+            highlight_arr = np.clip(highlight_arr, 0, 255)
+            
+            if highlight_sharpen:
+                laplacian_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+                pad_arr = np.pad(highlight_arr, 1, mode="edge")
+                sharpened_arr = np.zeros_like(highlight_arr)
+                for i in range(highlight_arr.shape[0]):
+                    for j in range(highlight_arr.shape[1]):
+                        sharpened_arr[i, j] = np.sum(pad_arr[i:i+3, j:j+3] * laplacian_kernel)
+                highlight_arr = np.clip(sharpened_arr, 0, 255)
+            
+            highlight_arr = highlight_arr.astype(np.float32) / 255.0
+            highlight_arr = np.stack([highlight_arr, highlight_arr, highlight_arr], axis=-1)
+            
+            out_normals.append(torch.from_numpy(np.transpose(normals_img, (1, 2, 0)).astype(np.float32)).unsqueeze(0))
+            out_curvature.append(torch.from_numpy(np.transpose(curvature_img, (1, 2, 0)).astype(np.float32)).unsqueeze(0))
+            out_height.append(torch.from_numpy(np.transpose(height_img, (1, 2, 0)).astype(np.float32)).unsqueeze(0))
+            out_highlight.append(torch.from_numpy(highlight_arr).unsqueeze(0))
+        
+        return (
+            torch.cat(out_normals, dim=0),
+            torch.cat(out_curvature, dim=0),
+            torch.cat(out_height, dim=0),
+            torch.cat(out_highlight, dim=0)
+        )
+
+
+#endregion-----------------纹理组---------------------------------
+
+
+
+#region------------------------------------
+def blend_normal(backdrop, source, opacity):
+    alpha = source[..., 3:4] / 255.0 * opacity
+    # 修复：截取backdrop前3通道（RGB），与source[..., :3]通道数保持一致
+    return backdrop[..., :3] * (1 - alpha) + source[..., :3] * alpha
+
+def blend_add(backdrop, source, opacity):
+    alpha = opacity
+    result = backdrop[..., :3] + source[..., :3] * alpha
+    return np.clip(result, 0.0, 255.0)
+
+def blend_multiply(backdrop, source, opacity):
+    alpha = opacity
+    backdrop_norm = backdrop[..., :3] / 255.0
+    source_norm = source[..., :3] / 255.0
+    result = backdrop_norm * source_norm * alpha + backdrop_norm * (1 - alpha)
+    return result * 255.0
+
+def blend_screen(backdrop, source, opacity):
+    alpha = opacity
+    backdrop_norm = backdrop[..., :3] / 255.0
+    source_norm = source[..., :3] / 255.0
+    result = (1 - (1 - backdrop_norm) * (1 - source_norm)) * alpha + backdrop_norm * (1 - alpha)
+    return result * 255.0
+
+def blend_overlay(backdrop, source, opacity):
+    alpha = opacity
+    backdrop_norm = backdrop[..., :3] / 255.0
+    source_norm = source[..., :3] / 255.0
+    result = np.where(backdrop_norm < 0.5, 2 * backdrop_norm * source_norm, 1 - 2 * (1 - backdrop_norm) * (1 - source_norm))
+    result = result * alpha + backdrop_norm * (1 - alpha)
+    return result * 255.0
+
+def blend_soft_light(backdrop, source, opacity):
+    alpha = opacity
+    backdrop_norm = backdrop[..., :3] / 255.0
+    source_norm = source[..., :3] / 255.0
+    def _g(x):
+        return np.where(x <= 0.25, ((16 * x - 12) * x + 4) * x, np.sqrt(x))
+    result = np.where(source_norm <= 0.5, backdrop_norm - (1 - 2 * source_norm) * backdrop_norm * (1 - backdrop_norm), backdrop_norm + (2 * source_norm - 1) * (_g(backdrop_norm) - backdrop_norm))
+    result = result * alpha + backdrop_norm * (1 - alpha)
+    return result * 255.0
+
+def blend_linear_light(backdrop, source, opacity):
+    alpha = opacity
+    backdrop_norm = backdrop[..., :3] / 255.0
+    source_norm = source[..., :3] / 255.0
+    result = np.where(source_norm > 0.5, backdrop_norm + 2 * (source_norm - 0.5), backdrop_norm + 2 * source_norm - 1)
+    result = np.clip(result, 0.0, 1.0)
+    result = result * alpha + backdrop_norm * (1 - alpha)
+    return result * 255.0
+
+BLEND_FUNCTIONS = {
+    'normal': blend_normal, 'add': blend_add, 'multiply': blend_multiply,
+    'screen': blend_screen, 'overlay': blend_overlay, 'soft light': blend_soft_light, 'linear light': blend_linear_light
+}
+
+def tensor2pil(t_image: torch.Tensor) -> Image:
+    return Image.fromarray(np.clip(255.0 * t_image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
+
+def pil2tensor(image: Image) -> torch.Tensor:
+    return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
+
+def chop_image_v2(background_image: Image, layer_image: Image, blend_mode: str, opacity: int) -> Image:
+    # 优化：先统一转为RGB再转RGBA，确保输入图像基础模式一致
+    background_image = background_image.convert('RGB').convert('RGBA')
+    layer_image = layer_image.convert('RGB').convert('RGBA')
+    
+    backdrop_prepped = np.asarray(background_image, dtype=np.float32)
+    source_prepped = np.asarray(layer_image, dtype=np.float32)
+    
+    # 优化：增加通道数校验，提前暴露异常
+    if backdrop_prepped.shape[-1] != 4 or source_prepped.shape[-1] != 4:
+        raise ValueError(f"图像通道数错误，需为RGBA（4通道），当前背景图通道：{backdrop_prepped.shape[-1]}，图层通道：{source_prepped.shape[-1]}")
+    
+    blend_func = BLEND_FUNCTIONS.get(blend_mode.lower())
+    if not blend_func:
+        raise ValueError(f"不支持的混合模式: {blend_mode}，可选模式：{list(BLEND_FUNCTIONS.keys())}")
+    
+    opacity_norm = opacity / 100.0
+    blended_np = blend_func(backdrop_prepped, source_prepped, opacity_norm)
+    return Image.fromarray(np.clip(blended_np, 0, 255).astype(np.uint8)).convert('RGB')
+
+def gaussian_blur(image: Image, radius: int) -> Image:
+    return image.filter(ImageFilter.GaussianBlur(radius=radius))
+
+class Image_Detail_HL_frequencye:
+    def __init__(self):
+        self.NODE_NAME = 'HLFrequencyDetailRestore'
+    
+    @classmethod
+    def INPUT_TYPES(self):
+        return {
+            "required": {
+                "image": ("IMAGE",),  # 目标图（打光图）
+                "detail_image": ("IMAGE",),  # 细节源图（原图）
+                "keep_high_freq": ("INT", {"default": 64, "min": 0, "max": 1023}),  # 细节提取模糊半径
+                "erase_low_freq": ("INT", {"default": 32, "min": 0, "max": 1023}),  # 光影平滑模糊半径
+                "mask_blur": ("INT", {"default": 16, "min": 0, "max": 1023}),  # 遮罩边缘模糊
+                "blend_mode": (list(BLEND_FUNCTIONS.keys()), {"default": "linear light"}),  # 混合模式
+                "blend_opacity": ("INT", {"default": 100, "min": 0, "max": 100}),  # 混合强度
+                "detail_strength": ("INT", {"default": 100, "min": 0, "max": 200}),  # 细节强度（0-200%）
+                "high_freq_threshold": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),  # 高频细节对比度阈值
+            },
+            "optional": {
+                "mask": ("MASK",),  # 细节应用区域遮罩
+                "invert_mask": ("BOOLEAN", {"default": False}),  # 是否反转遮罩
+            }
+        }
+    
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = 'frequency_detail_restore'
+    CATEGORY = "Apt_Preset/image"
+    DESCRIPTION = """
+    细节太粗 / 太细 调 高频保留keep_high_freq（小→细，大→粗）。
+    光影太硬 / 太糊 调 擦除低频erase_low_freq（小→硬，大→糊）。
+    效果太淡 / 太浓 调 混合强度blend_opacity（小→淡，大→浓）。
+    细节太弱 / 过曝 调 细节强度detail_strength（小→弱，大→强）。
+    噪点多 / 细节杂 调 高频细节对比度（小→留杂，大→去杂）。
+    边缘太硬 / 太糊 调 mask_blur（小→硬，大→糊）。
+    """
+    def frequency_detail_restore(self, image, detail_image, keep_high_freq, erase_low_freq, mask_blur, blend_mode="overlay", blend_opacity=100, detail_strength=100, high_freq_threshold=0.5, mask=None, invert_mask=False):
+        b_images = [torch.unsqueeze(b, 0) for b in image]
+        l_images = [torch.unsqueeze(l, 0) for l in detail_image]
+        l_masks = []
+        
+        for l in detail_image:
+            m = tensor2pil(l)
+            l_masks.append(m.split()[-1] if m.mode == 'RGBA' else Image.new('L', m.size, 'white'))
+        
+        if mask is not None:
+            if mask.dim() == 2:
+                mask = torch.unsqueeze(mask, 0)
+            l_masks = [tensor2pil(torch.unsqueeze(m, 0)).convert('L') for m in mask]
+            if invert_mask:
+                l_masks = [ImageChops.invert(m) for m in l_masks]
+        
+        max_batch = max(len(b_images), len(l_images), len(l_masks))
+        ret_images = []
+        
+        for i in range(max_batch):
+            bg_img = tensor2pil(b_images[i % len(b_images)]).convert('RGB')
+            dt_img = tensor2pil(l_images[i % len(l_images)]).convert('RGB')
+            _mask = l_masks[i % len(l_masks)]
+            
+            # 提取高频细节（增强强度控制）
+            blurred_dt = gaussian_blur(dt_img, keep_high_freq)
+            high_freq = chop_image_v2(ImageChops.invert(dt_img), blurred_dt, 'normal', 50)
+            high_freq = ImageChops.invert(high_freq)
+            
+            # 细节强度调整
+            if detail_strength != 100:
+                high_freq = ImageChops.blend(dt_img, high_freq, alpha=detail_strength/100)
+            
+            # 高频阈值过滤（弱化低对比度细节）
+            high_freq_np = np.array(high_freq).astype(np.float32)
+            blurred_high = gaussian_blur(high_freq, 1)
+            high_contrast = np.abs(high_freq_np - np.array(blurred_high)) / 255.0
+            mask_threshold = (high_contrast >= high_freq_threshold).astype(np.float32)
+            high_freq = Image.fromarray(np.uint8(high_freq_np * mask_threshold + np.array(blurred_high) * (1 - mask_threshold)))
+            
+            # 低频处理
+            low_freq = gaussian_blur(bg_img, erase_low_freq) if erase_low_freq > 0 else bg_img.copy()
+            
+            # 混合
+            ret_image = chop_image_v2(low_freq, high_freq, blend_mode, blend_opacity)
+            
+            # 遮罩应用
+            _mask_inv = ImageChops.invert(_mask)
+            if mask_blur > 0:
+                _mask_inv = gaussian_blur(_mask_inv, mask_blur)
+            ret_image.paste(bg_img, mask=_mask_inv)
+            
+            ret_images.append(pil2tensor(ret_image))
+        
+        return (torch.cat(ret_images, dim=0),)
+    
+#endregion-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

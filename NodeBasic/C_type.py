@@ -4,6 +4,11 @@ import comfy
 import torch
 import numpy as np
 from PIL import Image, ImageOps
+
+import torch
+import comfy.utils
+
+
 from ..main_unit import *
 
 
@@ -525,6 +530,8 @@ class create_image_batch:
         return (image1,)
 
 
+
+
 class create_mask_batch:
     @classmethod 
     def INPUT_TYPES(s):
@@ -543,18 +550,54 @@ class create_mask_batch:
     CATEGORY = "Apt_Preset/data"
 
     def doit(self, unique_id, prompt, extra_pnginfo, **kwargs):
-        masks = [make_3d_mask(value) for value in kwargs.values() if value is not None]
+        # 处理所有输入遮罩，统一格式和类型
+        masks = []
+        for value in kwargs.values():
+            if value is None:
+                continue
+                
+            # 转换为3D遮罩并标准化数据类型
+            mask = make_3d_mask(value)
+            
+            # 确保数据类型正确（转换为float32）
+            if mask.dtype != torch.float32:
+                mask = mask.to(torch.float32) / 255.0  # 处理可能的0-255范围数据
+            
+            # 确保维度正确 (1, H, W)
+            if len(mask.shape) == 2:
+                mask = mask.unsqueeze(0)
+            elif len(mask.shape) > 3:
+                mask = mask.squeeze()  # 移除多余维度
+                if len(mask.shape) == 2:
+                    mask = mask.unsqueeze(0)
+            
+            masks.append(mask)
         
         if len(masks) == 0:
             return (torch.zeros((1, 64, 64), dtype=torch.float32),)
+        
+        # 确定最小尺寸作为统一尺寸（使用裁切而非缩放）
+        min_height = min(mask.shape[1] for mask in masks)
+        min_width = min(mask.shape[2] for mask in masks)
+        
+        # 统一所有遮罩到最小尺寸（居中裁切）
+        processed_masks = []
+        for mask in masks:
+            h, w = mask.shape[1], mask.shape[2]
             
-        mask1 = masks[0]
-        for mask2 in masks[1:]:
-            if mask1.shape[1:] != mask2.shape[1:]:
-                mask2 = comfy.utils.common_upscale(mask2.movedim(-1, 1), mask1.shape[2], mask1.shape[1], "lanczos", "center").movedim(1, -1)
-            mask1 = torch.cat((mask1, mask2), dim=0)
-        return (mask1,)
-
+            # 计算裁切区域（居中裁切）
+            h_start = (h - min_height) // 2
+            h_end = h_start + min_height
+            w_start = (w - min_width) // 2
+            w_end = w_start + min_width
+            
+            # 执行裁切
+            cropped = mask[:, h_start:h_end, w_start:w_end]
+            processed_masks.append(cropped)
+        
+        # 拼接所有遮罩
+        combined_mask = torch.cat(processed_masks, dim=0)
+        return (combined_mask,)
 
 
 
@@ -860,6 +903,12 @@ class type_AnyCast:
 
     def try_cast(self, value, target_type):
         return self.run(value, target_type)[0]
+
+
+
+
+
+
 
 
 

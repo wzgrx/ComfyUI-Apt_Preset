@@ -47,7 +47,9 @@ WEIGHT_TYPES = ["linear", "ease in", "ease out", 'ease in-out', 'reverse in-out'
 
 #region--------latent总控-----------------
 
-class Stack_latent:
+
+
+class XXXStack_latent:
     ratio_sizes, ratio_dict = read_ratios()
 
     @classmethod
@@ -61,8 +63,10 @@ class Stack_latent:
                 "noise_mask": ("BOOLEAN", {"default": True}),
                 "diff_difusion": ("BOOLEAN", {"default": True}),  # 新增参数
                 "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1, "display": "slider"}),
-                "ratio_selected": (['None'] + cls.ratio_sizes, {"default": "None"}),
-                "batch_size": ("INT", {"default": 1, "min": 1, "max": 300})
+                "ratio_selected": (['None','customer_WxH'] + cls.ratio_sizes, {"default": "None"}),
+                "batch_size": ("INT", {"default": 1, "min": 1, "max": 300}),
+                "width": ("INT", {"default": 512, "min": 8, "max": 16384}),
+                "height": ("INT", {"default": 512, "min": 8, "max": 16384}),               
             }
         }
 
@@ -79,7 +83,8 @@ class Stack_latent:
         return (latent_stack,)
 
 
-class Apply_latent:
+
+class XXXApply_latent:
     ratio_sizes, ratio_dict = read_ratios()
 
     @classmethod
@@ -146,6 +151,129 @@ class Apply_latent:
 
         latent = latentrepeat(latent, batch_size)[0]
         return model, positive, negative, latent
+
+
+
+
+
+
+
+
+class Stack_latent:
+    ratio_sizes, ratio_dict = read_ratios()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {},
+            "optional": {
+                "latent": ("LATENT",),
+                "pixels": ("IMAGE",),
+                "mask": ("MASK",),
+                "diff_difusion": ("BOOLEAN", {"default": True}),
+                "smoothness": ("INT", {"default": 0, "min": 0, "max": 150, "step": 1, "display": "slider"}),
+                "ratio_selected": (['None','customer_WxH'] + cls.ratio_sizes, {"default": "None"}),
+                "batch_size": ("INT", {"default": 1, "min": 1, "max": 300}),
+                "width": ("INT", {"default": 512, "min": 8, "max": 16384}),
+                "height": ("INT", {"default": 512, "min": 8, "max": 16384}),               
+            }
+        }
+
+    RETURN_TYPES = ("LATENT_STACK",)
+    RETURN_NAMES = ("latent_stack",)
+    FUNCTION = "stack_latent"
+    CATEGORY = "Apt_Preset/stack/😺backup"
+    DESCRIPTION = """
+    - latent、pixels、ratio_selected 三者选其一
+    - diff_difusion: 是否使用扩散差异，默认值为True，为可选项。
+    - ratio_selected比例选项：'None'不操作
+    - customer_WxH 用宽和宽定义latent尺寸 
+    - 其它数字则直接按预设
+    """
+
+
+
+
+
+    def stack_latent(self, latent=None, pixels=None, mask=None, diff_difusion=True,
+                    smoothness=1, ratio_selected="None", batch_size=1, width=512, height=512):
+        noise_mask = True
+        latent_info = (latent, pixels, mask, noise_mask, diff_difusion, smoothness, ratio_selected, batch_size, width, height)
+        latent_stack = [latent_info]
+        return (latent_stack,)
+
+
+
+class Apply_latent:
+    ratio_sizes, ratio_dict = read_ratios()
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "positive": ("CONDITIONING", ),
+                "negative": ("CONDITIONING", ),
+                "vae": ("VAE",),
+                "latent_stack": ("LATENT_STACK",),
+            }
+        }
+
+    RETURN_TYPES = ("MODEL","CONDITIONING","CONDITIONING","LATENT",)
+    RETURN_NAMES = ("model","positive","negative","latent",)
+    FUNCTION = "apply_latent_stack"
+    CATEGORY = "Apt_Preset/stack"
+
+    def apply_latent_stack(self, model, positive, negative, vae, latent_stack):
+        default_width = 512
+        default_height = 512
+        batch_size = 1
+
+        for latent_info in latent_stack:
+            latent, pixels, mask, noise_mask, diff_difusion, smoothness, ratio_selected, batch_size, width, height = latent_info
+
+            if ratio_selected == "None" and latent is None and pixels is None:
+                raise ValueError("pls input latent, or pixels, or ratio_selected.")
+
+            if ratio_selected != "None":
+                if ratio_selected == "customer_WxH":
+                    width_val = width
+                    height_val = height
+                else:
+                    width_val = self.ratio_dict[ratio_selected]["width"]
+                    height_val = self.ratio_dict[ratio_selected]["height"]
+                
+                latent = {"samples": torch.zeros([batch_size, 4, height_val // 8, width_val // 8])}
+                if diff_difusion:
+                    model = DifferentialDiffusion().apply(model)[0]
+                return model, positive, negative, latent
+
+            if latent is None :
+                latent = {"samples": torch.zeros([batch_size, 4, default_height // 8, default_width // 8])}
+                
+            if pixels is not None:
+                latent = VAEEncode().encode(vae, pixels)[0]
+
+            if pixels is None and mask is None:
+                if latent is not None:
+                    pass
+                else:
+                    raise TypeError("No input pixels")
+
+
+            if mask is not None:
+                mask = tensor2pil(mask)
+                feathered_image = mask.filter(ImageFilter.GaussianBlur(smoothness))
+                mask = pil2tensor(feathered_image)
+                positive, negative, latent = InpaintModelConditioning().encode(positive, negative, pixels, vae, mask, noise_mask)
+            
+            if diff_difusion:
+                model = DifferentialDiffusion().apply(model)[0]
+
+        latent = latentrepeat(latent, batch_size)[0]
+        return model, positive, negative, latent
+
+
 
 
 
@@ -1293,10 +1421,10 @@ class Stack_ControlNet:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
 
             },
             "optional": {
+                "image": ("IMAGE",),
                 "controlnet": (["None"] + folder_paths.get_filename_list("controlnet"),),
                 "strength": ("FLOAT", {"default": 0.8, "min": -10.0, "max": 10.0, "step": 0.01}),
                 "start_percent": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
@@ -2221,8 +2349,8 @@ class sum_stack_image:
             "hidden": {},
         }
         
-    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "CONDITIONING","CONDITIONING","LATENT","VAE","CLIP")
-    RETURN_NAMES = ("context", "model","positive","negative","latent","vae","clip")
+    RETURN_TYPES = ("RUN_CONTEXT","MODEL", "CONDITIONING","CONDITIONING","LATENT","VAE","CLIP","IMAGE")
+    RETURN_NAMES = ("context", "model","positive","negative","latent","vae","clip","image")
     FUNCTION = "merge"
     CATEGORY = "Apt_Preset/chx_tool"
 
@@ -2234,7 +2362,8 @@ class sum_stack_image:
         clip = context.get("clip")
         latent = context.get("latent", None)
         vae = context.get("vae", None)
-        
+        image = context.get("images", None)
+
         if model is None:
             model = context.get("model", None)
 
@@ -2293,7 +2422,7 @@ class sum_stack_image:
             model, positive, negative, latent = Apply_latent().apply_latent_stack(model, positive, negative, vae, latent_stack)
 
         context = new_context(context, clip=clip, positive=positive, negative=negative, model=model, latent=latent, vae=vae)
-        return (context, model, positive, negative, latent,vae,clip )
+        return (context, model, positive, negative, latent,vae,clip, image )
 
 
 

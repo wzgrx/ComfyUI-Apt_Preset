@@ -25,6 +25,8 @@ import node_helpers
 import hashlib
 import ast
 
+import json
+
 
 
 
@@ -999,7 +1001,6 @@ class view_bridge_image:
 #endregion-----------------------旧-------------------------------------------------------#.
 
 
-
 class view_Mask_And_Img(SaveImage):
     def __init__(self):
         self.output_dir = folder_paths.get_temp_directory()
@@ -1029,21 +1030,25 @@ class view_Mask_And_Img(SaveImage):
         if mask is not None and image is None:
             preview = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])).movedim(1, -1).expand(-1, -1, -1, 3)
         elif mask is None and image is not None:
+            if image.shape[-1] == 4:
+                image = image[..., :3]
             preview = image
         elif mask is not None and image is not None:
+            if image.shape[-1] == 4:
+                image = image[..., :3]
             mask_adjusted = mask * mask_opacity
             mask_image = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])).movedim(1, -1).expand(-1, -1, -1, 3).clone()
-            color_list = [0, 0, 0]  # 黑色
+            color_list = [0, 0, 0]
             mask_image[:, :, :, 0] = color_list[0] / 255
             mask_image[:, :, :, 1] = color_list[1] / 255
             mask_image[:, :, :, 2] = color_list[2] / 255
             preview, = ImageCompositeMasked.composite(self, image, mask_image, 0, 0, True, mask_adjusted)
         else:
-            # 当 mask 和 image 都为 None 时，创建一个默认的预览图像
             preview = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
 
-        # 只需返回 save_images 的结果即可，ComfyUI 自动处理预览
         return self.save_images(preview, filename_prefix, prompt, extra_pnginfo)
+
+
 
 
 
@@ -1179,6 +1184,7 @@ class IO_adjust_image:
 
 
 
+
 class IO_save_image:
     def __init__(self):
         self.type = "output"
@@ -1188,14 +1194,18 @@ class IO_save_image:
         return {
             "required": {
                 "image": ("IMAGE", ),
-                "file_format": (["png","webp", "jpg", "tif"],),
+                "file_format": (["png", "webp", "jpg", "tif"],),
                 "output_path": ("STRING", {"default": "./output/Apt", "multiline": False}),
                 "filename_mid": ("STRING", {"default": "Apt"}),
-
             },
             "optional": {
                 "number_prefix": ("BOOLEAN", {"default": False, "label_on": "前置编号", "label_off": "后置编号"}),
                 "number_digits": ("INT", {"default": 5, "min": 1, "max": 10, "step": 1, "tooltip": "编号位数，如设置为3则为001格式"}),
+                "save_workflow_as_json": ("BOOLEAN", {"default": False}),
+            },
+            "hidden": {
+                "prompt": "PROMPT",
+                "extra_pnginfo": "EXTRA_PNGINFO"
             }
         }
 
@@ -1203,7 +1213,7 @@ class IO_save_image:
     RETURN_NAMES = ("out_path",)
     FUNCTION = "save_image"
     OUTPUT_NODE = True
-    OUTPUT_IS_LIST = (True,)  
+    OUTPUT_IS_LIST = (True,)
     CATEGORY = "Apt_Preset/View_IO"
 
     @staticmethod
@@ -1222,71 +1232,67 @@ class IO_save_image:
                 except (ValueError, AttributeError):
                     continue
         return highest_value
-        
-    def save_image(self, image, file_format, filename_mid="Apt", output_path="", number_prefix=False, number_digits=5):
+
+    def save_image(self, image, file_format, filename_mid="Apt", output_path="", number_prefix=False, number_digits=5,
+                   save_workflow_as_json=False, prompt=None, extra_pnginfo=None):
         batch_size = image.shape[0]
         images_list = [image[i:i + 1, ...] for i in range(batch_size)]
-
-        # 设置输出路径
         output_dir = folder_paths.get_output_directory()
-        results = []
-
-        # 存储每张图的输出路径
         output_paths = []
 
         if isinstance(output_path, str):
-            # 单一路径：所有图像都保存到该目录
             os.makedirs(output_path, exist_ok=True)
             output_paths = [output_path] * batch_size
         elif isinstance(output_path, list) and len(output_path) == batch_size:
-            # 多路径列表：每个图像对应一个目录
             for path in output_path:
                 os.makedirs(path, exist_ok=True)
             output_paths = output_path
         else:
-            # 路径数量不匹配，默认使用默认输出目录
             print("Invalid output_path format. Using default output directory.")
             output_paths = [output_dir] * batch_size
 
-        # 获取当前前缀下的最大序号
         base_dir = output_paths[0]
         counter = self.find_highest_numeric_value(base_dir, filename_mid) + 1
-
         absolute_paths = []
+
         for idx, img_tensor in enumerate(images_list):
             output_image = img_tensor.cpu().numpy()
             img_np = np.clip(output_image * 255.0, 0, 255).astype(np.uint8)
             img = Image.fromarray(img_np[0])
-
             out_path = output_paths[idx]
 
-            # 根据number_prefix决定编号位置，根据number_digits决定编号位数
             numbering = f"{counter + idx:0{number_digits}d}"
             if number_prefix:
                 output_filename = f"{numbering}_{filename_mid}"
             else:
                 output_filename = f"{filename_mid}_{numbering}"
-                
-            resolved_image_path = os.path.join(out_path, f"{output_filename}.{file_format}")
 
+            resolved_image_path = os.path.join(out_path, f"{output_filename}.{file_format}")
             img_params = {
                 'png': {'compress_level': 4},
                 'webp': {'method': 6, 'lossless': False, 'quality': 80},
                 'jpg': {'quality': 95, 'format': 'JPEG'},
                 'tif': {'format': 'TIFF'}
             }
-
             img.save(resolved_image_path, **img_params[file_format])
-
-            results.append({
-                "filename": f"{output_filename}.{file_format}",
-                "subfolder": os.path.basename(out_path),
-                "type": self.type
-            })
-
             absolute_paths.append(os.path.abspath(resolved_image_path))
 
+            if save_workflow_as_json:
+                try:
+                    workflow = (extra_pnginfo or {}).get('workflow')
+                    if workflow is not None:
+                        json_file_path = os.path.join(out_path, f"{output_filename}.json")
+                        with open(json_file_path, 'w') as f:
+                            json.dump(workflow, f)
+                except Exception as e:
+                    print(f"Failed to save workflow JSON: {e}")
+
         return (absolute_paths, )
+
+
+
+
+
 
 
 
